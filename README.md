@@ -1,5 +1,7 @@
 # Heathen Ledger
 
+> *"It's not about money... well, actually, it is. But it's also about sending a message."*
+
 Heathen Ledger is a Telegram bot designed to help you and your friends easily track and settle shared expenses within group chats. 
 
 Whether you're organizing a trip, sharing an apartment, or just splitting a dinner bill, Heathen Ledger keeps track of who paid what and calculates the simplest way for everyone to settle their debts.
