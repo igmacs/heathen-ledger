@@ -2,7 +2,7 @@
 
 > *"It's not about money... well, actually, it is. But it's also about sending a message."*
 
-Heathen Ledger is a Telegram bot designed to help you and your friends easily track and settle shared expenses within group chats. 
+Heathen Ledger is a Telegram bot designed to help you and your friends easily track and settle shared expenses within group chats.
 
 Whether you're organizing a trip, sharing an apartment, or just splitting a dinner bill, Heathen Ledger keeps track of who paid what and calculates the simplest way for everyone to settle their debts.
 
@@ -17,10 +17,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 *Commands are conceptual and may evolve during development.*
 
-1. **Add an Expense**: 
+1. **Add an Expense**:
    `/pay @Alice 50 for Dinner` (Default: split equally among everyone in the group)
    `/pay @Alice 50 for @Bob @Charlie` (Split specifically between Bob and Charlie)
-   
+
 2. **Check Balances**:
    `/balances` (Shows a quick summary of everyone's net balance)
 
