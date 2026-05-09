@@ -34,3 +34,5 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 ### Vibe Coding & AI Generation
 
 This project is intended to be "vibe coded" as much as possible. All code and commits in this repository are 100% AI-generated unless explicitly specified otherwise.
+
+**Workflow Rule:** The AI assistant must commit code incrementally after completing each logical file or small feature, providing atomic and descriptive commits, rather than batching everything into a single large commit.
