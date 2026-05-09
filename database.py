@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import logging
 from typing import Optional
@@ -6,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 
 class Database:
-    def __init__(self, db_path: str = "ledger.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path or os.environ.get("DB_PATH", "data/ledger.db")
         self._connection: Optional[sqlite3.Connection] = None
 
     def connect(self) -> sqlite3.Connection:
@@ -17,6 +18,11 @@ class Database:
         """
         if self._connection is None:
             try:
+                # Ensure the database directory exists
+                db_dir = os.path.dirname(self.db_path)
+                if db_dir:
+                    os.makedirs(db_dir, exist_ok=True)
+
                 self._connection = sqlite3.connect(self.db_path)
                 self._connection.row_factory = sqlite3.Row
                 logger.info(f"Connected to SQLite database at {self.db_path}")
