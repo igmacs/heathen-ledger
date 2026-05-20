@@ -125,8 +125,6 @@ For native deployments on a Linux server without Docker:
 
 This project is intended to be "vibe coded" as much as possible. All code and commits in this repository are 100% AI-generated unless explicitly specified otherwise.
 
-**Workflow Rule:** The AI assistant must commit code incrementally after completing each logical file or small feature, providing atomic and descriptive commits, rather than batching everything into a single large commit.
-
 #### Project evolution & Agent conversation history
 
 Here I document my conversation with the Antigravity agent and how the
