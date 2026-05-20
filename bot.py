@@ -1,8 +1,9 @@
 import os
 import logging
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import Update, BotCommand
 from telegram.ext import (
+    Application,
     ApplicationBuilder,
     ContextTypes,
     CommandHandler,
@@ -344,6 +345,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
+async def post_init(application: Application) -> None:
+    """Set the bot commands for autocompletion."""
+    commands = [
+        BotCommand("pay", "Log an expense split among members"),
+        BotCommand("balances", "View current group balances"),
+        BotCommand("settle", "Calculate payback transactions"),
+        BotCommand("payback", "Record a direct payment"),
+        BotCommand("history", "View last 10 transactions"),
+        BotCommand("help", "Display help message"),
+    ]
+    await application.bot.set_my_commands(commands)
+
+
 if __name__ == "__main__":
     # Fetch the token from the environment variable
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -352,7 +366,7 @@ if __name__ == "__main__":
             "No token provided. Please set the TELEGRAM_BOT_TOKEN environment variable."
         )
 
-    application = ApplicationBuilder().token(token).build()
+    application = ApplicationBuilder().token(token).post_init(post_init).build()
 
     # Add auto-registration handler in a separate group (-1) so it runs before command handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
