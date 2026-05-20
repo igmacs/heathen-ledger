@@ -220,3 +220,7 @@ when I had to correct or guide it
 
 - I asked the agent to write this section, but didn't like the results
   so I wrote it manually
+
+- I asked the agent where I should document the rules I want it to
+  follow from now on in every new conversation. He suggested AGENTS.md
+  and I asked it to write it with a few rules I came up with
