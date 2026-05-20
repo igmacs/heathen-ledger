@@ -173,8 +173,10 @@ class TestParser(unittest.TestCase):
 
         summary = generate_history_summary(txs)
         self.assertIn("📜 **Recent Group History:**", summary)
-        self.assertIn("💸 **Expense:** **Alice** paid **$50.00** for 'Dinner'", summary)
-        self.assertIn("🤝 **Payment:** **Bob** paid **Alice** **$20.00**", summary)
+        self.assertIn(
+            "1. 💸 **Expense:** **Alice** paid **$50.00** for 'Dinner'", summary
+        )
+        self.assertIn("2. 🤝 **Payment:** **Bob** paid **Alice** **$20.00**", summary)
 
 
 if __name__ == "__main__":

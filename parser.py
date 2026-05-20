@@ -315,7 +315,7 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
         return "ℹ️ No recent transactions found in this group."
 
     lines = []
-    for tx in transactions:
+    for i, tx in enumerate(transactions, 1):
         t_type = tx["type"]
         obj = tx["obj"]
         amount_formatted = f"{obj.amount / 100:.2f}"
@@ -324,13 +324,13 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
             payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
             desc = f" for '{obj.description}'" if obj.description else ""
             lines.append(
-                f"💸 **Expense:** **{payer_name}** paid **${amount_formatted}**{desc}"
+                f"{i}. 💸 **Expense:** **{payer_name}** paid **${amount_formatted}**{desc}"
             )
         elif t_type == "payment":
             payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
             payee_name = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
             lines.append(
-                f"🤝 **Payment:** **{payer_name}** paid **{payee_name}** **${amount_formatted}**"
+                f"{i}. 🤝 **Payment:** **{payer_name}** paid **{payee_name}** **${amount_formatted}**"
             )
 
     return "📜 **Recent Group History:**\n" + "\n".join(lines)
