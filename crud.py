@@ -129,6 +129,7 @@ def create_payment(
         group_id=group_id, payer_id=payer_id, payee_id=payee_id, amount=amount
     )
     session.add(payment)
+    session.flush()
     logger.info(
         f"Logged payment of {amount} cents from user ID {payer_id} to user ID {payee_id}"
     )

@@ -2,6 +2,7 @@ import sys
 import os
 import unittest
 from unittest.mock import AsyncMock, MagicMock
+from contextlib import contextmanager
 
 # Add project root to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -56,7 +57,7 @@ class TestBotSettleCallback(unittest.TestCase):
         )
         self.db_session.commit()
 
-    @unittest.mock.contextmanager
+    @contextmanager
     def get_session_context(self, session):
         yield session
 

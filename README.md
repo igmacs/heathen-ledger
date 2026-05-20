@@ -230,4 +230,10 @@ when I had to correct or guide it
 - I asked for suggestions about where to introduce inline buttons for
   the Telegram bot, and the agent suggested to start with the
   `/settle` command, the place I already had in mind. The agent
-  implemented it.
+  implemented it but there were two issues:
+  - The tests did not pass, but the agent fixed autonomously when I
+    complained and shared the output (usually the agent runs the tests
+    on its own, but in my last conversations the agent suddenly
+    stopped being able to run them or run git commands, not sure why)
+  - The feature did not work, but the agent also fixed it autonomously
+    when I shared the error

@@ -2,6 +2,7 @@ import os
 import logging
 from dotenv import load_dotenv
 from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -350,10 +351,14 @@ async def settle_callback_handler(
     amount_formatted = f"${amount / 100:.2f}"
     await query.answer(text=f"Recorded: {from_name} paid {to_name} {amount_formatted}.")
 
-    # Edit the message
-    await query.edit_message_text(
-        text=reply_text, parse_mode="Markdown", reply_markup=reply_markup
-    )
+    # Edit the message, trapping any duplicate click "Message is not modified" exceptions
+    try:
+        await query.edit_message_text(
+            text=reply_text, parse_mode="Markdown", reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 @with_db_session
