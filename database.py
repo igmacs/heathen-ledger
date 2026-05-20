@@ -1,6 +1,7 @@
 import os
 import logging
 from contextlib import contextmanager
+from functools import wraps
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -48,6 +49,17 @@ def get_session() -> Generator[Session, None, None]:
         raise
     finally:
         session.close()
+
+
+def with_db_session(f):
+    """Decorator to inject a database session into an asynchronous handler function."""
+
+    @wraps(f)
+    async def wrapper(*args, **kwargs):
+        with get_session() as session:
+            return await f(*args, session=session, **kwargs)
+
+    return wrapper
 
 
 def init_db() -> None:

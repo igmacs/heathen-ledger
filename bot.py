@@ -3,6 +3,8 @@ import logging
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
+from sqlalchemy.orm import Session
+from database import with_db_session
 
 load_dotenv()
 
@@ -12,7 +14,8 @@ logging.basicConfig(
 )
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+@with_db_session
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session):
     """Send a message when the command /start is issued."""
     await context.bot.send_message(
         chat_id=update.effective_chat.id, text="Hello, World!"
