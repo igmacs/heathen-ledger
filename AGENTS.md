@@ -14,3 +14,5 @@ Please follow these instructions and rules during all interactions in this works
 ## 3. Maintain Agent Conversation History
 * Keep the **Project evolution & Agent conversation history** section (at the end of `README.md`) up to date.
 * For each session, append a summary of the progress made, decisions taken, where the agent was autonomous, and where the user had to correct or guide the agent.
+* Use existing entries as reference for how brief those entries should
+  be and what details are important and which ones aren't

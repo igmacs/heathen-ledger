@@ -225,7 +225,8 @@ when I had to correct or guide it
   follow from now on in every new conversation. He suggested AGENTS.md
   and I asked it to write it with a few rules I came up with.
 
-- The user asked about Telegram bot command autocompletion in groups and how duplicate commands are handled when multiple bots are in the same group. I explained that Telegram handles command autocompletion in groups and uses usernames to disambiguate duplicate commands. The user chose to proceed with programmatically registering the commands. I implemented the programmatic setup using the `post_init` hook in `bot.py` to register `/pay`, `/balances`, `/settle`, `/payback`, `/history`, and `/help` commands. The user approved the implementation and the test suite passed successfully.
+- I asked the agent to implement command autocompletion and it did
+  successfully.
 
 - I asked for suggestions about where to introduce inline buttons for
   the Telegram bot, and the agent suggested to start with the
@@ -242,4 +243,6 @@ when I had to correct or guide it
   to `/pay` and `/payback` confirmations. It implemented it, I tested
   it, and it seems to work.
 
-- The user requested to add delete buttons to the `/history` command entries. I proposed an implementation plan where history entries are formatted with numeric prefixes, and the history response includes corresponding inline keyboard buttons (e.g., `🗑️ Delete 1`, `🗑️ Delete 2`). Clicking a button triggers a handler that deletes the transaction (validating that only the involved payer/payee is authorized to do so) and dynamically refreshes the history list in-place. I implemented these changes in `parser.py` and `bot.py`, updated the parser tests, and added unit tests in `tests/test_bot.py`. The user approved the implementation plan, and the changes were implemented. Due to environment command restrictions, testing and committing were left to the user.
+- I asked the agent to implement delete buttons when listing payments
+  with /history and it did. It's not the way I had in mind, but it
+  seems to work.
