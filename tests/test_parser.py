@@ -6,6 +6,7 @@ from parser import (
     simplify_debts,
     generate_settlements_summary,
     parse_payback_message,
+    generate_history_summary,
 )
 
 
@@ -139,6 +140,41 @@ class TestParser(unittest.TestCase):
     def test_parse_payback_message_invalid(self):
         res = parse_payback_message("/payback @Alice")
         self.assertIn("error", res)
+
+    def test_generate_history_summary(self):
+        class MockUser:
+            def __init__(self, first_name):
+                self.first_name = first_name
+
+        class MockExpense:
+            def __init__(self, payer, amount, description):
+                self.payer = payer
+                self.payer_id = 1
+                self.amount = amount
+                self.description = description
+
+        class MockPayment:
+            def __init__(self, payer, payee, amount):
+                self.payer = payer
+                self.payer_id = 1
+                self.payee = payee
+                self.payee_id = 2
+                self.amount = amount
+
+        alice = MockUser("Alice")
+        bob = MockUser("Bob")
+        exp = MockExpense(alice, 5000, "Dinner")
+        pay = MockPayment(bob, alice, 2000)
+
+        txs = [
+            {"type": "expense", "obj": exp, "created_at": None},
+            {"type": "payment", "obj": pay, "created_at": None},
+        ]
+
+        summary = generate_history_summary(txs)
+        self.assertIn("📜 **Recent Group History:**", summary)
+        self.assertIn("💸 **Expense:** **Alice** paid **$50.00** for 'Dinner'", summary)
+        self.assertIn("🤝 **Payment:** **Bob** paid **Alice** **$20.00**", summary)
 
 
 if __name__ == "__main__":

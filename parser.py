@@ -305,3 +305,32 @@ def parse_payback_message(text: str) -> Dict[str, Any]:
         "payee_username": payee,
         "amount": amount_cents,
     }
+
+
+def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
+    """
+    Formats recent transactions (expenses and payments) into a Markdown string.
+    """
+    if not transactions:
+        return "ℹ️ No recent transactions found in this group."
+
+    lines = []
+    for tx in transactions:
+        t_type = tx["type"]
+        obj = tx["obj"]
+        amount_formatted = f"{obj.amount / 100:.2f}"
+
+        if t_type == "expense":
+            payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
+            desc = f" for '{obj.description}'" if obj.description else ""
+            lines.append(
+                f"💸 **Expense:** **{payer_name}** paid **${amount_formatted}**{desc}"
+            )
+        elif t_type == "payment":
+            payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
+            payee_name = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
+            lines.append(
+                f"🤝 **Payment:** **{payer_name}** paid **{payee_name}** **${amount_formatted}**"
+            )
+
+    return "📜 **Recent Group History:**\n" + "\n".join(lines)

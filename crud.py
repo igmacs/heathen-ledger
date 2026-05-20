@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from sqlalchemy.orm import Session
 from models import User, Group, Expense, ExpenseSplit, Payment
 
@@ -191,3 +191,36 @@ def get_group_balances(session: Session, group_id: int) -> Dict[int, int]:
         balances[pay.payee_id] -= pay.amount
 
     return balances
+
+
+def get_recent_transactions(
+    session: Session, group_id: int, limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve recent transactions (both expenses and payments) in a group,
+    merged and sorted by creation date descending.
+    """
+    expenses = (
+        session.query(Expense)
+        .filter(Expense.group_id == group_id)
+        .order_by(Expense.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    payments = (
+        session.query(Payment)
+        .filter(Payment.group_id == group_id)
+        .order_by(Payment.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    txs = []
+    for exp in expenses:
+        txs.append({"type": "expense", "obj": exp, "created_at": exp.created_at})
+    for pay in payments:
+        txs.append({"type": "payment", "obj": pay, "created_at": pay.created_at})
+
+    # Sort descending
+    txs.sort(key=lambda x: x["created_at"], reverse=True)
+    return txs[:limit]

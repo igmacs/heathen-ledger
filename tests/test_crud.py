@@ -70,6 +70,12 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(balances[bob.id], 0)
             self.assertEqual(balances[charlie.id], -1000)
 
+            # 5. Retrieve recent transactions history
+            history = crud.get_recent_transactions(session, group.id)
+            self.assertEqual(len(history), 2)  # 1 expense and 1 payment
+            self.assertEqual(history[0]["type"], "payment")
+            self.assertEqual(history[1]["type"], "expense")
+
 
 if __name__ == "__main__":
     unittest.main()

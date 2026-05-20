@@ -20,6 +20,7 @@ from parser import (
     simplify_debts,
     generate_settlements_summary,
     parse_payback_message,
+    generate_history_summary,
 )
 
 load_dotenv()
@@ -299,6 +300,27 @@ async def payback_command(
     )
 
 
+@with_db_session
+async def history_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+):
+    """Handle the /history command to show recent transactions."""
+    if not update.effective_chat:
+        return
+
+    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
+    if not group:
+        await update.message.reply_text(
+            "ℹ️ No transactions or members recorded for this group yet."
+        )
+        return
+
+    # Fetch last 10 transactions
+    txs = crud.get_recent_transactions(session, group.id, limit=10)
+    reply_text = generate_history_summary(txs)
+    await update.message.reply_text(reply_text, parse_mode="Markdown")
+
+
 if __name__ == "__main__":
     # Fetch the token from the environment variable
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -317,12 +339,14 @@ if __name__ == "__main__":
     balances_handler = CommandHandler("balances", balances_command)
     settle_handler = CommandHandler("settle", settle_command)
     payback_handler = CommandHandler("payback", payback_command)
+    history_handler = CommandHandler("history", history_command)
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
     application.add_handler(balances_handler)
     application.add_handler(settle_handler)
     application.add_handler(payback_handler)
+    application.add_handler(history_handler)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
