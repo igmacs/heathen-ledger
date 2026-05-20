@@ -1,68 +1,63 @@
 import os
-import sqlite3
 import logging
-from typing import Optional
+from contextlib import contextmanager
+from typing import Generator
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 logger = logging.getLogger(__name__)
 
+# Base class for all database models
+Base = declarative_base()
 
-class Database:
-    def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path or os.environ.get("DB_PATH", "data/ledger.db")
-        self._connection: Optional[sqlite3.Connection] = None
+# Retrieve database configuration from environment
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    db_path = os.environ.get("DB_PATH", "data/ledger.db")
+    database_url = f"sqlite:///{db_path}"
 
-    def connect(self) -> sqlite3.Connection:
-        """
-        Establishes and returns a connection to the SQLite database.
-        Uses sqlite3.Row to allow dict-like access to rows.
-        """
-        if self._connection is None:
-            try:
-                # Ensure the database directory exists
-                db_dir = os.path.dirname(self.db_path)
-                if db_dir:
-                    os.makedirs(db_dir, exist_ok=True)
+# For SQLite, ensure the parent directory exists
+if database_url.startswith("sqlite:///"):
+    db_file_path = database_url.replace("sqlite:///", "")
+    if db_file_path:
+        db_dir = os.path.dirname(db_file_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
-                self._connection = sqlite3.connect(self.db_path)
-                self._connection.row_factory = sqlite3.Row
-                logger.info(f"Connected to SQLite database at {self.db_path}")
-            except sqlite3.Error as e:
-                logger.error(f"Failed to connect to database: {e}")
-                raise
-        return self._connection
+# Configure sqlite engine to handle multithreading/async contexts safely
+connect_args = {}
+if database_url.startswith("sqlite"):
+    connect_args["check_same_thread"] = False
 
-    def close(self) -> None:
-        """Closes the connection to the database if it exists."""
-        if self._connection:
-            try:
-                self._connection.close()
-                logger.info("Database connection closed.")
-            except sqlite3.Error as e:
-                logger.error(f"Failed to close database connection: {e}")
-            finally:
-                self._connection = None
+engine = create_engine(database_url, connect_args=connect_args)
 
-    def __enter__(self):
-        """Allows use of the Database class as a context manager."""
-        self.connect()
-        return self
+# Session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Ensures the connection is closed when exiting the context manager."""
-        self.close()
 
-    def init_db(self) -> None:
-        """
-        Initializes the database.
-        Schemas and initial tables will be defined here later.
-        """
-        conn = self.connect()
-        try:
-            # TODO: Define and execute schema creation statements here
+@contextmanager
+def get_session() -> Generator[Session, None, None]:
+    """Provide a transactional scope around a series of operations."""
+    session = SessionLocal()
+    try:
+        yield session
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Database transaction error, rolled back: {e}")
+        raise
+    finally:
+        session.close()
 
-            conn.commit()
-            logger.info("Database initialized successfully.")
-        except sqlite3.Error as e:
-            logger.error(f"Failed to initialize database: {e}")
-            conn.rollback()
-            raise
+
+def init_db() -> None:
+    """
+    Initializes the database by creating all tables.
+    Note: When using Alembic, tables are usually created/evolved via migrations.
+    """
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
