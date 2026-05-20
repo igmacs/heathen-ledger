@@ -241,7 +241,7 @@ def generate_settlements_summary(
         "🤝 **Suggested Payments to Settle Up:**\n"
         + "\n".join(lines)
         + "\n\n"
-        + "*To log a payment, use:* `/payback @recipient <amount>`"
+        + "*To log a payment, use:* `/payback @recipient <amount>` or tap the checkmark buttons below."
     )
 
 
