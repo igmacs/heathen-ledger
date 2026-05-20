@@ -1,5 +1,11 @@
+import sys
+import os
 import unittest
-from parser import (
+
+# Add project src to path dynamically
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+from heathen_ledger.parser import (
     parse_pay_message,
     split_amount_equally,
     generate_balances_summary,

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "heathen-ledger"
+version = "0.1.0"
+description = "A Telegram bot to track and settle group expenses"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "python-telegram-bot~=20.0",
+    "python-dotenv~=1.0",
+    "pre-commit~=3.5",
+    "SQLAlchemy>=2.0.0",
+    "alembic>=1.11.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -3,13 +3,13 @@ import os
 
 import unittest
 
-# Add project root to path dynamically
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project src to path dynamically
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database import Base
-import crud
+from heathen_ledger.database import Base
+from heathen_ledger import crud
 
 
 class TestCRUD(unittest.TestCase):

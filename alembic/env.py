@@ -7,14 +7,14 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Add parent directory to sys.path so we can import our database module
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add src directory to sys.path so we can import our database module
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv()
 
-from database import Base  # noqa: E402
+from heathen_ledger.database import Base  # noqa: E402
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

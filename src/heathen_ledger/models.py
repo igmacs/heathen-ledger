@@ -2,7 +2,7 @@ import datetime
 from sqlalchemy import Column, Integer, String, BigInteger, ForeignKey, DateTime, Table
 from sqlalchemy.orm import relationship
 
-from database import Base
+from .database import Base
 
 # Many-to-many relationship mapping between users and groups
 group_members = Table(

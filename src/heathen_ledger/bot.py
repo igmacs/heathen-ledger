@@ -13,10 +13,10 @@ from telegram.ext import (
     filters,
 )
 from sqlalchemy.orm import Session
-from database import with_db_session
-from models import User, Expense, Payment
-import crud
-from parser import (
+from .database import with_db_session
+from .models import User, Expense, Payment
+from . import crud
+from .parser import (
     parse_pay_message,
     split_amount_equally,
     generate_balances_summary,

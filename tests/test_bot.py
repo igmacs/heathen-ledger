@@ -4,14 +4,14 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock
 from contextlib import contextmanager
 
-# Add project root to path dynamically
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add project src to path dynamically
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from database import Base
-import crud
-from bot import (
+from heathen_ledger.database import Base
+from heathen_ledger import crud
+from heathen_ledger.bot import (
     settle_callback_handler,
     undo_callback_handler,
     history_delete_callback_handler,
@@ -32,7 +32,7 @@ class TestBotSettleCallback(unittest.TestCase):
         # 2. Patch database.get_session to return our test session
         self.db_session = self.Session()
         self.get_session_patcher = unittest.mock.patch(
-            "database.get_session",
+            "heathen_ledger.database.get_session",
             side_effect=lambda: self.get_session_context(self.db_session),
         )
         self.get_session_patcher.start()

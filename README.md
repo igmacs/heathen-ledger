@@ -66,11 +66,24 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 ### Running the Bot
 Start the bot application:
 ```bash
-python bot.py
+PYTHONPATH=src python -m heathen_ledger.bot
+```
+
+Alternatively, you can install the package in editable mode:
+```bash
+pip install -e .
+```
+And run the bot directly:
+```bash
+python -m heathen_ledger.bot
 ```
 
 ### Running the Test Suite
 Verify everything is working with:
+```bash
+PYTHONPATH=src python -m unittest discover -s tests
+```
+Or, if installed in editable mode:
 ```bash
 python -m unittest discover -s tests
 ```
@@ -246,3 +259,9 @@ when I had to correct or guide it
 - I asked the agent to implement delete buttons when listing payments
   with /history and it did. It's not the way I had in mind, but it
   seems to work.
+
+- I asked the agent to evaluate the project for quality standards. The
+  agent proposed a few imporovements but not the basic one I had in
+  mind, structuring the code property and moving the .py files to a
+  src/ folder. I told it to do so and it did together with a few other
+  related improvements.

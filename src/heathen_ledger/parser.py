@@ -231,7 +231,7 @@ def generate_settlements_summary(
             if to_user
             else f"User {tx['to_user_id']}"
         )
-        amount_formatted = f"{tx["amount"] / 100:.2f}"
+        amount_formatted = f"{tx['amount'] / 100:.2f}"
 
         lines.append(
             f"• **{from_name}** should pay **{to_name}** **${amount_formatted}**"
