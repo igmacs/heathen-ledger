@@ -243,3 +243,65 @@ def generate_settlements_summary(
         + "\n\n"
         + "*To log a payment, use:* `/payback @recipient <amount>`"
     )
+
+
+def parse_payback_message(text: str) -> Dict[str, Any]:
+    """
+    Parses a /payback command to extract direct payment details.
+
+    Expected formats:
+    - /payback @recipient <amount>
+    - /payback @payer @recipient <amount>
+
+    Examples:
+    - /payback @Alice 10 -> Payer: None (default sender), Payee: Alice, Amount: 1000
+    - /payback @Bob @Alice 10 -> Payer: Bob, Payee: Alice, Amount: 1000
+
+    :param text: The raw text of the message.
+    :return: A dictionary containing:
+             - 'payer_username': Username of the payer (lowercase, no @), or None
+             - 'payee_username': Username of the payee (lowercase, no @)
+             - 'amount': Amount in cents (int)
+             - 'error': Error message string if parsing fails
+    """
+    cleaned_text = re.sub(r"^/payback(?:\s+|$)", "", text, flags=re.IGNORECASE).strip()
+
+    mentions: List[Dict[str, Any]] = []
+    for match in re.finditer(r"@(\w+)", cleaned_text):
+        mentions.append(
+            {
+                "username": match.group(1).lower(),
+                "start": match.start(),
+                "end": match.end(),
+            }
+        )
+
+    amount_match = re.search(r"\b(\d+(?:\.\d{1,2})?)\b", cleaned_text)
+    if not amount_match:
+        return {"error": "No valid amount found in the message."}
+
+    amount_str = amount_match.group(1)
+
+    if "." in amount_str:
+        parts = amount_str.split(".")
+        dollars = int(parts[0])
+        cents_part = parts[1]
+        cents = int(cents_part) * 10 if len(cents_part) == 1 else int(cents_part)
+        amount_cents = dollars * 100 + cents
+    else:
+        amount_cents = int(amount_str) * 100
+
+    if len(mentions) == 1:
+        payer = None
+        payee = mentions[0]["username"]
+    elif len(mentions) >= 2:
+        payer = mentions[0]["username"]
+        payee = mentions[1]["username"]
+    else:
+        return {"error": "Must mention at least the recipient (payee) of the payback."}
+
+    return {
+        "payer_username": payer,
+        "payee_username": payee,
+        "amount": amount_cents,
+    }

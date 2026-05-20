@@ -5,6 +5,7 @@ from parser import (
     generate_balances_summary,
     simplify_debts,
     generate_settlements_summary,
+    parse_payback_message,
 )
 
 
@@ -122,6 +123,22 @@ class TestParser(unittest.TestCase):
 
         self.assertIn("🤝 **Suggested Payments to Settle Up:**", summary)
         self.assertIn("• **Bob** should pay **Alice** **$15.00**", summary)
+
+    def test_parse_payback_message_single_mention(self):
+        res = parse_payback_message("/payback @Alice 10")
+        self.assertIsNone(res.get("payer_username"))
+        self.assertEqual(res.get("payee_username"), "alice")
+        self.assertEqual(res.get("amount"), 1000)
+
+    def test_parse_payback_message_dual_mention(self):
+        res = parse_payback_message("/payback @Bob @Alice 12.50")
+        self.assertEqual(res.get("payer_username"), "bob")
+        self.assertEqual(res.get("payee_username"), "alice")
+        self.assertEqual(res.get("amount"), 1250)
+
+    def test_parse_payback_message_invalid(self):
+        res = parse_payback_message("/payback @Alice")
+        self.assertIn("error", res)
 
 
 if __name__ == "__main__":

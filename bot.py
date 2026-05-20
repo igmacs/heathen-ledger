@@ -19,6 +19,7 @@ from parser import (
     generate_balances_summary,
     simplify_debts,
     generate_settlements_summary,
+    parse_payback_message,
 )
 
 load_dotenv()
@@ -218,6 +219,86 @@ async def settle_command(
     await update.message.reply_text(reply_text, parse_mode="Markdown")
 
 
+@with_db_session
+async def payback_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+):
+    """Handle the /payback command to log direct payback transactions."""
+    if not update.message or not update.message.text:
+        return
+
+    parsed = parse_payback_message(update.message.text)
+    if "error" in parsed:
+        await update.message.reply_text(
+            f"⚠️ Error parsing command: {parsed['error']}\n"
+            f"Usage: `/payback [@payer] @recipient <amount>`"
+        )
+        return
+
+    amount = parsed["amount"]
+    payer_username = parsed["payer_username"]
+    payee_username = parsed["payee_username"]
+
+    # Get active group
+    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
+    if not group:
+        group = crud.get_or_create_group(
+            session, update.effective_chat.id, update.effective_chat.title
+        )
+
+    # 1. Resolve Payer
+    if payer_username:
+        payer = session.query(User).filter(User.username == payer_username).first()
+        if not payer:
+            await update.message.reply_text(
+                f"⚠️ I don't know who @{payer_username} is yet! "
+                f"They need to send a message in this group first so I can register them."
+            )
+            return
+    else:
+        # Default to the sender of the message
+        payer = crud.get_user_by_telegram_id(session, update.effective_user.id)
+        if not payer:
+            payer = crud.get_or_create_user(
+                session,
+                update.effective_user.id,
+                update.effective_user.username,
+                update.effective_user.first_name,
+            )
+
+    # 2. Resolve Payee
+    payee = session.query(User).filter(User.username == payee_username).first()
+    if not payee:
+        await update.message.reply_text(
+            f"⚠️ I don't know who @{payee_username} is yet! "
+            f"They need to send a message in this group first so I can register them."
+        )
+        return
+
+    # Ensure members are registered to the group members list
+    crud.add_user_to_group(session, payer, group)
+    crud.add_user_to_group(session, payee, group)
+
+    # 3. Create direct payment in the database
+    crud.create_payment(
+        session=session,
+        group_id=group.id,
+        payer_id=payer.id,
+        payee_id=payee.id,
+        amount=amount,
+    )
+
+    # 4. Format and reply
+    amount_formatted = f"{amount / 100:.2f}"
+    await update.message.reply_text(
+        f"✅ **Recorded payment:**\n"
+        f"• **Paid by:** {payer.first_name}\n"
+        f"• **Paid to:** {payee.first_name}\n"
+        f"• **Amount:** ${amount_formatted}",
+        parse_mode="Markdown",
+    )
+
+
 if __name__ == "__main__":
     # Fetch the token from the environment variable
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -235,11 +316,13 @@ if __name__ == "__main__":
     pay_handler = CommandHandler("pay", pay_command)
     balances_handler = CommandHandler("balances", balances_command)
     settle_handler = CommandHandler("settle", settle_command)
+    payback_handler = CommandHandler("payback", payback_command)
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
     application.add_handler(balances_handler)
     application.add_handler(settle_handler)
+    application.add_handler(payback_handler)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
