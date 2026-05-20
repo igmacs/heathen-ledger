@@ -126,3 +126,99 @@ For native deployments on a Linux server without Docker:
 This project is intended to be "vibe coded" as much as possible. All code and commits in this repository are 100% AI-generated unless explicitly specified otherwise.
 
 **Workflow Rule:** The AI assistant must commit code incrementally after completing each logical file or small feature, providing atomic and descriptive commits, rather than batching everything into a single large commit.
+
+#### Project evolution & Agent conversation history
+
+Here I document my conversation with the Antigravity agent and how the
+project evolved, with emphasis in when was the agent autonomous and
+when I had to correct or guide it
+
+- I explained the project I wanted to build and asked the agent to
+  create the README. I asked for a few a amends to include things I
+  considered important, and finally to commit it. It did it well, the
+  only problem is that it had a tendency to include in the commit
+  messages a few words about my amend requests, even if they were not
+  really important in comparison with my main request.
+
+- I asked what languages and tools the agent recommended to build the
+  bot, and we settled with Python. I asked it to create a Hello World
+  Python Telegram bot skeleton, which it did mostly successfully,
+  except for the following:
+  - The bot token was hardcoded so I had to ask it to treat it as a
+    secret.
+  - I had to explicitly ask for dependency management
+
+- I asked the agent to help me come up with some fun quotes for the
+  projects, building on the play of words in the name (the actor Heath
+  Ledger, in particular his role as The Joker in The Dark Knight film,
+  and the concept of a ledger telegram bot). It came with surprisingly
+  good suggestions, I have only used one for now but the other ones
+  are saved for later and will probably be used later
+
+- I asked it to proceed with the implementation and it tried to create
+  the core logic of the bot all at once. It didn't go well
+  - First, I had to remind it to create smaller and incremental
+    commits, and to add a section somewhere to remind it in the
+    future. It choose the README, so I'm skeptical it will be useful
+  - I had to ask it why it had written and import in the middle of the
+    code, and the agent moved it to the beginning of the file
+  - I had to ask it to write a pre-commit configuration since it was
+    adding trailing whitespaces everywhere. It suggested using ruff
+    for formatting and I accepted it. The agent added the
+    configuration and fixed the code autonomously
+    - Although it added a check-yaml hook and there was no yaml file
+      in the project nor any plan to have it, so I had to ask it to
+      remove it
+  - Then I tried the code, and it didn't work well, although I don't
+    remember now how broken it was. I manually reverted commit 665b0d8
+    but keeping all changes on top, the only change that I had made
+    manually so far
+
+- I asked to forget about the logic for now and start with the
+  database, for which at some point we had agreed to use SQLite,
+  although I don't remember when anymore. I had to correct the agent a
+  few times here to
+  - It created the db file in root of the directory and didn't add it
+    to gitignore. I complained, and we agreed to parameterize the path
+    and default to an ignored data/ folder in the project.
+  - It hardcoded the schema and the queries. I asked it what was the
+    proper way to manage schemas and migrations in Python and it
+    suggested Alembic with SQLAlchemy, which I agreed to. The agent
+    created the basic setup and I agreed to it without review, since I
+    had already entered the zone where I have never really worked with
+    the tools the agent was working with
+  - In the middle of all this, I exceeded my quota for my Google Pro
+    subscription, which I had only used for this project, and I had to
+    wait a week to continue. It was supposed to be a 20€/month plan,
+    but the first month was free, so maybe it has a lower quota.
+
+- I asked the agent to define the initial schema. It came up with a
+  proposal to which I agreed, and it implemented it. The agent
+  suggested to do next the database session integration and the data
+  models, and I told it to proceed.
+  - For the models, the agent said it had wrote a test and run it for
+    verification. But that test file wasn't commited and never reached
+    the workspace either. I had to ask the agent to add it and commit
+    it, and I'm not really sure that it didn't hallucinate it
+    originally.
+
+- I asked the agent for next step suggestions and it suggest to
+  implement the basic commands one by one. It autonomously did so,
+  without any review whatsoever of the code on my side. It added tests
+  for all of them, but I didn't review them either, so who knows how
+  good they are.
+  - I had to remind the agent to update the documentation in the
+    README for the new commands it was implementing or the new
+    choices it was making for the original commands.
+
+- The agent suggested as next action to write a dockerfile and
+  document the deployment steps. I agreed and approved all the code
+  without review
+
+- I asked the agent to write for me a manual testing guide to test the
+  progress so far
+  - Most commands are not parsed correctly when you specify a user.
+  - Otherwise, it mostly worked well
+
+- I asked the agent to write this section, but didn't like the results
+  so I wrote it manually
