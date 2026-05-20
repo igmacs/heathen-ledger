@@ -148,3 +148,98 @@ def generate_balances_summary(
             lines.append(f"• **{name}** is settled up")
 
     return "📊 **Current Net Balances:**\n" + "\n".join(lines)
+
+
+def simplify_debts(balances: Dict[int, int]) -> List[Dict[str, Any]]:
+    """
+    Computes the minimum number of transactions needed to settle all debts.
+
+    :param balances: A dict mapping user IDs to their net balances in cents.
+    :return: A list of dicts representing transactions:
+             {
+                 'from_user_id': int,
+                 'to_user_id': int,
+                 'amount': int  # in cents
+             }
+    """
+    debtors = []  # list of [user_id, amount_cents]
+    creditors = []  # list of [user_id, amount_cents]
+
+    for user_id, balance in balances.items():
+        if balance < 0:
+            debtors.append([user_id, -balance])
+        elif balance > 0:
+            creditors.append([user_id, balance])
+
+    # Sort descending by amount so we process largest balances first
+    debtors.sort(key=lambda x: x[1], reverse=True)
+    creditors.sort(key=lambda x: x[1], reverse=True)
+
+    transactions = []
+
+    while debtors and creditors:
+        debtor = debtors[0]
+        creditor = creditors[0]
+
+        from_id, owe_amt = debtor
+        to_id, owed_amt = creditor
+
+        settle_amt = min(owe_amt, owed_amt)
+        if settle_amt == 0:
+            break
+
+        transactions.append(
+            {"from_user_id": from_id, "to_user_id": to_id, "amount": settle_amt}
+        )
+
+        debtor[1] -= settle_amt
+        creditor[1] -= settle_amt
+
+        if debtor[1] == 0:
+            debtors.pop(0)
+        else:
+            debtors.sort(key=lambda x: x[1], reverse=True)
+
+        if creditor[1] == 0:
+            creditors.pop(0)
+        else:
+            creditors.sort(key=lambda x: x[1], reverse=True)
+
+    return transactions
+
+
+def generate_settlements_summary(
+    transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
+) -> str:
+    """
+    Formats the list of suggested payments into a human-readable Markdown string.
+    """
+    if not transactions:
+        return "✅ **Everyone is fully settled up! No transactions needed.**"
+
+    lines = []
+    for tx in transactions:
+        from_user = users_by_id.get(tx["from_user_id"])
+        to_user = users_by_id.get(tx["to_user_id"])
+        from_name = (
+            getattr(from_user, "first_name", f"User {tx['from_user_id']}")
+            if from_user
+            else f"User {tx['from_user_id']}"
+        )
+        to_name = (
+            getattr(to_user, "first_name", f"User {tx['to_user_id']}")
+            if to_user
+            else f"User {tx['to_user_id']}"
+        )
+        amount_formatted = f"{tx["amount"] / 100:.2f}"
+
+        lines.append(
+            f"• **{from_name}** should pay **{to_name}** **${amount_formatted}**"
+        )
+
+    return (
+        "🤝 **Suggested Payments to Settle Up:**\n"
+        + "\n".join(lines)
+        + "\n\n"
+        + "*To log a payment, use:* `/payback @recipient <amount>`"
+    )

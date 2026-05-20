@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session
 from database import with_db_session
 from models import User
 import crud
-from parser import parse_pay_message, split_amount_equally, generate_balances_summary
+from parser import (
+    parse_pay_message,
+    split_amount_equally,
+    generate_balances_summary,
+    simplify_debts,
+    generate_settlements_summary,
+)
 
 load_dotenv()
 
@@ -189,6 +195,29 @@ async def balances_command(
     await update.message.reply_text(reply_text, parse_mode="Markdown")
 
 
+@with_db_session
+async def settle_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+):
+    """Handle the /settle command to show simplified payback transactions."""
+    if not update.effective_chat:
+        return
+
+    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
+    if not group or not group.members:
+        await update.message.reply_text(
+            "ℹ️ No transactions or members recorded for this group yet."
+        )
+        return
+
+    balances = crud.get_group_balances(session, group.id)
+    transactions = simplify_debts(balances)
+    users_by_id = {u.id: u for u in group.members}
+
+    reply_text = generate_settlements_summary(transactions, users_by_id)
+    await update.message.reply_text(reply_text, parse_mode="Markdown")
+
+
 if __name__ == "__main__":
     # Fetch the token from the environment variable
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -205,10 +234,12 @@ if __name__ == "__main__":
     start_handler = CommandHandler("start", start)
     pay_handler = CommandHandler("pay", pay_command)
     balances_handler = CommandHandler("balances", balances_command)
+    settle_handler = CommandHandler("settle", settle_command)
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
     application.add_handler(balances_handler)
+    application.add_handler(settle_handler)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
