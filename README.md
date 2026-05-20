@@ -75,6 +75,52 @@ Verify everything is working with:
 python -m unittest discover -s tests
 ```
 
+### Production Deployment
+
+#### Option A: Docker Compose (Recommended)
+This method ensures the bot runs inside a containerized environment and automatically restarts on system reboots.
+1. Populate your root `.env` file with the target `TELEGRAM_BOT_TOKEN`.
+2. Launch the containerized bot in detached mode:
+   ```bash
+   docker compose up -d --build
+   ```
+3. To view running logs:
+   ```bash
+   docker compose logs -f
+   ```
+The SQLite database file will be saved inside the docker volume `bot_data` (mapped to `/app/data` inside the container), keeping your ledger state persistent across upgrades.
+
+#### Option B: systemd System Service
+For native deployments on a Linux server without Docker:
+1. Create a systemd service file at `/etc/systemd/system/heathen-ledger.service`:
+   ```ini
+   [Unit]
+   Description=Heathen Ledger Telegram Bot
+   After=network.target
+
+   [Service]
+   Type=simple
+   User=your-ssh-user
+   WorkingDirectory=/home/your-ssh-user/heathen-ledger
+   EnvironmentFile=/home/your-ssh-user/heathen-ledger/.env
+   ExecStart=/home/your-ssh-user/heathen-ledger/.venv/bin/python bot.py
+   Restart=on-failure
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+2. Enable and start the service:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable heathen-ledger
+   sudo systemctl start heathen-ledger
+   ```
+3. Monitor the execution status or logs:
+   ```bash
+   sudo systemctl status heathen-ledger
+   journalctl -u heathen-ledger -f
+   ```
+
 ### Vibe Coding & AI Generation
 
 This project is intended to be "vibe coded" as much as possible. All code and commits in this repository are 100% AI-generated unless explicitly specified otherwise.
