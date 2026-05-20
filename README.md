@@ -18,8 +18,14 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 *Commands are conceptual and may evolve during development.*
 
 1. **Add an Expense**:
-   `/pay @Alice 50 for Dinner` (Default: split equally among everyone in the group)
-   `/pay @Alice 50 for @Bob @Charlie` (Split specifically between Bob and Charlie)
+   - `/pay @Alice 50 for Dinner` (Alice paid $50.00; split equally among all members of the group chat).
+   - `/pay @Alice 50 for @Bob @Charlie` (Alice paid $50.00; split specifically between Bob and Charlie).
+   - `/pay 12.50 for Pizza` (The sender paid $12.50; split equally among all members of the group chat).
+
+   > [!IMPORTANT]
+   > **User Auto-Registration:**
+   > To split an expense or specify a payer using their Telegram username (e.g. `@Alice`), that user **must have sent at least one message in the group** since the bot was added.
+   > The bot auto-registers users when they send messages. If a user is mentioned but has never interacted, the bot will return a warning asking them to send a message to register.
 
 2. **Check Balances**:
    `/balances` (Shows a quick summary of everyone's net balance)

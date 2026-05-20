@@ -1,0 +1,53 @@
+import unittest
+from parser import parse_pay_message, split_amount_equally
+
+
+class TestParser(unittest.TestCase):
+    def test_parse_pay_message_with_payer_and_desc(self):
+        res = parse_pay_message("/pay @Alice 50 for Dinner")
+        self.assertEqual(res.get("payer_username"), "alice")
+        self.assertEqual(res.get("amount"), 5000)
+        self.assertEqual(res.get("participants"), [])
+        self.assertEqual(res.get("description"), "Dinner")
+
+    def test_parse_pay_message_with_payer_and_participants(self):
+        res = parse_pay_message("/pay @Alice 50 for @Bob @Charlie")
+        self.assertEqual(res.get("payer_username"), "alice")
+        self.assertEqual(res.get("amount"), 5000)
+        self.assertEqual(res.get("participants"), ["bob", "charlie"])
+        self.assertIsNone(res.get("description"))
+
+    def test_parse_pay_message_no_payer(self):
+        res = parse_pay_message("/pay 12.50 for lunch @Bob")
+        self.assertIsNone(res.get("payer_username"))
+        self.assertEqual(res.get("amount"), 1250)
+        self.assertEqual(res.get("participants"), ["bob"])
+        self.assertEqual(res.get("description"), "lunch")
+
+    def test_parse_pay_message_only_amount(self):
+        res = parse_pay_message("/pay 100")
+        self.assertIsNone(res.get("payer_username"))
+        self.assertEqual(res.get("amount"), 10000)
+        self.assertEqual(res.get("participants"), [])
+        self.assertIsNone(res.get("description"))
+
+    def test_parse_pay_message_invalid_amount(self):
+        res = parse_pay_message("/pay @Alice for Dinner")
+        self.assertIn("error", res)
+
+    def test_split_amount_equally_exact(self):
+        shares = split_amount_equally(3000, 3)
+        self.assertEqual(shares, [1000, 1000, 1000])
+
+    def test_split_amount_equally_with_remainder(self):
+        # 10.00 / 3 -> 3.34, 3.33, 3.33
+        shares = split_amount_equally(1000, 3)
+        self.assertEqual(shares, [334, 333, 333])
+
+        # 0.05 / 3 -> 0.02, 0.02, 0.01
+        shares = split_amount_equally(5, 3)
+        self.assertEqual(shares, [2, 2, 1])
+
+
+if __name__ == "__main__":
+    unittest.main()
