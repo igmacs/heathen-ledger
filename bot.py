@@ -321,6 +321,29 @@ async def history_command(
     await update.message.reply_text(reply_text, parse_mode="Markdown")
 
 
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the /help command to display instructions and formatting."""
+    help_text = (
+        "📖 **Heathen Ledger Bot Help**\n\n"
+        "Here are the available commands:\n\n"
+        "💸 **Logging Expenses**\n"
+        "• `/pay <amount> [for <description>]` — Log an expense paid by you, split equally among everyone. (e.g. `/pay 12.50 for Pizza`)\n"
+        "• `/pay @payer <amount> [for <description>]` — Log an expense paid by another member, split equally. (e.g. `/pay @Alice 50 for Dinner`)\n"
+        "• `/pay @payer <amount> for @user1 @user2 ...` — Log an expense split specifically among selected members. (e.g. `/pay @Alice 50 for @Bob @Charlie`)\n\n"
+        "🤝 **Settle Debts & Paybacks**\n"
+        "• `/balances` — View current net group balances (highest creditor to highest debtor).\n"
+        "• `/settle` — Calculate the minimum payback transactions needed to settle all group debts.\n"
+        "• `/payback @recipient <amount>` — Record a direct payment from you to settle up. (e.g. `/payback @Alice 10`)\n"
+        "• `/payback @payer @recipient <amount>` — Record a direct payment between other group members. (e.g. `/payback @Bob @Alice 12.50`)\n\n"
+        "📜 **History & Audit Logs**\n"
+        "• `/history` — View the last 10 transactions logged in the group chat.\n\n"
+        "⚠️ **User Registration:**\n"
+        "The bot automatically registers users when they send a message. "
+        "Before you can assign a payment/expense to a member, they *must have sent at least one message* in the group."
+    )
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+
 if __name__ == "__main__":
     # Fetch the token from the environment variable
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
@@ -340,6 +363,7 @@ if __name__ == "__main__":
     settle_handler = CommandHandler("settle", settle_command)
     payback_handler = CommandHandler("payback", payback_command)
     history_handler = CommandHandler("history", history_command)
+    help_handler = CommandHandler("help", help_command)
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
@@ -347,6 +371,7 @@ if __name__ == "__main__":
     application.add_handler(settle_handler)
     application.add_handler(payback_handler)
     application.add_handler(history_handler)
+    application.add_handler(help_handler)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
