@@ -1,5 +1,5 @@
 import unittest
-from parser import parse_pay_message, split_amount_equally
+from parser import parse_pay_message, split_amount_equally, generate_balances_summary
 
 
 class TestParser(unittest.TestCase):
@@ -47,6 +47,36 @@ class TestParser(unittest.TestCase):
         # 0.05 / 3 -> 0.02, 0.02, 0.01
         shares = split_amount_equally(5, 3)
         self.assertEqual(shares, [2, 2, 1])
+
+    def test_generate_balances_summary(self):
+        class MockUser:
+            def __init__(self, first_name):
+                self.first_name = first_name
+
+        users_by_id = {
+            1: MockUser("Alice"),
+            2: MockUser("Bob"),
+            3: MockUser("Charlie"),
+        }
+
+        balances = {
+            1: 2000,  # Alice is owed $20.00
+            2: -1000,  # Bob owes $10.00
+            3: 0,  # Charlie is settled up
+        }
+
+        summary = generate_balances_summary(balances, users_by_id)
+
+        self.assertIn("📊 **Current Net Balances:**", summary)
+        self.assertIn("• **Alice** is owed **$20.00**", summary)
+        self.assertIn("• **Bob** owes **$10.00**", summary)
+        self.assertIn("• **Charlie** is settled up", summary)
+
+        # Verify sorting order (descending balance)
+        lines = summary.split("\n")
+        self.assertTrue("Alice" in lines[1])
+        self.assertTrue("Charlie" in lines[2])
+        self.assertTrue("Bob" in lines[3])
 
 
 if __name__ == "__main__":

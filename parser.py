@@ -118,3 +118,33 @@ def split_amount_equally(amount: int, num_people: int) -> List[int]:
         shares[i] += 1
 
     return shares
+
+
+def generate_balances_summary(
+    balances: Dict[int, int], users_by_id: Dict[int, Any]
+) -> str:
+    """
+    Formats the net balances of group members into a human-readable Markdown string.
+    """
+    if not balances:
+        return "ℹ️ No member balances to display."
+
+    lines = []
+    # Sort by balance descending (people who are owed the most first)
+    sorted_balances = sorted(balances.items(), key=lambda item: item[1], reverse=True)
+
+    for user_id, balance in sorted_balances:
+        user = users_by_id.get(user_id)
+        if not user:
+            continue
+        name = getattr(user, "first_name", f"User {user_id}")
+        amount = abs(balance) / 100
+
+        if balance > 0:
+            lines.append(f"• **{name}** is owed **${amount:.2f}**")
+        elif balance < 0:
+            lines.append(f"• **{name}** owes **${amount:.2f}**")
+        else:
+            lines.append(f"• **{name}** is settled up")
+
+    return "📊 **Current Net Balances:**\n" + "\n".join(lines)
