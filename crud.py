@@ -225,3 +225,25 @@ def get_recent_transactions(
     # Sort descending
     txs.sort(key=lambda x: x["created_at"], reverse=True)
     return txs[:limit]
+
+
+def delete_expense(session: Session, expense_id: int) -> bool:
+    """Delete an expense by its ID. Splits will be cascade-deleted by the database."""
+    expense = session.query(Expense).filter(Expense.id == expense_id).first()
+    if expense:
+        session.delete(expense)
+        session.flush()
+        logger.info(f"Deleted expense ID {expense_id} and its associated splits")
+        return True
+    return False
+
+
+def delete_payment(session: Session, payment_id: int) -> bool:
+    """Delete a payback payment by its ID."""
+    payment = session.query(Payment).filter(Payment.id == payment_id).first()
+    if payment:
+        session.delete(payment)
+        session.flush()
+        logger.info(f"Deleted payment ID {payment_id}")
+        return True
+    return False

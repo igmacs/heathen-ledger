@@ -237,3 +237,7 @@ when I had to correct or guide it
     stopped being able to run them or run git commands, not sure why)
   - The feature did not work, but the agent also fixed it autonomously
     when I shared the error
+
+- I asked to implement the second suggestion to add a `🗑️ Undo` button
+  to `/pay` and `/payback` confirmations. It implemented it, I tested
+  it, and it seems to work.

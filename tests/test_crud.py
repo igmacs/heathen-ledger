@@ -76,6 +76,46 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(history[0]["type"], "payment")
             self.assertEqual(history[1]["type"], "expense")
 
+    def test_deletion_scenario(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+
+        with Session() as session:
+            group = crud.get_or_create_group(session, 12345, "Trip to Spain")
+            alice = crud.get_or_create_user(session, 11, "alice", "Alice")
+            bob = crud.get_or_create_user(session, 22, "bob", "Bob")
+            crud.add_user_to_group(session, alice, group)
+            crud.add_user_to_group(session, bob, group)
+            session.commit()
+
+            # Create expense
+            splits = {alice.id: 500, bob.id: 500}
+            expense = crud.create_expense(
+                session, group.id, alice.id, 1000, "Pizza", splits
+            )
+            session.commit()
+
+            # Create payment
+            payment = crud.create_payment(session, group.id, bob.id, alice.id, 500)
+            session.commit()
+
+            # Verify presence
+            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 1)
+            self.assertEqual(len(crud.get_group_payments(session, group.id)), 1)
+
+            # Delete payment
+            success_pay = crud.delete_payment(session, payment.id)
+            session.commit()
+            self.assertTrue(success_pay)
+            self.assertEqual(len(crud.get_group_payments(session, group.id)), 0)
+
+            # Delete expense (should cascade delete splits)
+            success_exp = crud.delete_expense(session, expense.id)
+            session.commit()
+            self.assertTrue(success_exp)
+            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

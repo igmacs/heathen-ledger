@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 from sqlalchemy.orm import Session
 from database import with_db_session
-from models import User
+from models import User, Expense, Payment
 import crud
 from parser import (
     parse_pay_message,
@@ -149,7 +149,7 @@ async def pay_command(
         splits_dict[user.id] = share
 
     # 4. Create the expense in database
-    crud.create_expense(
+    expense = crud.create_expense(
         session=session,
         group_id=group.id,
         payer_id=payer.id,
@@ -175,7 +175,29 @@ async def pay_command(
         for user, share in zip(participants, shares):
             reply_text += f"  - {user.first_name}: ${share / 100:.2f}\n"
 
-    await update.message.reply_text(reply_text, parse_mode="Markdown")
+    # Get creator info
+    creator = crud.get_user_by_telegram_id(session, update.effective_user.id)
+    if not creator:
+        creator = crud.get_or_create_user(
+            session,
+            update.effective_user.id,
+            update.effective_user.username,
+            update.effective_user.first_name,
+        )
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text="🗑️ Undo",
+                callback_data=f"undo:expense:{expense.id}:{creator.id}",
+            )
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        reply_text, parse_mode="Markdown", reply_markup=reply_markup
+    )
 
 
 @with_db_session
@@ -362,6 +384,94 @@ async def settle_callback_handler(
 
 
 @with_db_session
+async def undo_callback_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+):
+    """Handle CallbackQuery for transaction undo actions."""
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    # Callback data schema: undo:<type>:<tx_id>:<creator_id>
+    parts = query.data.split(":")
+    if len(parts) != 4:
+        return
+
+    _, tx_type, tx_id_str, creator_id_str = parts
+    tx_id = int(tx_id_str)
+    creator_id = int(creator_id_str)
+
+    # Resolve clicking user's database ID
+    clicker = crud.get_user_by_telegram_id(session, query.from_user.id)
+    if not clicker:
+        # Fallback to auto-register them
+        clicker = crud.get_or_create_user(
+            session,
+            query.from_user.id,
+            query.from_user.username,
+            query.from_user.first_name,
+        )
+
+    # Security check: only the user who recorded the transaction can undo it
+    if clicker.id != creator_id:
+        creator_user = session.query(User).filter(User.id == creator_id).first()
+        creator_name = (
+            creator_user.first_name if creator_user else "the user who recorded it"
+        )
+        await query.answer(
+            text=f"⚠️ Only {creator_name} can undo this transaction.",
+            show_alert=True,
+        )
+        return
+
+    # Perform the deletion
+    success = False
+    audit_desc = ""
+    if tx_type == "expense":
+        expense = session.query(Expense).filter(Expense.id == tx_id).first()
+        if expense:
+            amount_formatted = f"${expense.amount / 100:.2f}"
+            desc_str = f" for '{expense.description}'" if expense.description else ""
+            audit_desc = f"Recorded expense of {amount_formatted}{desc_str}"
+            success = crud.delete_expense(session, tx_id)
+    elif tx_type == "payment":
+        payment = session.query(Payment).filter(Payment.id == tx_id).first()
+        if payment:
+            amount_formatted = f"${payment.amount / 100:.2f}"
+            audit_desc = f"Recorded payment of {amount_formatted}"
+            success = crud.delete_payment(session, tx_id)
+
+    if not success:
+        await query.answer(
+            text="⚠️ Transaction not found or already deleted.", show_alert=True
+        )
+        try:
+            await query.edit_message_text(
+                text="⚠️ This transaction has already been deleted or is not found.",
+                reply_markup=None,
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
+        return
+
+    # Log successful undo
+    await query.answer(text="Transaction undone.")
+
+    # Edit message to record undo audit log and remove keyboard
+    undo_text = f"🗑️ **{audit_desc}** has been undone by {clicker.first_name}."
+    try:
+        await query.edit_message_text(
+            text=undo_text,
+            parse_mode="Markdown",
+            reply_markup=None,
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
+@with_db_session
 async def payback_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
@@ -422,7 +532,7 @@ async def payback_command(
     crud.add_user_to_group(session, payee, group)
 
     # 3. Create direct payment in the database
-    crud.create_payment(
+    payment = crud.create_payment(
         session=session,
         group_id=group.id,
         payer_id=payer.id,
@@ -432,12 +542,34 @@ async def payback_command(
 
     # 4. Format and reply
     amount_formatted = f"{amount / 100:.2f}"
+
+    # Get creator info
+    creator = crud.get_user_by_telegram_id(session, update.effective_user.id)
+    if not creator:
+        creator = crud.get_or_create_user(
+            session,
+            update.effective_user.id,
+            update.effective_user.username,
+            update.effective_user.first_name,
+        )
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                text="🗑️ Undo",
+                callback_data=f"undo:payment:{payment.id}:{creator.id}",
+            )
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
     await update.message.reply_text(
         f"✅ **Recorded payment:**\n"
         f"• **Paid by:** {payer.first_name}\n"
         f"• **Paid to:** {payee.first_name}\n"
         f"• **Amount:** ${amount_formatted}",
         parse_mode="Markdown",
+        reply_markup=reply_markup,
     )
 
 
@@ -521,6 +653,9 @@ if __name__ == "__main__":
     settle_callback_handler_registered = CallbackQueryHandler(
         settle_callback_handler, pattern="^settle:"
     )
+    undo_callback_handler_registered = CallbackQueryHandler(
+        undo_callback_handler, pattern="^undo:"
+    )
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
@@ -530,6 +665,7 @@ if __name__ == "__main__":
     application.add_handler(history_handler)
     application.add_handler(help_handler)
     application.add_handler(settle_callback_handler_registered)
+    application.add_handler(undo_callback_handler_registered)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()
