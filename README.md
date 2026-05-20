@@ -241,3 +241,5 @@ when I had to correct or guide it
 - I asked to implement the second suggestion to add a `🗑️ Undo` button
   to `/pay` and `/payback` confirmations. It implemented it, I tested
   it, and it seems to work.
+
+- The user requested to add delete buttons to the `/history` command entries. I proposed an implementation plan where history entries are formatted with numeric prefixes, and the history response includes corresponding inline keyboard buttons (e.g., `🗑️ Delete 1`, `🗑️ Delete 2`). Clicking a button triggers a handler that deletes the transaction (validating that only the involved payer/payee is authorized to do so) and dynamically refreshes the history list in-place. I implemented these changes in `parser.py` and `bot.py`, updated the parser tests, and added unit tests in `tests/test_bot.py`. The user approved the implementation plan, and the changes were implemented. Due to environment command restrictions, testing and committing were left to the user.

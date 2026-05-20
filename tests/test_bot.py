@@ -11,7 +11,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from database import Base
 import crud
-from bot import settle_callback_handler, undo_callback_handler
+from bot import (
+    settle_callback_handler,
+    undo_callback_handler,
+    history_delete_callback_handler,
+)
 
 # We mock database session injection because get_session inside @with_db_session
 # needs to point to our in-memory test database session.
@@ -231,6 +235,76 @@ class TestBotSettleCallback(unittest.TestCase):
         update.callback_query.edit_message_text.assert_called_once()
         kwargs = update.callback_query.edit_message_text.call_args.kwargs
         self.assertIn("has been undone by Bob", kwargs.get("text"))
+
+    async def run_history_delete_callback(self, update):
+        context = MagicMock()
+        await history_delete_callback_handler(update, context)
+
+    def test_history_delete_security_unauthorized_user(self):
+        # Alice created an expense (paid by Alice). Charlie tries to delete it.
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        callback_data = f"hist_del:expense:{expense.id}"
+        update = self.create_mock_update(
+            telegram_user_id=33, callback_data=callback_data
+        )  # Charlie is ID 33
+
+        import asyncio
+
+        asyncio.run(self.run_history_delete_callback(update))
+
+        # Check Charlie is rejected with show_alert
+        update.callback_query.answer.assert_called_once()
+        kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(kwargs.get("show_alert"))
+        self.assertIn("Only Alice can delete", kwargs.get("text"))
+
+        # Expense should NOT be deleted
+        self.assertEqual(
+            len(crud.get_group_expenses(self.db_session, self.group.id)), 1
+        )
+
+    def test_history_delete_authorized_expense(self):
+        # Alice (payer) deletes the expense she paid
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        callback_data = f"hist_del:expense:{expense.id}"
+        update = self.create_mock_update(
+            telegram_user_id=11, callback_data=callback_data
+        )  # Alice is ID 11
+
+        import asyncio
+
+        asyncio.run(self.run_history_delete_callback(update))
+
+        # Check expense deleted
+        self.assertEqual(
+            len(crud.get_group_expenses(self.db_session, self.group.id)), 0
+        )
+        update.callback_query.answer.assert_called_once_with(text="Expense deleted.")
+        update.callback_query.edit_message_text.assert_called_once()
+
+    def test_history_delete_authorized_payment(self):
+        # Bob records a payment of $5.00 to Alice
+        payment = crud.create_payment(
+            self.db_session, self.group.id, self.bob.id, self.alice.id, 500
+        )
+        self.db_session.commit()
+
+        # Bob (payer) deletes the payment
+        callback_data = f"hist_del:payment:{payment.id}"
+        update = self.create_mock_update(
+            telegram_user_id=22, callback_data=callback_data
+        )  # Bob is ID 22
+
+        import asyncio
+
+        asyncio.run(self.run_history_delete_callback(update))
+
+        # Check payment deleted
+        self.assertEqual(
+            len(crud.get_group_payments(self.db_session, self.group.id)), 0
+        )
+        update.callback_query.answer.assert_called_once_with(text="Payment deleted.")
+        update.callback_query.edit_message_text.assert_called_once()
 
 
 if __name__ == "__main__":
