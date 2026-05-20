@@ -15,8 +15,6 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 ## How it Works
 
-*Commands are conceptual and may evolve during development.*
-
 1. **Add an Expense**:
    - `/pay @Alice 50 for Dinner` (Alice paid $50.00; split equally among all members of the group chat).
    - `/pay @Alice 50 for @Bob @Charlie` (Alice paid $50.00; split specifically between Bob and Charlie).
@@ -28,14 +26,54 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    > The bot auto-registers users when they send messages. If a user is mentioned but has never interacted, the bot will return a warning asking them to send a message to register.
 
 2. **Check Balances**:
-   `/balances` (Shows a quick summary of everyone's net balance)
+   - `/balances` (Shows a summary of everyone's net balance, sorted from highest creditor to highest debtor).
 
 3. **Settle Up**:
-   `/settle` (Calculates the most efficient way to pay back everyone)
+   - `/settle` (Calculates the minimum number of transactions needed to clear all debts using a greedy simplification algorithm).
+
+4. **Record a Payback**:
+   - `/payback @Alice 10` (Logs that you paid Alice $10.00).
+   - `/payback @Bob @Alice 12.50` (Logs that Bob paid Alice $12.50).
+
+5. **Audit History**:
+   - `/history` (Displays the last 10 logged transactions—expenses and payments—in chronological order).
 
 ## Development
 
-*Tech stack and setup instructions to be determined as the project develops.*
+### Prerequisites
+- Python 3.10+
+- A Telegram Bot Token from [@BotFather](https://t.me/BotFather)
+
+### Local Setup
+1. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
+2. Install the package dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Create a `.env` file in the project root:
+   ```env
+   TELEGRAM_BOT_TOKEN=your_bot_token_here
+   ```
+4. Run Alembic migrations to set up the SQLite database schema:
+   ```bash
+   alembic upgrade head
+   ```
+
+### Running the Bot
+Start the bot application:
+```bash
+python bot.py
+```
+
+### Running the Test Suite
+Verify everything is working with:
+```bash
+python -m unittest discover -s tests
+```
 
 ### Vibe Coding & AI Generation
 
