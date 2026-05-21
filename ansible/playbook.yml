@@ -65,7 +65,7 @@
 
     - name: Synchronize project files to the VPS
       synchronize:
-        src: "../"
+        src: "{{ playbook_dir }}/../"
         dest: "{{ app_dir }}/"
         recursive: true
         delete: true
