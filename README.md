@@ -298,3 +298,6 @@ when I had to correct or guide it
   update the `Group` model with a new `created_at` column and I
   agreed. It was succesfull, the schema did change and the previous
   state wasn't lost
+
+- I asked to add an "OK" button to parsing error messages to easily
+  dismiss and delete them from the chat. The agent did it successfully.

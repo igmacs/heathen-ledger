@@ -81,9 +81,13 @@ async def pay_command(
 
     parsed = parse_pay_message(update.message.text)
     if "error" in parsed:
+        keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"⚠️ Error parsing command: {parsed['error']}\n"
-            f"Usage: `/pay [@payer] <amount> [for <description/participants>]`"
+            f"Usage: `/pay [@payer] <amount> [for <description/participants>]`",
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
         )
         return
 
@@ -603,6 +607,23 @@ async def history_delete_callback_handler(
     await refresh_history_message(query, session)
 
 
+async def dismiss_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle callback query when a dismiss/OK button is clicked to delete the message."""
+    query = update.callback_query
+    if not query:
+        return
+
+    if query.data != "dismiss":
+        return
+
+    try:
+        await query.message.delete()
+    except BadRequest as e:
+        logging.warning(f"Failed to delete message: {e}")
+
+    await query.answer()
+
+
 @with_db_session
 async def payback_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -613,9 +634,13 @@ async def payback_command(
 
     parsed = parse_payback_message(update.message.text)
     if "error" in parsed:
+        keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"⚠️ Error parsing command: {parsed['error']}\n"
-            f"Usage: `/payback [@payer] @recipient <amount>`"
+            f"Usage: `/payback [@payer] @recipient <amount>`",
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
         )
         return
 
@@ -809,6 +834,9 @@ if __name__ == "__main__":
     hist_del_callback_handler_registered = CallbackQueryHandler(
         history_delete_callback_handler, pattern="^hist_del:"
     )
+    dismiss_callback_handler_registered = CallbackQueryHandler(
+        dismiss_callback_handler, pattern="^dismiss$"
+    )
 
     application.add_handler(start_handler)
     application.add_handler(pay_handler)
@@ -820,6 +848,7 @@ if __name__ == "__main__":
     application.add_handler(settle_callback_handler_registered)
     application.add_handler(undo_callback_handler_registered)
     application.add_handler(hist_del_callback_handler_registered)
+    application.add_handler(dismiss_callback_handler_registered)
 
     # Run the bot until the user presses Ctrl-C
     application.run_polling()

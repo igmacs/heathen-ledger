@@ -15,6 +15,7 @@ from heathen_ledger.bot import (
     settle_callback_handler,
     undo_callback_handler,
     history_delete_callback_handler,
+    dismiss_callback_handler,
 )
 
 # We mock database session injection because get_session inside @with_db_session
@@ -305,6 +306,35 @@ class TestBotSettleCallback(unittest.TestCase):
         )
         update.callback_query.answer.assert_called_once_with(text="Payment deleted.")
         update.callback_query.edit_message_text.assert_called_once()
+
+    async def run_dismiss_callback(self, update):
+        context = MagicMock()
+        await dismiss_callback_handler(update, context)
+
+    def test_dismiss_callback(self):
+        update = self.create_mock_update(telegram_user_id=11, callback_data="dismiss")
+
+        import asyncio
+
+        asyncio.run(self.run_dismiss_callback(update))
+
+        update.callback_query.message.delete.assert_called_once()
+        update.callback_query.answer.assert_called_once()
+
+    def test_dismiss_callback_bad_request(self):
+        from telegram.error import BadRequest
+
+        update = self.create_mock_update(telegram_user_id=11, callback_data="dismiss")
+        update.callback_query.message.delete.side_effect = BadRequest(
+            "Message to delete not found"
+        )
+
+        import asyncio
+
+        asyncio.run(self.run_dismiss_callback(update))
+
+        update.callback_query.message.delete.assert_called_once()
+        update.callback_query.answer.assert_called_once()
 
 
 if __name__ == "__main__":
