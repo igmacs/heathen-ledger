@@ -13,4 +13,3 @@ htmlcov/
 tests/
 *.db
 *.sqlite
-alembic.ini

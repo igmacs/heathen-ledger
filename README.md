@@ -286,4 +286,6 @@ when I had to correct or guide it
   VPS (Infomaniak VPS Lite) using Ansible for automated
   deployment. The agent created the Ansible configuration, I signed up
   in Infomaniak and purchased the VPS, and deployed the bot following
-  the agent instructions.
+  the agent instructions. After two errors which the agent fixed
+  autonomously when I shared the `ansible-playbook` output, the bot
+  was deployed successfully.
