@@ -50,9 +50,9 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    python -m venv .venv
    source .venv/bin/activate
    ```
-2. Install the package dependencies:
+2. Install the package in editable mode:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 3. Create a `.env` file in the project root:
    ```env
@@ -66,24 +66,11 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 ### Running the Bot
 Start the bot application:
 ```bash
-PYTHONPATH=src python -m heathen_ledger.bot
-```
-
-Alternatively, you can install the package in editable mode:
-```bash
-pip install -e .
-```
-And run the bot directly:
-```bash
 python -m heathen_ledger.bot
 ```
 
 ### Running the Test Suite
 Verify everything is working with:
-```bash
-PYTHONPATH=src python -m unittest discover -s tests
-```
-Or, if installed in editable mode:
 ```bash
 python -m unittest discover -s tests
 ```
@@ -303,3 +290,9 @@ when I had to correct or guide it
   dismiss and delete them from the chat. The agent did it successfully.
   - I then asked to remove the original message too, and it also did
     it successfully, but it requires to promote the bot to admin
+
+- I noticed a redundancy between pyproject.toml and
+  requirements.txt. The agent explained the difference and, with my
+  approval, removed requirements.txt and transitioned the setup
+  (README, Dockerfile) to use pyproject.toml instead. It also fixed a
+  unit test issue on the way.
