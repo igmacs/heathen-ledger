@@ -27,6 +27,8 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
+import heathen_ledger.models  # noqa: F401, E402
+
 target_metadata = Base.metadata
 
 # Retrieve database URL dynamically from environment

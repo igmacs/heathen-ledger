@@ -49,6 +49,11 @@ class Group(Base):
     id = Column(Integer, primary_key=True)
     telegram_chat_id = Column(BigInteger, unique=True, nullable=False, index=True)
     title = Column(String, nullable=True)
+    created_at = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=True,
+    )
 
     # Relationships
     members = relationship("User", secondary=group_members, back_populates="groups")

@@ -293,3 +293,8 @@ when I had to correct or guide it
 - I wanted to test how updates are propagated to the VPS and ensure that database
   history is preserved. The agent suggested updating the `/start` command response,
   which we did by adding a Joker quote. The test was successful.
+
+- I wanted to test database schema migrations. The agent proposed to
+  update the `Group` model with a new `created_at` column and I
+  agreed. It was succesfull, the schema did change and the previous
+  state wasn't lost
