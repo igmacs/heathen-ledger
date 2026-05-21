@@ -301,3 +301,5 @@ when I had to correct or guide it
 
 - I asked to add an "OK" button to parsing error messages to easily
   dismiss and delete them from the chat. The agent did it successfully.
+  - I then asked to remove the original message too, and it also did
+    it successfully, but it requires to promote the bot to admin

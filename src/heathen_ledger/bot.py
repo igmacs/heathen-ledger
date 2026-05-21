@@ -616,10 +616,19 @@ async def dismiss_callback_handler(update: Update, context: ContextTypes.DEFAULT
     if query.data != "dismiss":
         return
 
-    try:
-        await query.message.delete()
-    except BadRequest as e:
-        logging.warning(f"Failed to delete message: {e}")
+    # Delete the original command message if it exists (requires bot to have admin delete rights in groups)
+    if query.message and query.message.reply_to_message:
+        try:
+            await query.message.reply_to_message.delete()
+        except BadRequest as e:
+            logging.warning(f"Failed to delete original command message: {e}")
+
+    # Delete the bot's error message
+    if query.message:
+        try:
+            await query.message.delete()
+        except BadRequest as e:
+            logging.warning(f"Failed to delete error message: {e}")
 
     await query.answer()
 

@@ -313,11 +313,14 @@ class TestBotSettleCallback(unittest.TestCase):
 
     def test_dismiss_callback(self):
         update = self.create_mock_update(telegram_user_id=11, callback_data="dismiss")
+        reply_to_mock = AsyncMock()
+        update.callback_query.message.reply_to_message = reply_to_mock
 
         import asyncio
 
         asyncio.run(self.run_dismiss_callback(update))
 
+        reply_to_mock.delete.assert_called_once()
         update.callback_query.message.delete.assert_called_once()
         update.callback_query.answer.assert_called_once()
 
@@ -325,6 +328,10 @@ class TestBotSettleCallback(unittest.TestCase):
         from telegram.error import BadRequest
 
         update = self.create_mock_update(telegram_user_id=11, callback_data="dismiss")
+        reply_to_mock = AsyncMock()
+        reply_to_mock.delete.side_effect = BadRequest("Cannot delete user message")
+        update.callback_query.message.reply_to_message = reply_to_mock
+
         update.callback_query.message.delete.side_effect = BadRequest(
             "Message to delete not found"
         )
@@ -333,6 +340,7 @@ class TestBotSettleCallback(unittest.TestCase):
 
         asyncio.run(self.run_dismiss_callback(update))
 
+        reply_to_mock.delete.assert_called_once()
         update.callback_query.message.delete.assert_called_once()
         update.callback_query.answer.assert_called_once()
 
