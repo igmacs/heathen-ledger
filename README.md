@@ -296,3 +296,9 @@ when I had to correct or guide it
   approval, removed requirements.txt and transitioned the setup
   (README, Dockerfile) to use pyproject.toml instead. It also fixed a
   unit test issue on the way.
+
+- I noticed a redundancy between the Alembic migrations and models.py
+  regarding the database schema definition. The agent explained to me
+  that it's not an actual redundancy and that is the standard way to
+  do it in Python, and I shouldn't compare to my known Java setup with
+  JPA and Flyway.
