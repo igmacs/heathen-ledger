@@ -11,12 +11,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from heathen_ledger.database import Base
 from heathen_ledger import crud
-from heathen_ledger.bot import (
-    settle_callback_handler,
-    undo_callback_handler,
-    history_delete_callback_handler,
-    dismiss_callback_handler,
-)
+from heathen_ledger.handlers.settle import settle_callback_handler
+from heathen_ledger.handlers.expense import undo_callback_handler
+from heathen_ledger.handlers.history import history_delete_callback_handler
+from heathen_ledger.handlers.common import dismiss_callback_handler
 
 # We mock database session injection because get_session inside @with_db_session
 # needs to point to our in-memory test database session.

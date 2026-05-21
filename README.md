@@ -302,3 +302,5 @@ when I had to correct or guide it
   that it's not an actual redundancy and that is the standard way to
   do it in Python, and I shouldn't compare to my known Java setup with
   JPA and Flyway.
+
+- I asked the agent which files should be split and how to improve project structure. We decided to split `bot.py` into a modular package of handlers. The agent successfully moved all command and callback handlers into `src/heathen_ledger/handlers/` and refactored `bot.py` into a clean runner. It updated and ran the unit tests successfully.
