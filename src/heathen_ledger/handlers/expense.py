@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
 
 from ..database import with_db_session
-from ..models import User, Expense, Payment
+from ..models import User, Expense, Payment, ExpenseSplit
 from .. import crud
 from ..parser import (
     parse_pay_message,
@@ -14,6 +14,68 @@ from ..parser import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def generate_expense_reply_text(expense: Expense) -> str:
+    """Format the expense split summary."""
+    amount_formatted = f"{expense.amount / 100:.2f}"
+    desc_str = f" for '{expense.description}'" if expense.description else ""
+
+    # Sort the splits by the user's first_name to keep the display order stable
+    sorted_splits = sorted(expense.splits, key=lambda s: s.user.first_name)
+    participants = [s.user for s in sorted_splits]
+    parts_str = ", ".join([u.first_name for u in participants])
+
+    reply_text = (
+        f"✅ Recorded expense:\n"
+        f"• **Paid by:** {expense.payer.first_name}\n"
+        f"• **Amount:** ${amount_formatted}{desc_str}\n"
+        f"• **Split between:** {parts_str}\n"
+    )
+
+    if len(sorted_splits) > 1:
+        reply_text += "• **Shares:**\n"
+        for s in sorted_splits:
+            reply_text += f"  - {s.user.first_name}: ${s.amount / 100:.2f}\n"
+
+    return reply_text
+
+
+def build_expense_keyboard(
+    expense: Expense, group_members: list, creator_id: int
+) -> InlineKeyboardMarkup:
+    """Build the inline keyboard with toggle buttons for each group member and an Undo button."""
+    participant_ids = {s.user_id for s in expense.splits}
+
+    # Sort members by first_name for UI consistency
+    sorted_members = sorted(group_members, key=lambda m: m.first_name)
+
+    keyboard = []
+    row = []
+    for member in sorted_members:
+        is_p = member.id in participant_ids
+        prefix = "✅" if is_p else "❌"
+        button = InlineKeyboardButton(
+            text=f"{prefix} {member.first_name}",
+            callback_data=f"pay_toggle:{expense.id}:{member.id}:{creator_id}",
+        )
+        row.append(button)
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    # Undo button below
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                text="🗑️ Undo",
+                callback_data=f"undo:expense:{expense.id}:{creator_id}",
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(keyboard)
 
 
 @with_db_session
@@ -113,23 +175,6 @@ async def pay_command(
         splits=splits_dict,
     )
 
-    # 5. Format and send response
-    amount_formatted = f"{amount / 100:.2f}"
-    parts_str = ", ".join([u.first_name for u in participants])
-    desc_str = f" for '{description}'" if description else ""
-
-    reply_text = (
-        f"✅ Recorded expense:\n"
-        f"• **Paid by:** {payer.first_name}\n"
-        f"• **Amount:** ${amount_formatted}{desc_str}\n"
-        f"• **Split between:** {parts_str}\n"
-    )
-
-    if num_people > 1:
-        reply_text += "• **Shares:**\n"
-        for user, share in zip(participants, shares):
-            reply_text += f"  - {user.first_name}: ${share / 100:.2f}\n"
-
     # Get creator info
     creator = crud.get_user_by_telegram_id(session, update.effective_user.id)
     if not creator:
@@ -140,19 +185,123 @@ async def pay_command(
             update.effective_user.first_name,
         )
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text="🗑️ Undo",
-                callback_data=f"undo:expense:{expense.id}:{creator.id}",
-            )
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_text = generate_expense_reply_text(expense)
+    reply_markup = build_expense_keyboard(expense, group.members, creator.id)
 
     await update.message.reply_text(
         reply_text, parse_mode="Markdown", reply_markup=reply_markup
     )
+
+
+@with_db_session
+async def pay_toggle_callback_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+):
+    """Handle toggling participants in an expense split."""
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    # Callback data schema: pay_toggle:<expense_id>:<user_id>:<creator_id>
+    parts = query.data.split(":")
+    if len(parts) != 4:
+        return
+
+    _, expense_id_str, user_id_str, creator_id_str = parts
+    expense_id = int(expense_id_str)
+    target_user_id = int(user_id_str)
+    creator_id = int(creator_id_str)
+
+    # 1. Resolve clicking user's database ID
+    clicker = crud.get_user_by_telegram_id(session, query.from_user.id)
+    if not clicker:
+        clicker = crud.get_or_create_user(
+            session,
+            query.from_user.id,
+            query.from_user.username,
+            query.from_user.first_name,
+        )
+
+    # 2. Check permissions (only creator can toggle)
+    if clicker.id != creator_id:
+        creator_user = session.query(User).filter(User.id == creator_id).first()
+        creator_name = (
+            creator_user.first_name if creator_user else "the user who recorded it"
+        )
+        await query.answer(
+            text=f"⚠️ Only {creator_name} can edit this split.",
+            show_alert=True,
+        )
+        return
+
+    # 3. Retrieve expense and group
+    expense = session.query(Expense).filter(Expense.id == expense_id).first()
+    if not expense:
+        await query.answer(
+            text="⚠️ Expense not found or already deleted.", show_alert=True
+        )
+        try:
+            await query.edit_message_text(
+                text="⚠️ This expense has already been deleted or is not found.",
+                reply_markup=None,
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
+        return
+
+    # 4. Modify splits list
+    current_splits = {s.user_id: s for s in expense.splits}
+    if target_user_id in current_splits:
+        # Prevent removing the last participant
+        if len(current_splits) <= 1:
+            await query.answer(
+                text="⚠️ Cannot remove the last participant from the split.",
+                show_alert=True,
+            )
+            return
+        # Delete split
+        session.delete(current_splits[target_user_id])
+        current_splits.pop(target_user_id)
+    else:
+        # Add split
+        new_split = ExpenseSplit(
+            expense_id=expense.id, user_id=target_user_id, amount=0
+        )
+        session.add(new_split)
+        current_splits[target_user_id] = new_split
+
+    session.flush()
+
+    # 5. Recalculate split shares
+    num_people = len(current_splits)
+    shares = split_amount_equally(expense.amount, num_people)
+    # Map them to remaining users (sort them to ensure deterministic remainder distribution)
+    sorted_remaining_ids = sorted(current_splits.keys())
+    for user_id, share in zip(sorted_remaining_ids, shares):
+        current_splits[user_id].amount = share
+
+    session.commit()
+
+    # Refresh expense and get members to rebuild markup
+    session.refresh(expense)
+    group = expense.group
+
+    # 6. Re-generate response
+    reply_text = generate_expense_reply_text(expense)
+    reply_markup = build_expense_keyboard(expense, group.members, creator_id)
+
+    try:
+        await query.edit_message_text(
+            text=reply_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+    await query.answer()
 
 
 @with_db_session

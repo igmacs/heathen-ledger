@@ -12,7 +12,10 @@ from sqlalchemy.orm import sessionmaker
 from heathen_ledger.database import Base
 from heathen_ledger import crud
 from heathen_ledger.handlers.settle import settle_callback_handler
-from heathen_ledger.handlers.expense import undo_callback_handler
+from heathen_ledger.handlers.expense import (
+    undo_callback_handler,
+    pay_toggle_callback_handler,
+)
 from heathen_ledger.handlers.history import history_delete_callback_handler
 from heathen_ledger.handlers.common import dismiss_callback_handler
 
@@ -342,6 +345,120 @@ class TestBotSettleCallback(unittest.TestCase):
         reply_to_mock.delete.assert_called_once()
         update.callback_query.message.delete.assert_called_once()
         update.callback_query.answer.assert_called_once()
+
+    async def run_pay_toggle_callback(self, update):
+        context = MagicMock()
+        await pay_toggle_callback_handler(update, context)
+
+    def test_pay_toggle_security_unauthorized_user(self):
+        # Alice created the expense. Charlie tries to toggle Bob out of the split.
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        callback_data = f"pay_toggle:{expense.id}:{self.bob.id}:{self.alice.id}"
+        update = self.create_mock_update(
+            telegram_user_id=33, callback_data=callback_data
+        )  # Charlie is ID 33
+
+        import asyncio
+
+        asyncio.run(self.run_pay_toggle_callback(update))
+
+        # Check Charlie is rejected with show_alert
+        update.callback_query.answer.assert_called_once()
+        kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(kwargs.get("show_alert"))
+        self.assertIn("Only Alice can edit", kwargs.get("text"))
+
+    def test_pay_toggle_remove_participant(self):
+        # Alice toggles Bob out of the split (initially split equally: Alice, Bob, Charlie)
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        self.assertEqual(len(expense.splits), 3)
+
+        callback_data = f"pay_toggle:{expense.id}:{self.bob.id}:{self.alice.id}"
+        update = self.create_mock_update(
+            telegram_user_id=11, callback_data=callback_data
+        )  # Alice is ID 11
+
+        import asyncio
+
+        asyncio.run(self.run_pay_toggle_callback(update))
+
+        # Check splits in database
+        self.db_session.expire_all()
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        self.assertEqual(len(expense.splits), 2)
+
+        # Verify splits recalculated (amount is 30.00 split between 2: Alice, Charlie get 15.00 each)
+        splits_dict = {s.user_id: s.amount for s in expense.splits}
+        self.assertNotIn(self.bob.id, splits_dict)
+        self.assertEqual(splits_dict[self.alice.id], 1500)
+        self.assertEqual(splits_dict[self.charlie.id], 1500)
+
+        # Verify message text updated
+        update.callback_query.edit_message_text.assert_called_once()
+        kwargs = update.callback_query.edit_message_text.call_args.kwargs
+        self.assertIn("Alice: $15.00", kwargs.get("text"))
+        self.assertIn("Charlie: $15.00", kwargs.get("text"))
+        self.assertNotIn("Bob:", kwargs.get("text"))
+
+    def test_pay_toggle_add_participant(self):
+        # First, remove Bob so splits are Alice, Charlie
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        for split in list(expense.splits):
+            if split.user_id == self.bob.id:
+                self.db_session.delete(split)
+        self.db_session.commit()
+
+        # Alice toggles Bob back in
+        callback_data = f"pay_toggle:{expense.id}:{self.bob.id}:{self.alice.id}"
+        update = self.create_mock_update(
+            telegram_user_id=11, callback_data=callback_data
+        )  # Alice is ID 11
+
+        import asyncio
+
+        asyncio.run(self.run_pay_toggle_callback(update))
+
+        # Check splits in database (Bob is back)
+        self.db_session.expire_all()
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        self.assertEqual(len(expense.splits), 3)
+
+        # Verify splits recalculated to 10.00 each
+        splits_dict = {s.user_id: s.amount for s in expense.splits}
+        self.assertEqual(splits_dict[self.bob.id], 1000)
+        self.assertEqual(splits_dict[self.alice.id], 1000)
+        self.assertEqual(splits_dict[self.charlie.id], 1000)
+
+    def test_pay_toggle_prevent_removing_last_participant(self):
+        # Remove Bob and Charlie from the split first
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        for split in list(expense.splits):
+            if split.user_id != self.alice.id:
+                self.db_session.delete(split)
+        expense.splits[0].amount = 3000
+        self.db_session.commit()
+
+        # Alice tries to toggle Alice off (leaving 0 participants)
+        callback_data = f"pay_toggle:{expense.id}:{self.alice.id}:{self.alice.id}"
+        update = self.create_mock_update(
+            telegram_user_id=11, callback_data=callback_data
+        )  # Alice is ID 11
+
+        import asyncio
+
+        asyncio.run(self.run_pay_toggle_callback(update))
+
+        # Check alert shown
+        update.callback_query.answer.assert_called_once()
+        kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(kwargs.get("show_alert"))
+        self.assertIn("Cannot remove the last participant", kwargs.get("text"))
+
+        # Check splits in database (Alice is still there)
+        self.db_session.expire_all()
+        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        self.assertEqual(len(expense.splits), 1)
+        self.assertEqual(expense.splits[0].user_id, self.alice.id)
 
 
 if __name__ == "__main__":

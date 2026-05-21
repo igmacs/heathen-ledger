@@ -8,7 +8,12 @@ from telegram.ext import (
 
 from .base import auto_register, start, help_command
 from .common import dismiss_callback_handler
-from .expense import pay_command, payback_command, undo_callback_handler
+from .expense import (
+    pay_command,
+    payback_command,
+    undo_callback_handler,
+    pay_toggle_callback_handler,
+)
 from .settle import balances_command, settle_command, settle_callback_handler
 from .history import history_command, history_delete_callback_handler
 
@@ -28,6 +33,9 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("help", help_command))
 
     # Callback Query Handlers
+    application.add_handler(
+        CallbackQueryHandler(pay_toggle_callback_handler, pattern="^pay_toggle:")
+    )
     application.add_handler(
         CallbackQueryHandler(settle_callback_handler, pattern="^settle:")
     )

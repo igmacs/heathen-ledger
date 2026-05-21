@@ -19,6 +19,7 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/pay @Alice 50 for Dinner` (Alice paid $50.00; split equally among all members of the group chat).
    - `/pay @Alice 50 for @Bob @Charlie` (Alice paid $50.00; split specifically between Bob and Charlie).
    - `/pay 12.50 for Pizza` (The sender paid $12.50; split equally among all members of the group chat).
+     - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares.
 
    > [!IMPORTANT]
    > **User Auto-Registration:**
@@ -304,3 +305,5 @@ when I had to correct or guide it
   JPA and Flyway.
 
 - I asked the agent which files should be split and how to improve project structure. We decided to split `bot.py` into a modular package of handlers. The agent successfully moved all command and callback handlers into `src/heathen_ledger/handlers/` and refactored `bot.py` into a clean runner. It updated and ran the unit tests successfully.
+
+- I asked for suggestions to make the `/pay` command easier to use. We settled on adding inline buttons to dynamically toggle participants in/out of the split. The agent implemented the `pay_toggle_callback_handler` and helpers, registered them, updated the message formatting, and added comprehensive unit tests which all passed.
