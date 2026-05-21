@@ -1,0 +1,8 @@
+# Deployment variables for Heathen Ledger
+# Rename this file to vars.yml and configure your values
+
+# The Telegram Bot Token from @BotFather
+telegram_bot_token: "your_telegram_bot_token_here"
+
+# Path on the server where the project files will be hosted
+app_dir: "/var/lib/heathen-ledger"

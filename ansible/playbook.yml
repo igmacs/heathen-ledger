@@ -1,0 +1,97 @@
+---
+- name: Deploy Heathen Ledger Telegram Bot
+  hosts: bot_servers
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install prerequisite packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - rsync
+        state: present
+
+    - name: Create keyring directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Add Docker GPG key
+      get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch={{ ansible_architecture | replace('x86_64', 'amd64') | replace('aarch64', 'arm64') }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Install Docker and Docker Compose plugin
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is enabled and running
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Synchronize project files to the VPS
+      synchronize:
+        src: "../"
+        dest: "{{ app_dir }}/"
+        recursive: true
+        delete: true
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.venv"
+          - "--exclude=.ruff_cache"
+          - "--exclude=__pycache__"
+          - "--exclude=data"
+          - "--exclude=tofu"
+          - "--exclude=ansible"
+
+    - name: Create environment configuration file
+      copy:
+        content: |
+          TELEGRAM_BOT_TOKEN={{ telegram_bot_token }}
+          DB_PATH=data/ledger.db
+        dest: "{{ app_dir }}/.env"
+        mode: '0600'
+
+    - name: Build and launch the bot using Docker Compose
+      shell:
+        cmd: docker compose up -d --build
+        chdir: "{{ app_dir }}"
+      register: compose_output
+
+    - name: Display Docker Compose output
+      debug:
+        var: compose_output.stdout_lines

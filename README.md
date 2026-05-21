@@ -134,6 +134,20 @@ For native deployments on a Linux server without Docker:
    journalctl -u heathen-ledger -f
    ```
 
+#### Option C: Automated Deployment (Ansible)
+If you want to automate server configuration and bot deployment on a manually ordered VPS (like Infomaniak VPS Lite), you can use the provided Ansible script located in the `ansible/` directory.
+
+1. **Prepare Server Configuration:**
+   - Copy `ansible/inventory.ini.example` to `ansible/inventory.ini` and replace the placeholder IP with your server's IP. (Or use the active `inventory.ini` created during configuration).
+   - Copy `ansible/vars.yml.example` to `ansible/vars.yml` and add your `TELEGRAM_BOT_TOKEN`.
+
+2. **Run Ansible Playbook:**
+   - Run the playbook to install Docker, configure the server, copy application files, and launch the bot:
+     ```bash
+     cd ansible
+     ansible-playbook -i inventory.ini playbook.yml
+     ```
+
 ### Vibe Coding & AI Generation
 
 This project is intended to be "vibe coded" as much as possible. All code and commits in this repository are 100% AI-generated unless explicitly specified otherwise.
@@ -265,3 +279,11 @@ when I had to correct or guide it
   mind, structuring the code property and moving the .py files to a
   src/ folder. I told it to do so and it did together with a few other
   related improvements.
+
+- I asked about alternatives for hosting the bot since I couldn't run
+  it on my laptop, using IaC as much as possible. The agent walked me
+  through different approaches and providers, and we settled with a
+  VPS (Infomaniak VPS Lite) using Ansible for automated
+  deployment. The agent created the Ansible configuration, I signed up
+  in Infomaniak and purchased the VPS, and deployed the bot following
+  the agent instructions.
