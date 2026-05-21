@@ -289,3 +289,7 @@ when I had to correct or guide it
   the agent instructions. After two errors which the agent fixed
   autonomously when I shared the `ansible-playbook` output, the bot
   was deployed successfully.
+
+- I wanted to test how updates are propagated to the VPS and ensure that database
+  history is preserved. The agent suggested updating the `/start` command response,
+  which we did by adding a Joker quote. The test was successful.

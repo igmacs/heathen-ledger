@@ -61,7 +61,13 @@ async def auto_register(
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session):
     """Send a message when the command /start is issued."""
     await context.bot.send_message(
-        chat_id=update.effective_chat.id, text="Hello, World!"
+        chat_id=update.effective_chat.id,
+        text=(
+            "👋 **Hello! I am Heathen Ledger.**\n\n"
+            '_*"This group deserves a better class of ledger, and I’m gonna give it to ‘em."*_\n\n'
+            "I help you track and settle shared expenses in group chats. Type /help to see all available commands."
+        ),
+        parse_mode="Markdown",
     )
 
 
