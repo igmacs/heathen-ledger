@@ -83,6 +83,7 @@ class TestBotSettleCallback(unittest.TestCase):
 
         # Mock query.message
         message = MagicMock()
+        message.delete = AsyncMock()
         chat = MagicMock()
         chat.id = 12345
         message.chat = chat
