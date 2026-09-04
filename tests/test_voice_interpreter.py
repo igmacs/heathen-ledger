@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock, MagicMock
 
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -83,12 +83,77 @@ class TestVoiceInterpreter(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Unsupported voice provider", str(ctx.exception))
 
     @patch("heathen_ledger.voice.gemini.genai.Client")
-    async def test_gemini_not_implemented_phases(self, mock_client_cls):
+    async def test_gemini_transcribe(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_response = MagicMock(text="Alice paid 25 for dinner")
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
         interpreter = GeminiVoiceInterpreter(api_key="test-key")
-        with self.assertRaises(NotImplementedError):
-            await interpreter.transcribe(b"audio")
-        with self.assertRaises(NotImplementedError):
-            await interpreter.interpret(b"audio")
+        result = await interpreter.transcribe(b"fake_audio_bytes")
+
+        self.assertEqual(result, "Alice paid 25 for dinner")
+        mock_client.aio.models.generate_content.assert_awaited_once()
+
+    @patch("heathen_ledger.voice.gemini.genai.Client")
+    async def test_gemini_interpret_with_command(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        json_output = '{"transcription": "Alice paid 25 for dinner", "command": "/pay @Alice 25 for dinner"}'
+        mock_response = MagicMock(text=json_output)
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        interpreter = GeminiVoiceInterpreter(api_key="test-key")
+        interpretation = await interpreter.interpret(
+            b"fake_audio_bytes", group_members=["@Alice", "@Bob"]
+        )
+
+        self.assertEqual(interpretation.transcription, "Alice paid 25 for dinner")
+        self.assertEqual(interpretation.command, "/pay @Alice 25 for dinner")
+        self.assertEqual(interpretation.raw_response, json_output)
+
+    @patch("heathen_ledger.voice.gemini.genai.Client")
+    async def test_gemini_interpret_command_missing_leading_slash(
+        self, mock_client_cls
+    ):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        json_output = '{"transcription": "settle up", "command": "settle"}'
+        mock_response = MagicMock(text=json_output)
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        interpreter = GeminiVoiceInterpreter(api_key="test-key")
+        interpretation = await interpreter.interpret(b"fake_audio_bytes")
+
+        self.assertEqual(interpretation.transcription, "settle up")
+        self.assertEqual(interpretation.command, "/settle")
+
+    @patch("heathen_ledger.voice.gemini.genai.Client")
+    async def test_gemini_interpret_no_command(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        json_output = '{"transcription": "How is everyone doing?", "command": null}'
+        mock_response = MagicMock(text=json_output)
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        interpreter = GeminiVoiceInterpreter(api_key="test-key")
+        interpretation = await interpreter.interpret(b"fake_audio_bytes")
+
+        self.assertEqual(interpretation.transcription, "How is everyone doing?")
+        self.assertIsNone(interpretation.command)
+
+    @patch("heathen_ledger.voice.gemini.genai.Client")
+    async def test_gemini_interpret_malformed_json_fallback(self, mock_client_cls):
+        mock_client = MagicMock()
+        mock_client_cls.return_value = mock_client
+        mock_response = MagicMock(text="Raw non-json text from model")
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+
+        interpreter = GeminiVoiceInterpreter(api_key="test-key")
+        interpretation = await interpreter.interpret(b"fake_audio_bytes")
+
+        self.assertEqual(interpretation.transcription, "Raw non-json text from model")
+        self.assertIsNone(interpretation.command)
 
 
 if __name__ == "__main__":
