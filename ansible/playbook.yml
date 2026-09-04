@@ -83,6 +83,9 @@
         content: |
           TELEGRAM_BOT_TOKEN={{ telegram_bot_token }}
           DB_PATH=data/ledger.db
+          {% if gemini_api_key is defined and gemini_api_key %}
+          GEMINI_API_KEY={{ gemini_api_key }}
+          {% endif %}
         dest: "{{ app_dir }}/.env"
         mode: '0600'
 
