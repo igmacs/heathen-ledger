@@ -16,12 +16,18 @@ from .expense import (
 )
 from .settle import balances_command, settle_command, settle_callback_handler
 from .history import history_command, history_delete_callback_handler
+from .voice import voice_message_handler
 
 
 def register_handlers(application: Application) -> None:
     """Register all command and callback handlers to the application."""
     # Add auto-registration handler in a separate group (-1) so it runs before command handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
+
+    # Voice / Audio Message Handler
+    application.add_handler(
+        MessageHandler(filters.VOICE | filters.AUDIO, voice_message_handler)
+    )
 
     # Command Handlers
     application.add_handler(CommandHandler("start", start))
