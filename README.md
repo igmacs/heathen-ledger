@@ -55,9 +55,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    ```bash
    pip install -e .
    ```
-3. Create a `.env` file in the project root:
+3. Create a `.env` file in the project root (you can copy `.env.example`):
    ```env
    TELEGRAM_BOT_TOKEN=your_bot_token_here
+   GEMINI_API_KEY=your_gemini_api_key_here  # Optional: for voice message interpretation
    ```
 4. Run Alembic migrations to set up the SQLite database schema:
    ```bash
@@ -307,3 +308,7 @@ when I had to correct or guide it
 - I asked the agent which files should be split and how to improve project structure. We decided to split `bot.py` into a modular package of handlers. The agent successfully moved all command and callback handlers into `src/heathen_ledger/handlers/` and refactored `bot.py` into a clean runner. It updated and ran the unit tests successfully.
 
 - I asked for suggestions to make the `/pay` command easier to use. We settled on adding inline buttons to dynamically toggle participants in/out of the split. The agent implemented the `pay_toggle_callback_handler` and helpers, registered them, updated the message formatting, and added comprehensive unit tests which all passed.
+
+- I asked to add support for sending commands through voice messages using an AI provider, and we agreed to start with Google Gemini while keeping the core agnostic to the provider. We agreed on an incremental phased plan:
+  - In Phase 1, the agent implemented a voice/audio message handler echoing voice notes with duration and metadata to verify Telegram bot audio delivery and permissions.
+  - In Phase 2, the agent added the Google Gemini SDK (`google-genai`), documented `GEMINI_API_KEY`, established a provider-agnostic `VoiceInterpreter` interface with a Gemini adapter skeleton, and added unit tests.
