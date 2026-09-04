@@ -12,6 +12,7 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 - **Expense Tracking**: Record who paid for what, the amount, and who was involved in the expense.
 - **Smart Debt Simplification**: When it's time to settle up, the bot calculates the minimum number of transactions needed to clear all debts. No more complex webs of "who owes who."
 - **Current Balances**: Instantly check how much you owe or are owed at any given time.
+- **Voice Commands**: Speak natural voice notes (e.g., *"I paid 25 for dinner"*) to automatically transcribe and interpret them into ledger commands via Google Gemini.
 
 ## How it Works
 
@@ -38,6 +39,11 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 5. **Audit History**:
    - `/history` (Displays the last 10 logged transactions—expenses and payments—in chronological order).
+
+6. **Voice Messages**:
+   - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
+   - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`).
+   - *(Note: Interactive confirmation buttons to execute the proposed command will be enabled in Phase 4)*.
 
 ## Development
 
@@ -312,3 +318,4 @@ when I had to correct or guide it
 - I asked to add support for sending commands through voice messages using an AI provider, and we agreed to start with Google Gemini while keeping the core agnostic to the provider. We agreed on an incremental phased plan:
   - In Phase 1, the agent implemented a voice/audio message handler echoing voice notes with duration and metadata to verify Telegram bot audio delivery and permissions.
   - In Phase 2, the agent added the Google Gemini SDK (`google-genai`), documented `GEMINI_API_KEY`, established a provider-agnostic `VoiceInterpreter` interface with a Gemini adapter skeleton, and added unit tests.
+  - In Phase 3, the agent connected the voice handler with Gemini to download voice notes in memory, transcribe the audio, and interpret spoken intent into ledger commands with group member context, returning the transcription and proposed command.
