@@ -1,3 +1,4 @@
+from telegram.constants import MessageEntityType
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -16,7 +17,10 @@ from .expense import (
 )
 from .settle import balances_command, settle_command, settle_callback_handler
 from .history import history_command, history_delete_callback_handler
-from .voice import voice_message_handler
+from .voice import (
+    voice_command_handler,
+    voice_mention_handler,
+)
 
 
 def register_handlers(application: Application) -> None:
@@ -24,9 +28,16 @@ def register_handlers(application: Application) -> None:
     # Add auto-registration handler in a separate group (-1) so it runs before command handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
 
-    # Voice / Audio Message Handler
+    # Voice / Audio reply mention handler
     application.add_handler(
-        MessageHandler(filters.VOICE | filters.AUDIO, voice_message_handler)
+        MessageHandler(
+            filters.REPLY
+            & (
+                filters.Entity(MessageEntityType.MENTION)
+                | filters.Entity(MessageEntityType.TEXT_MENTION)
+            ),
+            voice_mention_handler,
+        )
     )
 
     # Command Handlers
@@ -36,6 +47,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("settle", settle_command))
     application.add_handler(CommandHandler("payback", payback_command))
     application.add_handler(CommandHandler("history", history_command))
+    application.add_handler(CommandHandler("voice", voice_command_handler))
     application.add_handler(CommandHandler("help", help_command))
 
     # Callback Query Handlers
