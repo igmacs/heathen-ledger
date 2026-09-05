@@ -62,6 +62,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/payback @payer @recipient <amount>` — Record a direct payment between other group members. (e.g. `/payback @Bob @Alice 12.50`)\n\n"
         "📜 **History & Audit Logs**\n"
         "• `/history` — View the last 10 transactions logged in the group chat.\n\n"
+        "🎙️ **Voice Notes**\n"
+        "• Reply to any voice note or audio message with `/voice`, `/pay`, or tag the bot to transcribe and interpret it into a ledger command.\n\n"
         "⚠️ **User Registration:**\n"
         "The bot automatically registers users when they send a message. "
         "Before you can assign a payment/expense to a member, they *must have sent at least one message* in the group."

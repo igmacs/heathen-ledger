@@ -24,6 +24,7 @@ async def post_init(application: Application) -> None:
         BotCommand("settle", "Calculate payback transactions"),
         BotCommand("payback", "Record a direct payment"),
         BotCommand("history", "View last 10 transactions"),
+        BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
         BotCommand("help", "Display help message"),
     ]
     await application.bot.set_my_commands(commands)
