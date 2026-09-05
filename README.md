@@ -42,7 +42,8 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 6. **Voice Messages**:
    - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
-   - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`).
+   - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it.
+   - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`). Casual voice messages sent to the chat without a reply or mention are ignored.
    - *(Note: Interactive confirmation buttons to execute the proposed command will be enabled in Phase 4)*.
 
 ## Development
@@ -319,3 +320,5 @@ when I had to correct or guide it
   - In Phase 1, the agent implemented a voice/audio message handler echoing voice notes with duration and metadata to verify Telegram bot audio delivery and permissions.
   - In Phase 2, the agent added the Google Gemini SDK (`google-genai`), documented `GEMINI_API_KEY`, established a provider-agnostic `VoiceInterpreter` interface with a Gemini adapter skeleton, and added unit tests.
   - In Phase 3, the agent connected the voice handler with Gemini to download voice notes in memory, transcribe the audio, and interpret spoken intent into ledger commands with group member context, returning the transcription and proposed command. When testing, the user encountered that `gemini-2.5-flash` was restricted to new accounts; the agent updated the default model to `gemini-3.6-flash` and documented `GEMINI_MODEL`.
+
+- I noticed that the bot was automatically processing every voice note sent to the chat and asked how we could let the user signal when an audio is intended for the bot. The agent presented multiple approaches (replying with a command/mention, captions, direct DM handling). I chose option 1 (replying to the voice note with a command or mention). The agent autonomously implemented reply detection for `/voice`, `/pay`, and bot mentions (`@bot_username`), added `/voice` to bot autocompletion and help text, updated tests, and updated the documentation.
