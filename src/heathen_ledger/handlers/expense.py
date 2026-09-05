@@ -12,6 +12,7 @@ from ..parser import (
     split_amount_equally,
     parse_payback_message,
 )
+from .voice import process_voice_audio
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,24 @@ async def pay_command(
     """Handle the /pay command to record an expense."""
     if not update.message or not update.message.text:
         return
+
+    # If replying to a voice/audio note with /pay (no arguments), delegate to voice interpretation
+    reply_to = update.message.reply_to_message
+    if reply_to and (reply_to.voice or reply_to.audio):
+        text_clean = update.message.text.strip().lower()
+        bot_username = getattr(context.bot, "username", None) or ""
+        valid_commands = ["/pay"]
+        if bot_username:
+            valid_commands.append(f"/pay@{bot_username.lower()}")
+        if text_clean in valid_commands:
+            chat_id = update.effective_chat.id if update.effective_chat else None
+            return await process_voice_audio(
+                media_message=reply_to,
+                response_message=update.message,
+                context=context,
+                session=session,
+                chat_id=chat_id,
+            )
 
     parsed = parse_pay_message(update.message.text)
     if "error" in parsed:
