@@ -35,7 +35,7 @@ class GeminiVoiceInterpreter(VoiceInterpreter):
                 "No API key provided. Please set the GEMINI_API_KEY environment variable."
             )
         self.model_name = (
-            model_name or os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash"
+            model_name or os.environ.get("GEMINI_MODEL") or "gemini-3.5-flash-lite"
         )
         self.client = genai.Client(api_key=self.api_key)
 
