@@ -15,6 +15,7 @@ from heathen_ledger.handlers.settle import settle_callback_handler
 from heathen_ledger.handlers.expense import (
     undo_callback_handler,
     pay_toggle_callback_handler,
+    pay_command,
 )
 from heathen_ledger.handlers.history import history_delete_callback_handler
 from heathen_ledger.handlers.common import dismiss_callback_handler
@@ -459,6 +460,134 @@ class TestBotSettleCallback(unittest.TestCase):
         expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
         self.assertEqual(len(expense.splits), 1)
         self.assertEqual(expense.splits[0].user_id, self.alice.id)
+
+
+class TestPayCommandHandler(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=self.engine)
+        self.Session = sessionmaker(bind=self.engine)
+        self.db_session = self.Session()
+        self.get_session_patcher = unittest.mock.patch(
+            "heathen_ledger.database.get_session",
+            side_effect=lambda: self.get_session_context(self.db_session),
+        )
+        self.get_session_patcher.start()
+
+        self.group = crud.get_or_create_group(self.db_session, 12345, "Trip")
+        self.alice = crud.get_or_create_user(self.db_session, 11, "alice", "Alice")
+        self.bob = crud.get_or_create_user(self.db_session, 22, "bob", "Bob")
+        self.charlie = crud.get_or_create_user(
+            self.db_session, 33, "charlie", "Charlie"
+        )
+        crud.add_user_to_group(self.db_session, self.alice, self.group)
+        crud.add_user_to_group(self.db_session, self.bob, self.group)
+        crud.add_user_to_group(self.db_session, self.charlie, self.group)
+        self.db_session.commit()
+
+    @contextmanager
+    def get_session_context(self, session):
+        yield session
+
+    def tearDown(self):
+        self.get_session_patcher.stop()
+        self.db_session.close()
+        Base.metadata.drop_all(bind=self.engine)
+
+    def create_mock_message_update(self, text, sender_telegram_id=11):
+        update = MagicMock()
+        message = MagicMock()
+        message.text = text
+        message.reply_to_message = None
+        message.reply_text = AsyncMock()
+
+        user = MagicMock()
+        user.id = sender_telegram_id
+        user.username = "alice" if sender_telegram_id == 11 else "bob"
+        user.first_name = "Alice" if sender_telegram_id == 11 else "Bob"
+
+        chat = MagicMock()
+        chat.id = 12345
+        chat.title = "Trip"
+
+        update.message = message
+        update.effective_user = user
+        update.effective_chat = chat
+        return update
+
+    def test_pay_command_multi_payer_equal(self):
+        import asyncio
+
+        update = self.create_mock_message_update("/pay 90 for Dinner by me @Bob")
+        context = MagicMock()
+        asyncio.run(pay_command(update, context))
+
+        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        self.assertEqual(len(expenses), 1)
+        exp = expenses[0]
+        self.assertEqual(exp.amount, 9000)
+        self.assertEqual(len(exp.payers), 2)
+        payer_map = {p.user_id: p.amount for p in exp.payers}
+        self.assertEqual(payer_map[self.alice.id], 4500)
+        self.assertEqual(payer_map[self.bob.id], 4500)
+        self.assertEqual(len(exp.splits), 3)
+
+        update.message.reply_text.assert_called_once()
+        reply_text = update.message.reply_text.call_args.args[0]
+        self.assertIn("Alice: $45.00", reply_text)
+        self.assertIn("Bob: $45.00", reply_text)
+
+    def test_pay_command_with_date(self):
+        import asyncio
+        import datetime
+
+        update = self.create_mock_message_update("/pay 50 for Lunch on 2026-09-07")
+        context = MagicMock()
+        asyncio.run(pay_command(update, context))
+
+        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        self.assertEqual(len(expenses), 1)
+        exp = expenses[0]
+        self.assertEqual(exp.expense_date, datetime.date(2026, 9, 7))
+
+        update.message.reply_text.assert_called_once()
+        reply_text = update.message.reply_text.call_args.args[0]
+        self.assertIn("**Date:** 2026-09-07", reply_text)
+
+    def test_pay_command_custom_split(self):
+        import asyncio
+
+        update = self.create_mock_message_update(
+            "/pay 30 for drinks split @Bob:10 @Charlie:20"
+        )
+        context = MagicMock()
+        asyncio.run(pay_command(update, context))
+
+        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        self.assertEqual(len(expenses), 1)
+        exp = expenses[0]
+        self.assertEqual(len(exp.splits), 2)
+        splits_map = {s.user_id: s.amount for s in exp.splits}
+        self.assertEqual(splits_map[self.bob.id], 1000)
+        self.assertEqual(splits_map[self.charlie.id], 2000)
+
+    def test_pay_command_split_except(self):
+        import asyncio
+
+        update = self.create_mock_message_update(
+            "/pay 40 for snacks split except @Charlie"
+        )
+        context = MagicMock()
+        asyncio.run(pay_command(update, context))
+
+        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        self.assertEqual(len(expenses), 1)
+        exp = expenses[0]
+        self.assertEqual(len(exp.splits), 2)
+        splits_map = {s.user_id: s.amount for s in exp.splits}
+        self.assertNotIn(self.charlie.id, splits_map)
+        self.assertEqual(splits_map[self.alice.id], 2000)
+        self.assertEqual(splits_map[self.bob.id], 2000)
 
 
 if __name__ == "__main__":

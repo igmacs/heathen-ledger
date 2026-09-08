@@ -569,10 +569,34 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
         amount_formatted = f"{obj.amount / 100:.2f}"
 
         if t_type == "expense":
-            payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
+            if getattr(obj, "payers", None) and len(obj.payers) > 1:
+                payer_parts = [
+                    f"{p.user.first_name} (${p.amount / 100:.2f})"
+                    for p in obj.payers
+                    if p.user
+                ]
+                payer_str = (
+                    ", ".join(payer_parts) if payer_parts else "Multiple members"
+                )
+            elif (
+                getattr(obj, "payers", None)
+                and len(obj.payers) == 1
+                and obj.payers[0].user
+            ):
+                payer_str = obj.payers[0].user.first_name
+            elif getattr(obj, "payer", None) and obj.payer:
+                payer_str = obj.payer.first_name
+            else:
+                payer_str = f"User {obj.payer_id}"
+
             desc = f" for '{obj.description}'" if obj.description else ""
+            date_str = (
+                f" on {obj.expense_date.isoformat()}"
+                if getattr(obj, "expense_date", None)
+                else ""
+            )
             lines.append(
-                f"{i}. 💸 **Expense:** **{payer_name}** paid **${amount_formatted}**{desc}"
+                f"{i}. 💸 **Expense:** **{payer_str}** paid **${amount_formatted}**{desc}{date_str}"
             )
         elif t_type == "payment":
             payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")

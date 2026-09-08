@@ -27,10 +27,30 @@ def generate_expense_reply_text(expense: Expense) -> str:
     participants = [s.user for s in sorted_splits]
     parts_str = ", ".join([u.first_name for u in participants])
 
+    # Format Payers
+    if expense.payers and len(expense.payers) > 1:
+        payer_lines = []
+        for p in expense.payers:
+            payer_lines.append(f"  - {p.user.first_name}: ${p.amount / 100:.2f}")
+        paid_by_str = "• **Paid by:**\n" + "\n".join(payer_lines)
+    elif expense.payers and len(expense.payers) == 1:
+        paid_by_str = f"• **Paid by:** {expense.payers[0].user.first_name}"
+    elif expense.payer:
+        paid_by_str = f"• **Paid by:** {expense.payer.first_name}"
+    else:
+        paid_by_str = f"• **Paid by:** User {expense.payer_id}"
+
+    date_line = (
+        f"• **Date:** {expense.expense_date.isoformat()}\n"
+        if expense.expense_date
+        else ""
+    )
+
     reply_text = (
         f"✅ Recorded expense:\n"
-        f"• **Paid by:** {expense.payer.first_name}\n"
+        f"{paid_by_str}\n"
         f"• **Amount:** ${amount_formatted}{desc_str}\n"
+        f"{date_line}"
         f"• **Split between:** {parts_str}\n"
     )
 
@@ -111,38 +131,17 @@ async def pay_command(
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             f"⚠️ Error parsing command: {parsed['error']}\n"
-            f"Usage: `/pay [@payer] <amount> [for <description/participants>]`",
+            f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
             reply_markup=reply_markup,
             parse_mode="Markdown",
         )
         return
 
     amount = parsed["amount"]
-    payer_username = parsed["payer_username"]
-    participant_usernames = parsed["participants"]
-    description = parsed["description"]
-
-    # 1. Resolve Payer
-    if payer_username:
-        # Find payer in database by username
-        payer = session.query(User).filter(User.username == payer_username).first()
-        if not payer:
-            await update.message.reply_text(
-                f"⚠️ I don't know who @{payer_username} is yet! "
-                f"They need to send a message in this group first so I can register them."
-            )
-            return
-    else:
-        # Default to the sender of the message
-        payer = crud.get_user_by_telegram_id(session, update.effective_user.id)
-        if not payer:
-            # Fallback in case of registration delay
-            payer = crud.get_or_create_user(
-                session,
-                update.effective_user.id,
-                update.effective_user.username,
-                update.effective_user.first_name,
-            )
+    raw_payers = parsed.get("payers", {})
+    description = parsed.get("description")
+    split_spec = parsed.get("split_spec", {"mode": "all", "participants": []})
+    expense_date = parsed.get("expense_date")
 
     # Get active group
     group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
@@ -151,61 +150,116 @@ async def pay_command(
             session, update.effective_chat.id, update.effective_chat.title
         )
 
-    # 2. Resolve Participants
-    participants = []
-    if participant_usernames:
-        for username in participant_usernames:
-            user = session.query(User).filter(User.username == username).first()
-            if not user:
-                await update.message.reply_text(
-                    f"⚠️ I don't know who @{username} is yet! "
-                    f"They need to send a message in this group first so I can register them."
-                )
-                return
-            # Ensure participant is registered in the group members list
-            crud.add_user_to_group(session, user, group)
-            participants.append(user)
-    else:
-        # Default split: among all members registered in this group chat
-        participants = group.members
-
-    if not participants:
-        await update.message.reply_text(
-            "⚠️ No participants found to split the expense with."
-        )
-        return
-
-    # 3. Calculate splits
-    num_people = len(participants)
-    shares = split_amount_equally(amount, num_people)
-
-    # Map user ID to their split share amount
-    splits_dict = {}
-    for user, share in zip(participants, shares):
-        splits_dict[user.id] = share
-
-    # 4. Create the expense in database
-    expense = crud.create_expense(
-        session=session,
-        group_id=group.id,
-        payer_id=payer.id,
-        amount=amount,
-        description=description,
-        splits=splits_dict,
-    )
-
-    # Get creator info
-    creator = crud.get_user_by_telegram_id(session, update.effective_user.id)
-    if not creator:
-        creator = crud.get_or_create_user(
+    # Resolve sender
+    sender = crud.get_user_by_telegram_id(session, update.effective_user.id)
+    if not sender:
+        sender = crud.get_or_create_user(
             session,
             update.effective_user.id,
             update.effective_user.username,
             update.effective_user.first_name,
         )
+    crud.add_user_to_group(session, sender, group)
 
+    # 1. Resolve Payers
+    payers_dict = {}
+    for uname, p_cents in raw_payers.items():
+        if uname == "me":
+            u = sender
+        else:
+            u = session.query(User).filter(User.username == uname).first()
+            if not u:
+                await update.message.reply_text(
+                    f"⚠️ I don't know who @{uname} is yet! "
+                    f"They need to send a message in this group first so I can register them."
+                )
+                return
+        crud.add_user_to_group(session, u, group)
+        payers_dict[u.id] = p_cents
+
+    # 2. Resolve Participants and Splits
+    split_mode = split_spec.get("mode", "all")
+    splits_dict = {}
+
+    if split_mode == "all":
+        participants = group.members
+        if not participants:
+            await update.message.reply_text(
+                "⚠️ No participants found to split the expense with."
+            )
+            return
+        shares = split_amount_equally(amount, len(participants))
+        for u, s in zip(participants, shares):
+            splits_dict[u.id] = s
+
+    elif split_mode == "except":
+        excluded = set(split_spec.get("excluded", []))
+        participants = [
+            m for m in group.members if (m.username or "").lower() not in excluded
+        ]
+        if not participants:
+            await update.message.reply_text(
+                "⚠️ No participants left to split the expense with after exclusions."
+            )
+            return
+        shares = split_amount_equally(amount, len(participants))
+        for u, s in zip(participants, shares):
+            splits_dict[u.id] = s
+
+    elif split_mode == "subset":
+        participants = []
+        for uname in split_spec.get("participants", []):
+            if uname == "me":
+                u = sender
+            else:
+                u = session.query(User).filter(User.username == uname).first()
+                if not u:
+                    await update.message.reply_text(
+                        f"⚠️ I don't know who @{uname} is yet! "
+                        f"They need to send a message in this group first so I can register them."
+                    )
+                    return
+            crud.add_user_to_group(session, u, group)
+            participants.append(u)
+
+        if not participants:
+            await update.message.reply_text(
+                "⚠️ No participants found to split the expense with."
+            )
+            return
+        shares = split_amount_equally(amount, len(participants))
+        for u, s in zip(participants, shares):
+            splits_dict[u.id] = s
+
+    elif split_mode == "custom":
+        for uname, share_cents in split_spec.get("shares", {}).items():
+            if uname == "me":
+                u = sender
+            else:
+                u = session.query(User).filter(User.username == uname).first()
+                if not u:
+                    await update.message.reply_text(
+                        f"⚠️ I don't know who @{uname} is yet! "
+                        f"They need to send a message in this group first so I can register them."
+                    )
+                    return
+            crud.add_user_to_group(session, u, group)
+            splits_dict[u.id] = share_cents
+
+    # 3. Create the expense in database
+    expense = crud.create_expense(
+        session=session,
+        group_id=group.id,
+        amount=amount,
+        description=description,
+        splits=splits_dict,
+        payers=payers_dict,
+        expense_date=expense_date,
+    )
+
+    creator_id = sender.id
     reply_text = generate_expense_reply_text(expense)
-    reply_markup = build_expense_keyboard(expense, group.members, creator.id)
+    reply_markup = build_expense_keyboard(expense, group.members, creator_id)
 
     await update.message.reply_text(
         reply_text, parse_mode="Markdown", reply_markup=reply_markup
