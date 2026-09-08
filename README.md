@@ -33,9 +33,9 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
      - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares, or tap `🗑️ Undo` to delete it.
 
    > [!IMPORTANT]
-   > **User Auto-Registration:**
-   > To split an expense or specify a payer using their Telegram username (e.g. `@Alice`), that user **must have sent at least one message in the group** since the bot was added.
-   > The bot auto-registers users when they send messages. If a user is mentioned but has never interacted, the bot will return a warning asking them to send a message to register.
+   > **User Registration:**
+   > To split an expense or specify a payer using their Telegram username (e.g. `@Alice`), that user **must have sent at least one message in the group** since the bot was added so the bot can auto-register them.
+   > For members without a Telegram account, they can be registered manually using `/register <name>` (e.g. `/register John` or `/register @john John Doe`).
 
 2. **Check Balances**:
    - `/balances` (Shows a summary of everyone's net balance, sorted from highest creditor to highest debtor).
@@ -55,6 +55,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it.
    - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`). Casual voice messages sent to the chat without a reply or mention are ignored.
    - *(Note: Interactive confirmation buttons to execute the proposed command will be enabled in Phase 4)*.
+
+7. **External Members & Member Directory**:
+   - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
+   - `/register <name>` (e.g. `/register John`) or `/register @handle <Display Name>` (e.g. `/register @john John Doe`) to add external members. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
 ## Development
 
@@ -340,3 +344,10 @@ when I had to correct or guide it
   - Updated the bot expense handler and message formatting to record and display multi-payer contributions and dates.
   - Updated the Gemini voice interpreter system prompt with the new `/pay` specification, examples, and dynamic date context.
   - Added comprehensive unit tests across models, CRUD, parser, and handlers, and updated the documentation.
+
+- I asked how user registration currently works, what data is saved, and whether the bot can work with users outside the Telegram group (e.g., people without Telegram). The agent explained the automatic registration handler, database schema constraints, and lack of external user support. I proposed adding a `/register` command to create external user profiles on the fly. The agent agreed and outlined a plan, which I approved. The agent autonomously:
+  - Updated the `User` database model by making `telegram_id` nullable and introducing an `is_external` boolean flag, and generated/tested an Alembic migration (`add_external_users_support`).
+  - Added CRUD helpers `create_external_user` and group-scoped user resolution (`get_user_in_group`) to safely find members within the active group and prevent cross-chat handle leaks.
+  - Implemented `/register` (allowing `/register <name>` or `/register @handle <Display Name>`) and `/members` to view all group members.
+  - Updated `/pay` and `/payback` to resolve external group members and updated `/settle` callback permissions so any registered member can confirm settlements when both parties are external.
+  - Added unit tests for external user CRUD, bot commands, payments, and settlements, and updated the documentation.
