@@ -160,6 +160,59 @@ class TestCRUD(unittest.TestCase):
             self.assertTrue(success_exp)
             self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
 
+    def test_external_user_crud(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+
+        with Session() as session:
+            group1 = crud.get_or_create_group(session, 1001, "Flatmates")
+            group2 = crud.get_or_create_group(session, 1002, "Hiking Club")
+
+            # Create regular telegram user in group 1
+            alice = crud.get_or_create_user(session, 1, "alice", "Alice")
+            crud.add_user_to_group(session, alice, group1)
+
+            # Register external user in group 1
+            john = crud.create_external_user(
+                session, group1, first_name="John Doe", username="john"
+            )
+            session.commit()
+
+            self.assertIsNone(john.telegram_id)
+            self.assertTrue(john.is_external)
+            self.assertEqual(john.username, "john")
+            self.assertEqual(john.first_name, "John Doe")
+            self.assertIn(john, group1.members)
+            self.assertNotIn(john, group2.members)
+
+            # Test get_user_in_group within group 1
+            self.assertEqual(crud.get_user_in_group(session, group1.id, "john"), john)
+            self.assertEqual(crud.get_user_in_group(session, group1.id, "@john"), john)
+            self.assertEqual(
+                crud.get_user_in_group(session, group1.id, "John Doe"), john
+            )
+            self.assertEqual(crud.get_user_in_group(session, group1.id, "alice"), alice)
+
+            # External user in group 1 must NOT be found from group 2
+            self.assertIsNone(crud.get_user_in_group(session, group2.id, "john"))
+
+            # Expense with external user
+            # Alice paid $20, split equally with John ($10 each)
+            crud.create_expense(
+                session,
+                group_id=group1.id,
+                payer_id=alice.id,
+                amount=2000,
+                description="Groceries",
+                splits={alice.id: 1000, john.id: 1000},
+            )
+            session.commit()
+
+            balances = crud.get_group_balances(session, group1.id)
+            self.assertEqual(balances[alice.id], 1000)
+            self.assertEqual(balances[john.id], -1000)
+
 
 if __name__ == "__main__":
     unittest.main()

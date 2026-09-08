@@ -24,7 +24,12 @@ def get_or_create_user(
     """Get an existing user or create a new user registry if they do not exist."""
     user = get_user_by_telegram_id(session, telegram_id)
     if not user:
-        user = User(telegram_id=telegram_id, username=username, first_name=first_name)
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            first_name=first_name,
+            is_external=False,
+        )
         session.add(user)
         session.flush()
         logger.info(f"Registered new user: {first_name} (Telegram ID: {telegram_id})")
@@ -35,6 +40,63 @@ def get_or_create_user(
         if first_name and user.first_name != first_name:
             user.first_name = first_name
     return user
+
+
+def create_external_user(
+    session: Session,
+    group: Group,
+    first_name: str,
+    username: Optional[str] = None,
+) -> User:
+    """
+    Register an external user (without a Telegram account) and add them to the group.
+    """
+    clean_username = username.lower().lstrip("@") if username else None
+    user = User(
+        telegram_id=None,
+        username=clean_username,
+        first_name=first_name,
+        is_external=True,
+    )
+    session.add(user)
+    session.flush()
+    add_user_to_group(session, user, group)
+    logger.info(
+        f"Registered external user: {first_name} (@{clean_username}) in group {group.title}"
+    )
+    return user
+
+
+def get_user_in_group(
+    session: Session,
+    group_id: int,
+    username: str,
+) -> Optional[User]:
+    """
+    Find a user in a specific group by username or first name.
+    If not found in group members, falls back to globally registered Telegram users.
+    """
+    clean_name = username.strip().lower().lstrip("@")
+    group = session.query(Group).filter(Group.id == group_id).first()
+    if group:
+        # 1. Match username in group members
+        for m in group.members:
+            if m.username and m.username.lower() == clean_name:
+                return m
+        # 2. Match first name in group members
+        for m in group.members:
+            if m.first_name and m.first_name.lower() == clean_name:
+                return m
+
+    # 3. Fallback: Search globally for registered non-external Telegram users
+    fallback_user = (
+        session.query(User)
+        .filter(User.username == clean_name, User.is_external.is_(False))
+        .first()
+    )
+    if fallback_user and group:
+        add_user_to_group(session, fallback_user, group)
+    return fallback_user
 
 
 # --- Group Helper Functions ---
