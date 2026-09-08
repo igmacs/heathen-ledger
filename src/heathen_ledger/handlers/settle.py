@@ -128,10 +128,16 @@ async def settle_callback_handler(
         )
         return
 
-    if clicking_user.id not in (from_id, to_id):
-        # Retrieve names of the parties for a descriptive alert
-        from_db_user = session.query(User).filter(User.id == from_id).first()
-        to_db_user = session.query(User).filter(User.id == to_id).first()
+    from_db_user = session.query(User).filter(User.id == from_id).first()
+    to_db_user = session.query(User).filter(User.id == to_id).first()
+
+    both_external = (
+        from_db_user is not None
+        and from_db_user.is_external
+        and to_db_user is not None
+        and to_db_user.is_external
+    )
+    if not both_external and clicking_user.id not in (from_id, to_id):
         from_name = from_db_user.first_name if from_db_user else "the debtor"
         to_name = to_db_user.first_name if to_db_user else "the creditor"
         await query.answer(

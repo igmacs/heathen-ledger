@@ -167,11 +167,11 @@ async def pay_command(
         if uname == "me":
             u = sender
         else:
-            u = session.query(User).filter(User.username == uname).first()
+            u = crud.get_user_in_group(session, group.id, uname)
             if not u:
                 await update.message.reply_text(
                     f"⚠️ I don't know who @{uname} is yet! "
-                    f"They need to send a message in this group first so I can register them."
+                    f"They need to send a message in this group first or be registered with /register."
                 )
                 return
         crud.add_user_to_group(session, u, group)
@@ -212,11 +212,11 @@ async def pay_command(
             if uname == "me":
                 u = sender
             else:
-                u = session.query(User).filter(User.username == uname).first()
+                u = crud.get_user_in_group(session, group.id, uname)
                 if not u:
                     await update.message.reply_text(
                         f"⚠️ I don't know who @{uname} is yet! "
-                        f"They need to send a message in this group first so I can register them."
+                        f"They need to send a message in this group first or be registered with /register."
                     )
                     return
             crud.add_user_to_group(session, u, group)
@@ -236,11 +236,11 @@ async def pay_command(
             if uname == "me":
                 u = sender
             else:
-                u = session.query(User).filter(User.username == uname).first()
+                u = crud.get_user_in_group(session, group.id, uname)
                 if not u:
                     await update.message.reply_text(
                         f"⚠️ I don't know who @{uname} is yet! "
-                        f"They need to send a message in this group first so I can register them."
+                        f"They need to send a message in this group first or be registered with /register."
                     )
                     return
             crud.add_user_to_group(session, u, group)
@@ -410,11 +410,11 @@ async def payback_command(
 
     # 1. Resolve Payer
     if payer_username:
-        payer = session.query(User).filter(User.username == payer_username).first()
+        payer = crud.get_user_in_group(session, group.id, payer_username)
         if not payer:
             await update.message.reply_text(
                 f"⚠️ I don't know who @{payer_username} is yet! "
-                f"They need to send a message in this group first so I can register them."
+                f"They need to send a message in this group first or be registered with /register."
             )
             return
     else:
@@ -429,11 +429,11 @@ async def payback_command(
             )
 
     # 2. Resolve Payee
-    payee = session.query(User).filter(User.username == payee_username).first()
+    payee = crud.get_user_in_group(session, group.id, payee_username)
     if not payee:
         await update.message.reply_text(
             f"⚠️ I don't know who @{payee_username} is yet! "
-            f"They need to send a message in this group first so I can register them."
+            f"They need to send a message in this group first or be registered with /register."
         )
         return
 

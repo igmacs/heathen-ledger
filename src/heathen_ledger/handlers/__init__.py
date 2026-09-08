@@ -7,7 +7,7 @@ from telegram.ext import (
     filters,
 )
 
-from .base import auto_register, start, help_command
+from .base import auto_register, start, help_command, register_command, members_command
 from .common import dismiss_callback_handler
 from .expense import (
     pay_command,
@@ -48,6 +48,8 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("payback", payback_command))
     application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("voice", voice_command_handler))
+    application.add_handler(CommandHandler("register", register_command))
+    application.add_handler(CommandHandler("members", members_command))
     application.add_handler(CommandHandler("help", help_command))
 
     # Callback Query Handlers

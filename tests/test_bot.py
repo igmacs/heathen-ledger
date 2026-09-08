@@ -11,11 +11,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from heathen_ledger.database import Base
 from heathen_ledger import crud
+from heathen_ledger.handlers.base import (
+    register_command,
+    members_command,
+)
 from heathen_ledger.handlers.settle import settle_callback_handler
 from heathen_ledger.handlers.expense import (
     undo_callback_handler,
     pay_toggle_callback_handler,
     pay_command,
+    payback_command,
 )
 from heathen_ledger.handlers.history import history_delete_callback_handler
 from heathen_ledger.handlers.common import dismiss_callback_handler
@@ -588,6 +593,98 @@ class TestPayCommandHandler(unittest.TestCase):
         self.assertNotIn(self.charlie.id, splits_map)
         self.assertEqual(splits_map[self.alice.id], 2000)
         self.assertEqual(splits_map[self.bob.id], 2000)
+
+    def test_register_command_and_members(self):
+        import asyncio
+
+        # 1. Empty /register shows usage
+        update_empty = self.create_mock_message_update("/register")
+        context = MagicMock()
+        asyncio.run(register_command(update_empty, context))
+        update_empty.message.reply_text.assert_called_once()
+        self.assertIn("Usage:", update_empty.message.reply_text.call_args.args[0])
+
+        # 2. Register simple name
+        update_reg = self.create_mock_message_update("/register John")
+        asyncio.run(register_command(update_reg, context))
+        update_reg.message.reply_text.assert_called_once()
+        reply = update_reg.message.reply_text.call_args.args[0]
+        self.assertIn("Registered external member *John* (`@john`)", reply)
+
+        # 3. Duplicate handle check
+        update_dup = self.create_mock_message_update("/register @john John Two")
+        asyncio.run(register_command(update_dup, context))
+        update_dup.message.reply_text.assert_called_once()
+        self.assertIn("already exists", update_dup.message.reply_text.call_args.args[0])
+
+        # 4. Register with explicit handle and full name
+        update_reg2 = self.create_mock_message_update("/register @maria_s Maria Silva")
+        asyncio.run(register_command(update_reg2, context))
+        self.assertIn(
+            "Registered external member *Maria Silva* (`@maria_s`)",
+            update_reg2.message.reply_text.call_args.args[0],
+        )
+
+        # 5. /members command
+        update_mem = self.create_mock_message_update("/members")
+        asyncio.run(members_command(update_mem, context))
+        mem_reply = update_mem.message.reply_text.call_args.args[0]
+        self.assertIn("Alice", mem_reply)
+        self.assertIn("John", mem_reply)
+        self.assertIn("_[external]_", mem_reply)
+
+        # 6. /pay involving external user
+        update_pay = self.create_mock_message_update(
+            "/pay 30 for pizza split @john @alice"
+        )
+        asyncio.run(pay_command(update_pay, context))
+        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        latest_exp = expenses[-1]
+        self.assertEqual(len(latest_exp.splits), 2)
+        john_user = crud.get_user_in_group(self.db_session, self.group.id, "john")
+        self.assertIsNotNone(john_user)
+        self.assertTrue(john_user.is_external)
+        splits_users = {s.user_id for s in latest_exp.splits}
+        self.assertIn(john_user.id, splits_users)
+
+        # 7. /payback involving external user
+        update_payback = self.create_mock_message_update("/payback @john 15")
+        asyncio.run(payback_command(update_payback, context))
+        payments = crud.get_group_payments(self.db_session, self.group.id)
+        self.assertEqual(len(payments), 1)
+        self.assertEqual(payments[0].payer_id, self.alice.id)
+        self.assertEqual(payments[0].payee_id, john_user.id)
+        self.assertEqual(payments[0].amount, 1500)
+
+    def test_settle_callback_both_external(self):
+        import asyncio
+
+        # Create two external users
+        john = crud.create_external_user(self.db_session, self.group, "John", "john")
+        mary = crud.create_external_user(self.db_session, self.group, "Mary", "mary")
+        self.db_session.commit()
+
+        # Alice (telegram_id=11) clicks settle button for John and Mary
+        query = MagicMock()
+        query.data = f"settle:{john.id}:{mary.id}:1000"
+        query.from_user.id = 11  # Alice
+        query.message.chat.id = self.group.telegram_chat_id
+        query.answer = AsyncMock()
+        query.edit_message_text = AsyncMock()
+
+        update = MagicMock()
+        update.callback_query = query
+        context = MagicMock()
+
+        asyncio.run(settle_callback_handler(update, context))
+
+        # Check payment was created even though Alice was neither John nor Mary
+        payments = crud.get_group_payments(self.db_session, self.group.id)
+        matching = [
+            p for p in payments if p.payer_id == john.id and p.payee_id == mary.id
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0].amount, 1000)
 
 
 if __name__ == "__main__":
