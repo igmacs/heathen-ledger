@@ -17,10 +17,20 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 ## How it Works
 
 1. **Add an Expense**:
-   - `/pay @Alice 50 for Dinner` (Alice paid $50.00; split equally among all members of the group chat).
-   - `/pay @Alice 50 for @Bob @Charlie` (Alice paid $50.00; split specifically between Bob and Charlie).
-   - `/pay 12.50 for Pizza` (The sender paid $12.50; split equally among all members of the group chat).
-     - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares.
+   - **Syntax**: `/pay <amount> [for <description>] [by <payer(s)>] [split <split_spec>] [on <date>]`
+   - **Basic everyday use**:
+     - `/pay 12.50 for Pizza` (Sender paid $12.50; split equally among all members of the group chat).
+     - `/pay 50 for Dinner on 2026-09-07` (Sender paid $50.00 for Dinner on a specific date; defaults to today).
+   - **Multiple or other payers (`by ...`)**:
+     - `/pay 50 for Groceries by @Alice` (Alice paid $50.00; split equally among all members).
+     - `/pay 90 for Dinner by me @Bob` (Sender and Bob paid $45.00 each from a joint account or shared cash).
+     - `/pay 40 for Pizza by me:25 @Charlie:15` (Sender paid $25.00, Charlie paid $15.00).
+   - **Splits & Beneficiaries (`split ...`)**:
+     - `/pay 60 for escape room split @Alice @Bob` (Split equally only between Alice and Bob).
+     - `/pay 30 for drinks split @Bob:10 @Charlie:20` (Custom shares: Bob owes $10.00, Charlie owes $20.00).
+     - `/pay 45 for groceries split except @Dave` (Split equally among all members except Dave).
+   - **Interactive Toggles & Undo**:
+     - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares, or tap `🗑️ Undo` to delete it.
 
    > [!IMPORTANT]
    > **User Auto-Registration:**
@@ -322,3 +332,11 @@ when I had to correct or guide it
   - In Phase 3, the agent connected the voice handler with Gemini to download voice notes in memory, transcribe the audio, and interpret spoken intent into ledger commands with group member context, returning the transcription and proposed command. When testing, the user encountered that `gemini-2.5-flash` was restricted to new accounts; the agent updated the default model to `gemini-3.6-flash` and documented `GEMINI_MODEL`.
 
 - I noticed that the bot was automatically processing every voice note sent to the chat and asked how we could let the user signal when an audio is intended for the bot. The agent presented multiple approaches (replying with a command/mention, captions, direct DM handling). I chose option 1 (replying to the voice note with a command or mention). The agent autonomously implemented reply detection for `/voice`, `/pay`, and bot mentions (`@bot_username`), added `/voice` to bot autocompletion and help text, updated tests, and updated the documentation. However, the agent had incorrectly claimed that replying to another user's voice message would work with Telegram Privacy Mode enabled; I corrected the agent that Telegram Privacy Mode strips `reply_to_message` unless Privacy Mode is disabled or the bot is an admin.
+
+- I asked for a final design and specification for the `/pay` command so that an LLM can easily generate it from natural language, with support for reasons, amounts, optional dates, optional/multiple payers (joint accounts, couples, cash splits), and flexible split beneficiaries, while reserving overly complex split mechanisms (such as percentages, weights, and itemized receipts) exclusively for interactive Telegram UI elements like buttons and popups. The agent proposed a structured keyword-based grammar (`for`, `by`, `split`, `on`) with clean UI boundaries and an incremental implementation plan. I approved the design and instructed the agent not to worry about breaking backwards compatibility at this early development stage, but to design with future schema evolution in mind (using Alembic). The agent autonomously implemented the changes across the stack:
+  - Created the `ExpensePayer` model and `expense_date` column on `Expense`, generating and running an Alembic migration (`add_expense_payers_and_expense_date`).
+  - Updated CRUD operations and balance calculations to handle multiple payers and dates.
+  - Implemented the advanced `/pay` parser with multi-payer, custom split, date, quoted description, and validation support.
+  - Updated the bot expense handler and message formatting to record and display multi-payer contributions and dates.
+  - Updated the Gemini voice interpreter system prompt with the new `/pay` specification, examples, and dynamic date context.
+  - Added comprehensive unit tests across models, CRUD, parser, and handlers, and updated the documentation.
