@@ -1,7 +1,8 @@
+import datetime
 import logging
 from typing import Optional, Dict, List, Any
 from sqlalchemy.orm import Session
-from .models import User, Group, Expense, ExpenseSplit, Payment
+from .models import User, Group, Expense, ExpenseSplit, Payment, ExpensePayer
 
 logger = logging.getLogger(__name__)
 
@@ -79,36 +80,62 @@ def add_user_to_group(session: Session, user: User, group: Group) -> bool:
 def create_expense(
     session: Session,
     group_id: int,
-    payer_id: int,
-    amount: int,
-    description: Optional[str],
-    splits: Dict[int, int],
+    payer_id: Optional[int] = None,
+    amount: int = 0,
+    description: Optional[str] = None,
+    splits: Optional[Dict[int, int]] = None,
+    payers: Optional[Dict[int, int]] = None,
+    expense_date: Optional[datetime.date] = None,
 ) -> Expense:
     """
     Log a new expense in a group chat.
 
     :param session: The database session.
     :param group_id: Internal primary key of the group.
-    :param payer_id: Internal primary key of the user who paid.
-    :param amount: Total expense amount in cents.
+    :param payer_id: Internal primary key of the user who paid (optional if payers given).
+    :param amount: Total expense amount in cents (inferred from payers if 0).
     :param description: What the expense was for.
     :param splits: A dictionary mapping internal user IDs (user_id: int)
                   to their individual owed amount in cents (split_amount: int).
+    :param payers: A dictionary mapping internal user IDs (user_id: int)
+                   to the amount in cents they paid (amount: int).
+    :param expense_date: The date on which the expense occurred (optional, defaults to None).
     """
+    if payers:
+        if amount == 0:
+            amount = sum(payers.values())
+        if payer_id is None:
+            payer_id = next(iter(payers)) if len(payers) == 1 else None
+    elif payer_id is not None:
+        payers = {payer_id: amount}
+    else:
+        payers = {}
+
     expense = Expense(
-        group_id=group_id, payer_id=payer_id, amount=amount, description=description
+        group_id=group_id,
+        payer_id=payer_id,
+        amount=amount,
+        description=description,
+        expense_date=expense_date,
     )
     session.add(expense)
     session.flush()
 
-    for user_id, split_amount in splits.items():
-        split = ExpenseSplit(
-            expense_id=expense.id, user_id=user_id, amount=split_amount
+    for p_user_id, p_amount in payers.items():
+        payer_entry = ExpensePayer(
+            expense_id=expense.id, user_id=p_user_id, amount=p_amount
         )
-        session.add(split)
+        session.add(payer_entry)
+
+    if splits:
+        for user_id, split_amount in splits.items():
+            split = ExpenseSplit(
+                expense_id=expense.id, user_id=user_id, amount=split_amount
+            )
+            session.add(split)
 
     logger.info(
-        f"Created expense of {amount} cents by user ID {payer_id} split among {len(splits)} members"
+        f"Created expense of {amount} cents in group {group_id} by {len(payers)} payer(s) split among {len(splits or {})} members"
     )
     return expense
 
@@ -169,9 +196,15 @@ def get_group_balances(session: Session, group_id: int) -> Dict[int, int]:
     # 1. Process Expenses and Splits
     expenses = get_group_expenses(session, group_id)
     for exp in expenses:
-        if exp.payer_id not in balances:
-            balances[exp.payer_id] = 0
-        balances[exp.payer_id] += exp.amount
+        if exp.payers:
+            for p in exp.payers:
+                if p.user_id not in balances:
+                    balances[p.user_id] = 0
+                balances[p.user_id] += p.amount
+        elif exp.payer_id:
+            if exp.payer_id not in balances:
+                balances[exp.payer_id] = 0
+            balances[exp.payer_id] += exp.amount
 
         for split in exp.splits:
             if split.user_id not in balances:

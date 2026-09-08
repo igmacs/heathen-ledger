@@ -116,6 +116,50 @@ class TestCRUD(unittest.TestCase):
             self.assertTrue(success_exp)
             self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
 
+    def test_multi_payer_expense_scenario(self):
+        import datetime
+
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+
+        with Session() as session:
+            group = crud.get_or_create_group(session, 9999, "Vacation")
+            alice = crud.get_or_create_user(session, 101, "alice", "Alice")
+            bob = crud.get_or_create_user(session, 102, "bob", "Bob")
+            charlie = crud.get_or_create_user(session, 103, "charlie", "Charlie")
+            crud.add_user_to_group(session, alice, group)
+            crud.add_user_to_group(session, bob, group)
+            crud.add_user_to_group(session, charlie, group)
+            session.commit()
+
+            # Total $60: Alice paid 40 (4000), Bob paid 20 (2000). Split 20 (2000) each.
+            exp_date = datetime.date(2026, 9, 7)
+            expense = crud.create_expense(
+                session,
+                group_id=group.id,
+                amount=6000,
+                description="Groceries & Snacks",
+                payers={alice.id: 4000, bob.id: 2000},
+                splits={alice.id: 2000, bob.id: 2000, charlie.id: 2000},
+                expense_date=exp_date,
+            )
+            session.commit()
+
+            self.assertEqual(len(expense.payers), 2)
+            self.assertEqual(expense.expense_date, exp_date)
+
+            balances = crud.get_group_balances(session, group.id)
+            self.assertEqual(balances[alice.id], 2000)
+            self.assertEqual(balances[bob.id], 0)
+            self.assertEqual(balances[charlie.id], -2000)
+
+            # Cascade delete check
+            success_exp = crud.delete_expense(session, expense.id)
+            session.commit()
+            self.assertTrue(success_exp)
+            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
