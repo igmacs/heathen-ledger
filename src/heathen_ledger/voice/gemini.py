@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -62,17 +63,24 @@ class GeminiVoiceInterpreter(VoiceInterpreter):
         members_desc = (
             ", ".join(group_members) if group_members else "None registered yet"
         )
+        today_iso = datetime.date.today().isoformat()
         prompt = (
             "You are an AI assistant for Heathen Ledger, a Telegram expense-sharing bot.\n"
+            f"Today's date is: {today_iso}\n\n"
             "Your tasks:\n"
             "1. Transcribe the spoken audio message accurately in its original language.\n"
             "2. Determine if the speaker intends to invoke one of the supported bot commands:\n"
             "   - /pay: Record an expense.\n"
-            "     Syntax: /pay [payer] <amount> [for <description or participants>]\n"
+            "     Syntax: /pay <amount> [for <description>] [by <payer_spec>] [split <split_spec>] [on <date>]\n"
             "     Examples:\n"
             "       'I paid 25 for lunch' -> /pay 25 for lunch\n"
-            "       'Alice paid 50 for groceries' -> /pay @Alice 50 for groceries\n"
-            "       'I paid 30 for Bob and Charlie' -> /pay 30 for @Bob @Charlie\n"
+            "       'Alice paid 50 for groceries' -> /pay 50 for groceries by @Alice\n"
+            "       'Dinner was 90, paid with Bob from our joint account' -> /pay 90 for Dinner by me @Bob\n"
+            "       'We got pizza for 40, I paid 25 and Charlie paid 15' -> /pay 40 for pizza by me:25 @Charlie:15\n"
+            "       'I paid 60 for escape room for Alice and Bob only' -> /pay 60 for escape room split @Alice @Bob\n"
+            "       'Bought drinks for 30, Bob owes 10 and Charlie owes 20' -> /pay 30 for drinks split @Bob:10 @Charlie:20\n"
+            "       'I paid 45 for groceries for everyone except Dave' -> /pay 45 for groceries split except @Dave\n"
+            "       'Alice paid 50 for dinner yesterday' -> /pay 50 for dinner by @Alice on <date_of_yesterday>\n"
             "   - /payback: Record a direct settlement payment.\n"
             "     Syntax: /payback [payer] <recipient> <amount>\n"
             "     Examples:\n"
@@ -84,6 +92,8 @@ class GeminiVoiceInterpreter(VoiceInterpreter):
             f"Known group members: {members_desc}\n\n"
             "Guidelines:\n"
             "- If a mentioned person corresponds to a known group member, use their username prefixed with '@' (e.g. @Alice).\n"
+            "- If the speaker refers to themselves paying or participating, use 'me' in 'by' or 'split'.\n"
+            "- If the speaker mentions a date (e.g. yesterday, on Monday), resolve it to ISO format YYYY-MM-DD in the 'on' clause.\n"
             "- Amounts must be positive decimal numbers.\n"
             "- If the user did NOT intend to issue a bot command, set command to null.\n"
         )
