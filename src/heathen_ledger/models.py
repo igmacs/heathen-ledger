@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     Date,
     Table,
+    Boolean,
 )
 from sqlalchemy.orm import relationship
 
@@ -36,9 +37,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-    telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    telegram_id = Column(BigInteger, unique=True, nullable=True, index=True)
     username = Column(String, nullable=True, index=True)
     first_name = Column(String, nullable=False)
+    is_external = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     groups = relationship("Group", secondary=group_members, back_populates="members")
