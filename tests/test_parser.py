@@ -1,5 +1,6 @@
-import sys
+import datetime
 import os
+import sys
 import unittest
 
 # Add project src to path dynamically
@@ -48,6 +49,82 @@ class TestParser(unittest.TestCase):
     def test_parse_pay_message_invalid_amount(self):
         res = parse_pay_message("/pay @Alice for Dinner")
         self.assertIn("error", res)
+
+    def test_parse_pay_message_multi_payer_equal(self):
+        res = parse_pay_message("/pay 90 for Dinner by me @Bob")
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 9000)
+        self.assertEqual(res["description"], "Dinner")
+        self.assertEqual(res["payers"], {"me": 4500, "bob": 4500})
+        self.assertIsNone(res["payer_username"])
+
+    def test_parse_pay_message_multi_payer_custom(self):
+        res = parse_pay_message("/pay 40 for Pizza by me:25 @Charlie:15")
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 4000)
+        self.assertEqual(res["description"], "Pizza")
+        self.assertEqual(res["payers"], {"me": 2500, "charlie": 1500})
+
+    def test_parse_pay_message_inferred_amount_from_payers(self):
+        res = parse_pay_message("/pay for Dinner by @Alice:30 @Bob:20")
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 5000)
+        self.assertEqual(res["payers"], {"alice": 3000, "bob": 2000})
+        self.assertEqual(res["description"], "Dinner")
+
+    def test_parse_pay_message_custom_splits(self):
+        res = parse_pay_message("/pay 30 for drinks split @Bob:10 @Charlie:20")
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 3000)
+        self.assertEqual(res["description"], "drinks")
+        self.assertEqual(res["split_spec"]["mode"], "custom")
+        self.assertEqual(res["split_spec"]["shares"], {"bob": 1000, "charlie": 2000})
+        self.assertEqual(res["participants"], ["bob", "charlie"])
+
+    def test_parse_pay_message_split_except(self):
+        res = parse_pay_message("/pay 45 for groceries split except @Dave")
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 4500)
+        self.assertEqual(res["description"], "groceries")
+        self.assertEqual(res["split_spec"]["mode"], "except")
+        self.assertEqual(res["split_spec"]["excluded"], ["dave"])
+
+    def test_parse_pay_message_dates(self):
+        # ISO date
+        res_iso = parse_pay_message("/pay 50 for Dinner on 2026-09-07")
+        self.assertNotIn("error", res_iso)
+        self.assertEqual(res_iso["expense_date"], datetime.date(2026, 9, 7))
+
+        # today & yesterday
+        res_today = parse_pay_message("/pay 50 for Lunch on today")
+        self.assertEqual(res_today["expense_date"], datetime.date.today())
+
+        res_yesterday = parse_pay_message("/pay 50 for Lunch on yesterday")
+        self.assertEqual(
+            res_yesterday["expense_date"],
+            datetime.date.today() - datetime.timedelta(days=1),
+        )
+
+        # Invalid date
+        res_invalid = parse_pay_message("/pay 50 for Lunch on 2026-99-99")
+        self.assertIn("error", res_invalid)
+
+    def test_parse_pay_message_quoted_description(self):
+        res = parse_pay_message('/pay 120 for "Weekend Airbnb and snacks" by @Alice')
+        self.assertNotIn("error", res)
+        self.assertEqual(res["amount"], 12000)
+        self.assertEqual(res["description"], "Weekend Airbnb and snacks")
+        self.assertEqual(res["payers"], {"alice": 12000})
+
+    def test_parse_pay_message_validation_mismatched_payers(self):
+        res = parse_pay_message("/pay 50 for Dinner by @Alice:30 @Bob:10")
+        self.assertIn("error", res)
+        self.assertIn("does not match total expense amount", res["error"])
+
+    def test_parse_pay_message_validation_mismatched_splits(self):
+        res = parse_pay_message("/pay 50 for Dinner split @Bob:20 @Charlie:20")
+        self.assertIn("error", res)
+        self.assertIn("does not match total expense amount", res["error"])
 
     def test_split_amount_equally_exact(self):
         shares = split_amount_equally(3000, 3)

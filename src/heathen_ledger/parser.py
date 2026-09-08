@@ -1,98 +1,346 @@
+import datetime
 import re
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Tuple
+
+
+def _parse_amount_to_cents(amount_str: str) -> Optional[int]:
+    """Parse a numeric string (integer or up to 2 decimals) into integer cents."""
+    match = re.fullmatch(r"(\d+(?:\.\d{1,2})?)", amount_str)
+    if not match:
+        return None
+    val = match.group(1)
+    if "." in val:
+        parts = val.split(".")
+        dollars = int(parts[0])
+        cents_part = parts[1]
+        cents = int(cents_part) * 10 if len(cents_part) == 1 else int(cents_part[:2])
+        return dollars * 100 + cents
+    return int(val) * 100
+
+
+def _parse_user_token(token: str) -> Optional[Tuple[str, Optional[int]]]:
+    """
+    Parses a user token like '@alice', '@bob:30', 'me', 'me:25.50'.
+    Returns (username_or_me, amount_in_cents_or_none).
+    """
+    token = token.strip().rstrip(",")
+    match = re.fullmatch(
+        r"(?:@(\w+)|(me))(?::(\d+(?:\.\d{1,2})?))?", token, re.IGNORECASE
+    )
+    if not match:
+        return None
+    username = (match.group(1) or match.group(2)).lower()
+    amount_str = match.group(3)
+    amount = _parse_amount_to_cents(amount_str) if amount_str else None
+    return username, amount
 
 
 def parse_pay_message(text: str) -> Dict[str, Any]:
     """
     Parses a /pay command message to extract expense details.
 
-    Expected formats:
-    - /pay [<payer>] <amount> [for <description>]
-    - /pay [<payer>] <amount> [for <participants>]
+    Supported Syntax:
+    - /pay <amount> [for <description>] [by <payer_spec>] [split <split_spec>] [on <date>]
 
-    Examples:
-    - /pay @Alice 50 for Dinner -> Payer: Alice, Amount: 5000, Description: Dinner
-    - /pay @Alice 50 for @Bob @Charlie -> Payer: Alice, Amount: 5000, Participants: [Bob, Charlie]
-    - /pay 12.50 -> Payer: None (default sender), Amount: 1250, Participants: []
+    Clauses can appear in any order. Quotes around <description> are optional unless
+    it contains reserved keywords (e.g. /pay 50 for "Dinner with friends" by @Alice).
+
+    Payer specs:
+    - Omitted: Sender paid 100%.
+    - by @Alice: Alice paid 100%.
+    - by @Alice @Bob: Equal split between Alice and Bob.
+    - by @Alice:30 @Bob:20: Custom amounts paid.
+    - 'me' keyword can be used to refer to the sender.
+
+    Split specs:
+    - Omitted: Split equally among all group members.
+    - split @Bob @Charlie: Split equally between Bob and Charlie.
+    - split @Bob:20 @Charlie:30: Custom split shares.
+    - split except @Dave: Split among all members except Dave.
+
+    Date specs:
+    - on YYYY-MM-DD, on today, on yesterday.
+
+    Legacy shorthand formats (e.g. /pay @Alice 50 for Dinner) are also fully supported.
 
     :param text: The raw text of the message.
     :return: A dictionary containing:
-             - 'payer_username': Username of the payer (lowercase, no @), or None
-             - 'amount': Amount in cents (int), or None if parsing fails
-             - 'participants': List of participant usernames (lowercase, no @)
+             - 'payer_username': Primary/single payer username (lowercase, no @), or None
+             - 'payers': Dict[str, int] mapping username/me to cents paid
+             - 'amount': Total amount in cents (int)
              - 'description': Description string, or None
+             - 'split_spec': Dict containing split configuration
+             - 'participants': List of participant usernames (for backwards compatibility)
+             - 'expense_date': Optional[datetime.date]
              - 'error': Error message string if parsing fails
     """
     # 1. Strip the /pay command prefix
     cleaned_text = re.sub(r"^/pay(?:\s+|$)", "", text, flags=re.IGNORECASE).strip()
-
-    # Find all @mentions with their character start/end positions
-    mentions: List[Dict[str, Any]] = []
-    for match in re.finditer(r"@(\w+)", cleaned_text):
-        mentions.append(
-            {
-                "username": match.group(1).lower(),
-                "start": match.start(),
-                "end": match.end(),
-            }
-        )
-
-    # Find the first numeric amount (integer or decimal up to 2 decimal places)
-    amount_match = re.search(r"\b(\d+(?:\.\d{1,2})?)\b", cleaned_text)
-    if not amount_match:
+    if not cleaned_text:
         return {"error": "No valid amount found in the message."}
 
-    amount_str = amount_match.group(1)
-    amount_start = amount_match.start()
-    amount_end = amount_match.end()
+    # 2. Extract quoted descriptions to avoid keyword collision inside strings
+    placeholders: Dict[str, str] = {}
 
-    # Convert amount to integer cents
-    if "." in amount_str:
-        parts = amount_str.split(".")
-        dollars = int(parts[0])
-        cents_part = parts[1]
-        cents = int(cents_part) * 10 if len(cents_part) == 1 else int(cents_part)
-        amount_cents = dollars * 100 + cents
+    def replace_quoted(m: re.Match) -> str:
+        key = f"__QUOTED_DESC_{len(placeholders)}__"
+        placeholders[key] = m.group(2)
+        return f"for {key}"
+
+    cleaned_text = re.sub(
+        r"\bfor\s+([\"'])(.*?)\1", replace_quoted, cleaned_text, flags=re.IGNORECASE
+    )
+
+    # 3. Identify keyword clause boundaries: for, by, split, among, on, or 'with' followed by mention/me
+    kw_regex = re.compile(
+        r"\b(for|by|split|among|on)\b|\bwith\b(?=\s+(?:@|me\b))", re.IGNORECASE
+    )
+    matches = list(kw_regex.finditer(cleaned_text))
+
+    clauses: Dict[str, str] = {}
+    if matches:
+        prefix_text = cleaned_text[: matches[0].start()].strip()
+        for i, m in enumerate(matches):
+            kw = m.group(1) or "split"  # 'with' maps to 'split'
+            kw = kw.lower()
+            if kw == "among":
+                kw = "split"
+            start = m.end()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(cleaned_text)
+            clause_content = cleaned_text[start:end].strip()
+            clauses[kw] = clause_content
     else:
-        amount_cents = int(amount_str) * 100
+        prefix_text = cleaned_text
 
-    # Resolve payer: the first mention that appears before the amount
-    payer_username: Optional[str] = None
-    for m in mentions:
-        if m["end"] <= amount_start:
-            payer_username = m["username"]
-            break
+    # 4. Parse Date Clause ('on')
+    expense_date: Optional[datetime.date] = None
+    if "on" in clauses:
+        on_raw = clauses["on"].strip().lower()
+        if on_raw == "today":
+            expense_date = datetime.date.today()
+        elif on_raw == "yesterday":
+            expense_date = datetime.date.today() - datetime.timedelta(days=1)
+        else:
+            try:
+                expense_date = datetime.date.fromisoformat(on_raw)
+            except ValueError:
+                return {
+                    "error": (
+                        f"Invalid date format '{clauses['on']}'. "
+                        "Expected YYYY-MM-DD, 'today', or 'yesterday'."
+                    )
+                }
 
-    # Resolve participants: all mentions that appear after the amount
-    participants: List[str] = []
-    for m in mentions:
-        if m["start"] >= amount_end:
-            participants.append(m["username"])
+    # 5. Parse Split Clause ('split')
+    split_spec: Dict[str, Any] = {"mode": "all", "participants": []}
+    if "split" in clauses:
+        split_raw = clauses["split"].strip()
+        exc_match = re.match(
+            r"^(?:all\s+)?except\s+(.*)$", split_raw, flags=re.IGNORECASE
+        )
+        if exc_match:
+            exc_tokens = exc_match.group(1).split()
+            excluded = []
+            for tok in exc_tokens:
+                parsed_tok = _parse_user_token(tok)
+                if not parsed_tok:
+                    return {"error": f"Invalid username '{tok}' in 'except' split."}
+                excluded.append(parsed_tok[0])
+            split_spec = {"mode": "except", "excluded": excluded, "participants": []}
+        elif split_raw.lower() in ("all", "everyone"):
+            split_spec = {"mode": "all", "participants": []}
+        else:
+            tokens = split_raw.split()
+            shares: Dict[str, Optional[int]] = {}
+            has_custom_shares = False
+            participants_list: List[str] = []
+            for tok in tokens:
+                parsed_tok = _parse_user_token(tok)
+                if not parsed_tok:
+                    return {
+                        "error": f"Invalid participant token '{tok}' in 'split' clause."
+                    }
+                username, share_amt = parsed_tok
+                participants_list.append(username)
+                shares[username] = share_amt
+                if share_amt is not None:
+                    has_custom_shares = True
 
-    # Extract description:
-    # If the 'for' keyword exists, grab the text following it, then filter out mentions.
+            if has_custom_shares:
+                split_spec = {
+                    "mode": "custom",
+                    "shares": shares,
+                    "participants": participants_list,
+                }
+            else:
+                split_spec = {
+                    "mode": "subset",
+                    "participants": participants_list,
+                }
+
+    # 6. Parse Description Clause ('for')
     description: Optional[str] = None
-    for_match = re.search(r"\bfor\b", cleaned_text, re.IGNORECASE)
-    if for_match:
-        after_for = cleaned_text[for_match.end() :].strip()
-        # Clean out mentions and extra spaces
-        desc_cleaned = re.sub(r"@\w+", "", after_for).strip()
-        desc_cleaned = re.sub(r"\s+", " ", desc_cleaned)
-        if desc_cleaned:
-            description = desc_cleaned
+    if "for" in clauses:
+        for_raw = clauses["for"].strip()
+        # Restore quoted description if present
+        for placeholder, original in placeholders.items():
+            if placeholder in for_raw:
+                for_raw = for_raw.replace(placeholder, original)
+                description = for_raw.strip()
+                break
+
+        if description is None:
+            # Check for legacy participant syntax: /pay 50 for @Bob @Charlie
+            tokens = for_raw.split()
+            all_mentions = bool(tokens) and all(
+                re.fullmatch(r"@\w+", t) for t in tokens
+            )
+            if all_mentions and "split" not in clauses:
+                legacy_participants = [t.lstrip("@").lower() for t in tokens]
+                split_spec = {
+                    "mode": "subset",
+                    "participants": legacy_participants,
+                }
+                description = None
+            else:
+                # Description with potential inline mentions (legacy: /pay 12.50 for lunch @Bob)
+                mentions_in_for = [m.lower() for m in re.findall(r"@(\w+)", for_raw)]
+                desc_cleaned = re.sub(r"@\w+", "", for_raw).strip()
+                desc_cleaned = re.sub(r"\s+", " ", desc_cleaned)
+                description = desc_cleaned if desc_cleaned else None
+                if (
+                    mentions_in_for
+                    and "split" not in clauses
+                    and not split_spec.get("participants")
+                ):
+                    split_spec = {
+                        "mode": "subset",
+                        "participants": mentions_in_for,
+                    }
+
+    # 7. Parse Raw Payers ('by')
+    raw_payers: List[Tuple[str, Optional[int]]] = []
+    if "by" in clauses:
+        by_tokens = clauses["by"].split()
+        for tok in by_tokens:
+            parsed_tok = _parse_user_token(tok)
+            if not parsed_tok:
+                return {"error": f"Invalid payer token '{tok}' in 'by' clause."}
+            raw_payers.append(parsed_tok)
+
+    # 8. Resolve Numeric Amount and Legacy Payer from Prefix
+    amount_cents: Optional[int] = None
+    amt_match = re.search(r"\b(\d+(?:\.\d{1,2})?)\b", prefix_text)
+    if amt_match:
+        amount_cents = _parse_amount_to_cents(amt_match.group(1))
+        # Check for legacy payer mention before amount in prefix: e.g. /pay @Alice 50 for Dinner
+        if not raw_payers:
+            prefix_before_amt = prefix_text[: amt_match.start()]
+            payer_match = re.search(r"@(\w+)", prefix_before_amt)
+            if payer_match:
+                legacy_payer = payer_match.group(1).lower()
+                raw_payers = [(legacy_payer, None)]
+
+    # If amount was not in prefix, try inferring from custom payer amounts or custom splits
+    if amount_cents is None:
+        if raw_payers and all(a is not None for _, a in raw_payers):
+            amount_cents = sum(a for _, a in raw_payers if a is not None)
+        elif split_spec.get("mode") == "custom" and all(
+            a is not None for a in split_spec.get("shares", {}).values()
+        ):
+            amount_cents = sum(
+                a for a in split_spec["shares"].values() if a is not None
+            )
+        else:
+            return {"error": "No valid amount found in the message."}
+
+    if amount_cents <= 0:
+        return {"error": "Amount must be greater than zero."}
+
+    # 9. Finalize Payers and Distribute Amounts
+    payers: Dict[str, int] = {}
+    if not raw_payers:
+        payers = {"me": amount_cents}
+        payer_username = None
     else:
-        # Default description: whatever text remains after the amount (excluding mentions)
-        after_amount = cleaned_text[amount_end:].strip()
-        desc_cleaned = re.sub(r"@\w+", "", after_amount).strip()
-        desc_cleaned = re.sub(r"\s+", " ", desc_cleaned)
-        if desc_cleaned:
-            description = desc_cleaned
+        specified_sum = sum(a for _, a in raw_payers if a is not None)
+        unspecified = [u for u, a in raw_payers if a is None]
+
+        if not unspecified:
+            if specified_sum != amount_cents:
+                return {
+                    "error": (
+                        f"Sum of payer amounts (${specified_sum / 100:.2f}) "
+                        f"does not match total expense amount (${amount_cents / 100:.2f})."
+                    )
+                }
+            payers = {u: a for u, a in raw_payers if a is not None}
+        else:
+            if specified_sum > amount_cents:
+                return {
+                    "error": (
+                        f"Specified payer amounts (${specified_sum / 100:.2f}) "
+                        f"exceed total expense amount (${amount_cents / 100:.2f})."
+                    )
+                }
+            remaining = amount_cents - specified_sum
+            unspecified_shares = split_amount_equally(remaining, len(unspecified))
+            idx = 0
+            for u, a in raw_payers:
+                if a is not None:
+                    payers[u] = a
+                else:
+                    payers[u] = unspecified_shares[idx]
+                    idx += 1
+
+        # Single payer backward compatibility
+        if len(payers) == 1:
+            first_user = next(iter(payers))
+            payer_username = None if first_user == "me" else first_user
+        else:
+            payer_username = None
+
+    # 10. Finalize Custom Split Shares
+    if split_spec.get("mode") == "custom":
+        shares = split_spec["shares"]
+        specified_sum = sum(a for a in shares.values() if a is not None)
+        unspecified = [u for u, a in shares.items() if a is None]
+
+        if not unspecified:
+            if specified_sum != amount_cents:
+                return {
+                    "error": (
+                        f"Sum of split amounts (${specified_sum / 100:.2f}) "
+                        f"does not match total expense amount (${amount_cents / 100:.2f})."
+                    )
+                }
+        else:
+            if specified_sum > amount_cents:
+                return {
+                    "error": (
+                        f"Specified split amounts (${specified_sum / 100:.2f}) "
+                        f"exceed total expense amount (${amount_cents / 100:.2f})."
+                    )
+                }
+            remaining = amount_cents - specified_sum
+            unspecified_shares = split_amount_equally(remaining, len(unspecified))
+            idx = 0
+            for u in list(shares.keys()):
+                if shares[u] is None:
+                    shares[u] = unspecified_shares[idx]
+                    idx += 1
+
+    # Populate top-level participants list for backwards compatibility
+    participants = list(split_spec.get("participants", []))
 
     return {
         "payer_username": payer_username,
+        "payers": payers,
         "amount": amount_cents,
         "participants": participants,
         "description": description,
+        "split_spec": split_spec,
+        "expense_date": expense_date,
     }
 
 
