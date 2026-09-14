@@ -7,7 +7,14 @@ from telegram.ext import (
     filters,
 )
 
-from .base import auto_register, start, help_command, register_command, members_command
+from .base import (
+    auto_register,
+    start,
+    help_command,
+    register_command,
+    members_command,
+    register_callback_handler,
+)
 from .common import dismiss_callback_handler
 from .expense import (
     pay_command,
@@ -64,6 +71,9 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(history_delete_callback_handler, pattern="^hist_del:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(register_callback_handler, pattern="^register:join$")
     )
     application.add_handler(
         CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")

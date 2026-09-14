@@ -25,7 +25,7 @@ async def post_init(application: Application) -> None:
         BotCommand("payback", "Record a direct payment"),
         BotCommand("history", "View last 10 transactions"),
         BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
-        BotCommand("register", "Register an external member without Telegram"),
+        BotCommand("register", "Register a member or show registration button"),
         BotCommand("members", "List group members"),
         BotCommand("help", "Display help message"),
     ]

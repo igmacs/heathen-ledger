@@ -33,9 +33,13 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
      - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares, or tap `🗑️ Undo` to delete it.
 
    > [!IMPORTANT]
-   > **User Registration:**
-   > To split an expense or specify a payer using their Telegram username (e.g. `@Alice`), that user **must have sent at least one message in the group** since the bot was added so the bot can auto-register them.
-   > For members without a Telegram account, they can be registered manually using `/register <name>` (e.g. `/register John` or `/register @john John Doe`).
+   > **User Registration & Privacy Mode:**
+   > To split an expense or specify a payer using their Telegram username (e.g. `@Alice`), that user must be registered in the group ledger.
+   > Because Telegram bots commonly operate with **Privacy Mode enabled** (where bots cannot see casual chat text messages), Heathen Ledger provides flexible registration methods:
+   > - **Self-Registration Button**: Run `/register` with no parameters to post an interactive `[ 📝 Register me ]` button that any member can tap to join the group ledger instantly.
+   > - **Mentioning Members**: Run `/register @username` (e.g. `/register @Alice` or `/register @Alice Alice Smith`), mention a user directly via text mention, or mention multiple members (`/register @alice @bob`). Group admins and known Telegram accounts resolve automatically, while other users are created as pending profiles that automatically link to their real Telegram accounts the moment they interact with the bot.
+   > - **Replying to a Message**: Reply to any message sent by a group member with `/register` to register them on the spot.
+   > - **External / Non-Telegram Members**: Run `/register <name>` (e.g. `/register John Doe`) to track expenses and settlements for people without Telegram accounts.
 
 2. **Check Balances**:
    - `/balances` (Shows a summary of everyone's net balance, sorted from highest creditor to highest debtor).
@@ -56,9 +60,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`). Casual voice messages sent to the chat without a reply or mention are ignored.
    - *(Note: Interactive confirmation buttons to execute the proposed command will be enabled in Phase 4)*.
 
-7. **External Members & Member Directory**:
+7. **Members & Directory**:
    - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
-   - `/register <name>` (e.g. `/register John`) or `/register @handle <Display Name>` (e.g. `/register @john John Doe`) to add external members. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
+   - `/register` (Generates an interactive button for members to tap and register themselves).
+   - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
 ## Development
 
@@ -367,3 +372,9 @@ when I had to correct or guide it
 - I noticed the agent had to search for the `ruff` path and asked whether project verification and linting tools belong in a SKILL or `AGENTS.md`. The agent explained the difference between persistent workspace rules (`AGENTS.md`) and on-demand specialized workflows (skills). I asked the agent to update `AGENTS.md` with verification commands and a rule to automatically update `AGENTS.md` whenever an agent has to discover or validate project conventions. The agent updated `AGENTS.md` with environment commands (`.venv/bin/python`, `.venv/bin/pre-commit`, Alembic migrations) and a continuous knowledge capture rule.
 
 - I asked why creating new files via shell redirection (`cat << 'EOF' > ...`) triggered manual approval prompts even though Antigravity is configured to allow file edits without review. The agent explained that shell commands are governed by the terminal execution policy rather than file modification permissions, and that Antigravity provides a native `write_to_file` tool that bypasses shell prompts. We updated `AGENTS.md` to mandate the use of native file creation tools (`write_to_file`) instead of shell redirection commands.
+
+- I asked to improve user registration to make the bot compatible with Telegram Privacy Mode, specifically requesting: (1) `/register` with no parameters to create an inline button that members can touch to register, and (2) `/register` to work when mentioning a group member. The agent autonomously:
+  - Added automatic profile linking in `crud.get_or_create_user`, allowing unlinked external/pending profiles to seamlessly upgrade and merge when a Telegram user registers by username.
+  - Implemented `/register` with no parameters to send an interactive `[ 📝 Register me ]` inline button, along with a callback handler (`register:join`) that announces registrations and prevents duplicate entries while keeping the button available for other members.
+  - Enhanced `/register` when mentioning members: supporting message replies (`reply_to_message`), text mentions (`TEXT_MENTION`), chat administrator lookups (`get_chat_administrators`), cross-group Telegram user lookups, and multi-user mentions (`/register @alice @bob`).
+  - Updated bot command descriptions, help texts, test fixtures, and comprehensive unit tests (89 passing tests).

@@ -60,10 +60,12 @@ class BaseDatabaseTestCase(unittest.TestCase):
         from_user.id = telegram_user_id
         from_user.username = "user"
         from_user.first_name = f"User{telegram_user_id}"
+        from_user.is_bot = False
         query.from_user = from_user
 
         message = MagicMock()
         message.delete = AsyncMock()
+        message.reply_text = AsyncMock()
         chat = MagicMock()
         chat.id = chat_id
         message.chat = chat
@@ -95,6 +97,7 @@ class BaseDatabaseTestCase(unittest.TestCase):
         user.id = sender_telegram_id
         user.username = sender_username
         user.first_name = sender_first_name
+        user.is_bot = False
 
         chat = MagicMock()
         chat.id = chat_id
