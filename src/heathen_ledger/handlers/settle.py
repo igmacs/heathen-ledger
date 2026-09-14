@@ -1,4 +1,7 @@
+"""Handlers for balance inquiries, debt settlements, and interactive payback confirmations."""
+
 import logging
+from typing import List, Dict, Any, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -7,13 +10,40 @@ from sqlalchemy.orm import Session
 from ..database import with_db_session
 from ..models import User
 from .. import crud
-from ..parser import (
+from ..formatters import (
     generate_balances_summary,
-    simplify_debts,
     generate_settlements_summary,
+    format_cents,
 )
+from ..services import settlement_service
+from ..services.exceptions import PermissionDeniedError
 
 logger = logging.getLogger(__name__)
+
+
+def build_settle_keyboard(
+    transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
+) -> Optional[InlineKeyboardMarkup]:
+    """Build inline confirmation buttons for suggested payback transactions."""
+    if not transactions:
+        return None
+
+    keyboard = []
+    for tx in transactions:
+        from_db_user = users_by_id.get(tx["from_user_id"])
+        to_db_user = users_by_id.get(tx["to_user_id"])
+        from_name = (
+            from_db_user.first_name if from_db_user else f"User {tx['from_user_id']}"
+        )
+        to_name = to_db_user.first_name if to_db_user else f"User {tx['to_user_id']}"
+        amount_formatted = format_cents(tx["amount"])
+
+        button_text = f"✅ {from_name} paid {to_name} {amount_formatted}"
+        callback_data = f"settle:{tx['from_user_id']}:{tx['to_user_id']}:{tx['amount']}"
+        keyboard.append(
+            [InlineKeyboardButton(text=button_text, callback_data=callback_data)]
+        )
+    return InlineKeyboardMarkup(keyboard)
 
 
 @with_db_session
@@ -31,9 +61,9 @@ async def balances_command(
         )
         return
 
-    balances = crud.get_group_balances(session, group.id)
-    users_by_id = {u.id: u for u in group.members}
-
+    balances, _, users_by_id = settlement_service.get_group_balances_and_settlements(
+        session, group.id
+    )
     reply_text = generate_balances_summary(balances, users_by_id)
     await update.message.reply_text(reply_text, parse_mode="Markdown")
 
@@ -53,36 +83,11 @@ async def settle_command(
         )
         return
 
-    balances = crud.get_group_balances(session, group.id)
-    transactions = simplify_debts(balances)
-    users_by_id = {u.id: u for u in group.members}
-
+    _, transactions, users_by_id = (
+        settlement_service.get_group_balances_and_settlements(session, group.id)
+    )
     reply_text = generate_settlements_summary(transactions, users_by_id)
-
-    reply_markup = None
-    if transactions:
-        keyboard = []
-        for tx in transactions:
-            from_db_user = users_by_id.get(tx["from_user_id"])
-            to_db_user = users_by_id.get(tx["to_user_id"])
-            from_name = (
-                from_db_user.first_name
-                if from_db_user
-                else f"User {tx['from_user_id']}"
-            )
-            to_name = (
-                to_db_user.first_name if to_db_user else f"User {tx['to_user_id']}"
-            )
-            amount_formatted = f"${tx['amount'] / 100:.2f}"
-
-            button_text = f"✅ {from_name} paid {to_name} {amount_formatted}"
-            callback_data = (
-                f"settle:{tx['from_user_id']}:{tx['to_user_id']}:{tx['amount']}"
-            )
-            keyboard.append(
-                [InlineKeyboardButton(text=button_text, callback_data=callback_data)]
-            )
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = build_settle_keyboard(transactions, users_by_id)
 
     await update.message.reply_text(
         reply_text, parse_mode="Markdown", reply_markup=reply_markup
@@ -128,71 +133,32 @@ async def settle_callback_handler(
         )
         return
 
-    from_db_user = session.query(User).filter(User.id == from_id).first()
-    to_db_user = session.query(User).filter(User.id == to_id).first()
-
-    both_external = (
-        from_db_user is not None
-        and from_db_user.is_external
-        and to_db_user is not None
-        and to_db_user.is_external
-    )
-    if not both_external and clicking_user.id not in (from_id, to_id):
-        from_name = from_db_user.first_name if from_db_user else "the debtor"
-        to_name = to_db_user.first_name if to_db_user else "the creditor"
-        await query.answer(
-            text=f"⚠️ Only {from_name} or {to_name} can confirm this payment.",
-            show_alert=True,
+    try:
+        settlement_service.record_settlement_payment(
+            session=session,
+            group=group,
+            clicking_user=clicking_user,
+            from_id=from_id,
+            to_id=to_id,
+            amount=amount,
         )
+    except PermissionDeniedError as e:
+        await query.answer(text=f"⚠️ {e}", show_alert=True)
         return
 
-    # Record the payment
-    crud.create_payment(
-        session=session,
-        group_id=group.id,
-        payer_id=from_id,
-        payee_id=to_id,
-        amount=amount,
-    )
-
     # Re-calculate balances and settlements
-    balances = crud.get_group_balances(session, group.id)
-    transactions = simplify_debts(balances)
-    users_by_id = {u.id: u for u in group.members}
-
+    _, transactions, users_by_id = (
+        settlement_service.get_group_balances_and_settlements(session, group.id)
+    )
     reply_text = generate_settlements_summary(transactions, users_by_id)
-
-    reply_markup = None
-    if transactions:
-        keyboard = []
-        for tx in transactions:
-            from_db_user = users_by_id.get(tx["from_user_id"])
-            to_db_user = users_by_id.get(tx["to_user_id"])
-            from_name = (
-                from_db_user.first_name
-                if from_db_user
-                else f"User {tx['from_user_id']}"
-            )
-            to_name = (
-                to_db_user.first_name if to_db_user else f"User {tx['to_user_id']}"
-            )
-            amount_formatted = f"${tx['amount'] / 100:.2f}"
-
-            button_text = f"✅ {from_name} paid {to_name} {amount_formatted}"
-            callback_data = (
-                f"settle:{tx['from_user_id']}:{tx['to_user_id']}:{tx['amount']}"
-            )
-            keyboard.append(
-                [InlineKeyboardButton(text=button_text, callback_data=callback_data)]
-            )
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = build_settle_keyboard(transactions, users_by_id)
 
     # Inform Telegram that the callback was handled
     from_db_user = session.query(User).filter(User.id == from_id).first()
     to_db_user = session.query(User).filter(User.id == to_id).first()
     from_name = from_db_user.first_name if from_db_user else "Debtor"
     to_name = to_db_user.first_name if to_db_user else "Creditor"
-    amount_formatted = f"${amount / 100:.2f}"
+    amount_formatted = format_cents(amount)
     await query.answer(text=f"Recorded: {from_name} paid {to_name} {amount_formatted}.")
 
     # Edit the message, trapping any duplicate click "Message is not modified" exceptions
