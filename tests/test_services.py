@@ -1,12 +1,10 @@
 import sys
 import os
 import unittest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger.database import Base
+from tests.base import BaseDatabaseTestCase
 from heathen_ledger import crud
 from heathen_ledger.dto import ParsedPayCommand, ParsedPaybackCommand, SplitSpec
 from heathen_ledger.services import expense_service, settlement_service
@@ -16,28 +14,7 @@ from heathen_ledger.services.exceptions import (
 )
 
 
-class TestServices(unittest.TestCase):
-    def setUp(self):
-        self.engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(bind=self.engine)
-        self.Session = sessionmaker(bind=self.engine)
-        self.session = self.Session()
-
-        # Seed group and users
-        self.group = crud.get_or_create_group(self.session, 100, "Service Test Group")
-        self.alice = crud.get_or_create_user(self.session, 1, "alice", "Alice")
-        self.bob = crud.get_or_create_user(self.session, 2, "bob", "Bob")
-        self.charlie = crud.get_or_create_user(self.session, 3, "charlie", "Charlie")
-
-        crud.add_user_to_group(self.session, self.alice, self.group)
-        crud.add_user_to_group(self.session, self.bob, self.group)
-        crud.add_user_to_group(self.session, self.charlie, self.group)
-        self.session.commit()
-
-    def tearDown(self):
-        self.session.close()
-        Base.metadata.drop_all(bind=self.engine)
-
+class TestServices(BaseDatabaseTestCase):
     def test_record_expense_equal_all(self):
         cmd = ParsedPayCommand(
             amount=3000,
