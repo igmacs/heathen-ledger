@@ -351,3 +351,10 @@ when I had to correct or guide it
   - Implemented `/register` (allowing `/register <name>` or `/register @handle <Display Name>`) and `/members` to view all group members.
   - Updated `/pay` and `/payback` to resolve external group members and updated `/settle` callback permissions so any registered member can confirm settlements when both parties are external.
   - Added unit tests for external user CRUD, bot commands, payments, and settlements, and updated the documentation.
+
+- I asked to step back and evaluate code quality to make the code extensible for future iterations. The agent identified key improvement areas (decoupling handlers via a service layer, breaking up `parser.py`, replacing loose dictionaries with typed DTOs, configuration management, and audit tracking). I asked to start with the handler decoupling, parser modularization, and typed DTOs. The agent autonomously:
+  - Extracted equal-split math and greedy debt simplification algorithms into `domain.calculations`.
+  - Extracted presentation logic and Markdown summary generators into `formatters.py` with a reusable `format_cents` helper.
+  - Introduced typed DTOs (`ParsedPayCommand`, `ParsedPaybackCommand`, `SplitSpec`, `ParseErrorResult`) with mapping backward-compatibility in `dto.py`.
+  - Created a dedicated service layer (`ExpenseService` and `SettlementService`) in `heathen_ledger.services`, decoupling expense calculation, split toggling, paybacks, and settlements from Telegram `Update` handlers.
+  - Added unit tests for the service layer and DTOs with all 81 tests passing.
