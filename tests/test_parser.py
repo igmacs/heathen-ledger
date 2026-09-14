@@ -14,6 +14,10 @@ from heathen_ledger.parser import (
     generate_settlements_summary,
     parse_payback_message,
     generate_history_summary,
+    ParsedPayCommand,
+    ParsedPaybackCommand,
+    SplitSpec,
+    ParseErrorResult,
 )
 
 
@@ -260,6 +264,34 @@ class TestParser(unittest.TestCase):
             "1. 💸 **Expense:** **Alice** paid **$50.00** for 'Dinner'", summary
         )
         self.assertIn("2. 🤝 **Payment:** **Bob** paid **Alice** **$20.00**", summary)
+
+    def test_typed_dto_attributes(self):
+        # Test ParsedPayCommand DTO
+        pay_res = parse_pay_message(
+            "/pay 50 for Pizza by me:30 @Alice:20 split @Bob @Charlie on 2026-09-14"
+        )
+        self.assertIsInstance(pay_res, ParsedPayCommand)
+        self.assertEqual(pay_res.amount, 5000)
+        self.assertEqual(pay_res.description, "Pizza")
+        self.assertEqual(pay_res.payers, {"me": 3000, "alice": 2000})
+        self.assertIsInstance(pay_res.split_spec, SplitSpec)
+        self.assertEqual(pay_res.split_spec.mode, "subset")
+        self.assertEqual(pay_res.split_spec.participants, ["bob", "charlie"])
+        self.assertEqual(pay_res.expense_date, datetime.date(2026, 9, 14))
+
+        # Test ParsedPaybackCommand DTO
+        payback_res = parse_payback_message("/payback @Bob @Alice 15")
+        self.assertIsInstance(payback_res, ParsedPaybackCommand)
+        self.assertEqual(payback_res.payer_username, "bob")
+        self.assertEqual(payback_res.payee_username, "alice")
+        self.assertEqual(payback_res.amount, 1500)
+
+        # Test ParseErrorResult DTO
+        err_res = parse_pay_message("/pay invalid")
+        self.assertIsInstance(err_res, ParseErrorResult)
+        self.assertEqual(err_res.error, "No valid amount found in the message.")
+        self.assertEqual(err_res["error"], "No valid amount found in the message.")
+        self.assertIn("error", err_res)
 
 
 if __name__ == "__main__":

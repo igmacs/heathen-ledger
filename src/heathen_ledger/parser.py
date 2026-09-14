@@ -8,6 +8,13 @@ from .formatters import (
     generate_settlements_summary,
     generate_history_summary,
 )
+from .dto import (
+    CommandParseError,
+    ParseErrorResult,
+    SplitSpec,
+    ParsedPayCommand,
+    ParsedPaybackCommand,
+)
 
 __all__ = [
     "parse_pay_message",
@@ -17,6 +24,11 @@ __all__ = [
     "generate_balances_summary",
     "generate_settlements_summary",
     "generate_history_summary",
+    "CommandParseError",
+    "ParseErrorResult",
+    "SplitSpec",
+    "ParsedPayCommand",
+    "ParsedPaybackCommand",
 ]
 
 
@@ -94,7 +106,7 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
     # 1. Strip the /pay command prefix
     cleaned_text = re.sub(r"^/pay(?:\s+|$)", "", text, flags=re.IGNORECASE).strip()
     if not cleaned_text:
-        return {"error": "No valid amount found in the message."}
+        return ParseErrorResult("No valid amount found in the message.")
 
     # 2. Extract quoted descriptions to avoid keyword collision inside strings
     placeholders: Dict[str, str] = {}
@@ -141,12 +153,10 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
             try:
                 expense_date = datetime.date.fromisoformat(on_raw)
             except ValueError:
-                return {
-                    "error": (
-                        f"Invalid date format '{clauses['on']}'. "
-                        "Expected YYYY-MM-DD, 'today', or 'yesterday'."
-                    )
-                }
+                return ParseErrorResult(
+                    f"Invalid date format '{clauses['on']}'. "
+                    "Expected YYYY-MM-DD, 'today', or 'yesterday'."
+                )
 
     # 5. Parse Split Clause ('split')
     split_spec: Dict[str, Any] = {"mode": "all", "participants": []}
@@ -161,7 +171,9 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
             for tok in exc_tokens:
                 parsed_tok = _parse_user_token(tok)
                 if not parsed_tok:
-                    return {"error": f"Invalid username '{tok}' in 'except' split."}
+                    return ParseErrorResult(
+                        f"Invalid username '{tok}' in 'except' split."
+                    )
                 excluded.append(parsed_tok[0])
             split_spec = {"mode": "except", "excluded": excluded, "participants": []}
         elif split_raw.lower() in ("all", "everyone"):
@@ -174,9 +186,9 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
             for tok in tokens:
                 parsed_tok = _parse_user_token(tok)
                 if not parsed_tok:
-                    return {
-                        "error": f"Invalid participant token '{tok}' in 'split' clause."
-                    }
+                    return ParseErrorResult(
+                        f"Invalid participant token '{tok}' in 'split' clause."
+                    )
                 username, share_amt = parsed_tok
                 participants_list.append(username)
                 shares[username] = share_amt
@@ -242,7 +254,7 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
         for tok in by_tokens:
             parsed_tok = _parse_user_token(tok)
             if not parsed_tok:
-                return {"error": f"Invalid payer token '{tok}' in 'by' clause."}
+                return ParseErrorResult(f"Invalid payer token '{tok}' in 'by' clause.")
             raw_payers.append(parsed_tok)
 
     # 8. Resolve Numeric Amount and Legacy Payer from Prefix
@@ -269,10 +281,10 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
                 a for a in split_spec["shares"].values() if a is not None
             )
         else:
-            return {"error": "No valid amount found in the message."}
+            return ParseErrorResult("No valid amount found in the message.")
 
     if amount_cents <= 0:
-        return {"error": "Amount must be greater than zero."}
+        return ParseErrorResult("Amount must be greater than zero.")
 
     # 9. Finalize Payers and Distribute Amounts
     payers: Dict[str, int] = {}
@@ -285,21 +297,17 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
 
         if not unspecified:
             if specified_sum != amount_cents:
-                return {
-                    "error": (
-                        f"Sum of payer amounts (${specified_sum / 100:.2f}) "
-                        f"does not match total expense amount (${amount_cents / 100:.2f})."
-                    )
-                }
+                return ParseErrorResult(
+                    f"Sum of payer amounts (${specified_sum / 100:.2f}) "
+                    f"does not match total expense amount (${amount_cents / 100:.2f})."
+                )
             payers = {u: a for u, a in raw_payers if a is not None}
         else:
             if specified_sum > amount_cents:
-                return {
-                    "error": (
-                        f"Specified payer amounts (${specified_sum / 100:.2f}) "
-                        f"exceed total expense amount (${amount_cents / 100:.2f})."
-                    )
-                }
+                return ParseErrorResult(
+                    f"Specified payer amounts (${specified_sum / 100:.2f}) "
+                    f"exceed total expense amount (${amount_cents / 100:.2f})."
+                )
             remaining = amount_cents - specified_sum
             unspecified_shares = split_amount_equally(remaining, len(unspecified))
             idx = 0
@@ -325,20 +333,16 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
 
         if not unspecified:
             if specified_sum != amount_cents:
-                return {
-                    "error": (
-                        f"Sum of split amounts (${specified_sum / 100:.2f}) "
-                        f"does not match total expense amount (${amount_cents / 100:.2f})."
-                    )
-                }
+                return ParseErrorResult(
+                    f"Sum of split amounts (${specified_sum / 100:.2f}) "
+                    f"does not match total expense amount (${amount_cents / 100:.2f})."
+                )
         else:
             if specified_sum > amount_cents:
-                return {
-                    "error": (
-                        f"Specified split amounts (${specified_sum / 100:.2f}) "
-                        f"exceed total expense amount (${amount_cents / 100:.2f})."
-                    )
-                }
+                return ParseErrorResult(
+                    f"Specified split amounts (${specified_sum / 100:.2f}) "
+                    f"exceed total expense amount (${amount_cents / 100:.2f})."
+                )
             remaining = amount_cents - specified_sum
             unspecified_shares = split_amount_equally(remaining, len(unspecified))
             idx = 0
@@ -350,15 +354,22 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
     # Populate top-level participants list for backwards compatibility
     participants = list(split_spec.get("participants", []))
 
-    return {
-        "payer_username": payer_username,
-        "payers": payers,
-        "amount": amount_cents,
-        "participants": participants,
-        "description": description,
-        "split_spec": split_spec,
-        "expense_date": expense_date,
-    }
+    typed_split_spec = SplitSpec(
+        mode=split_spec.get("mode", "all"),
+        participants=split_spec.get("participants", []),
+        shares=split_spec.get("shares", {}),
+        excluded=split_spec.get("excluded", []),
+    )
+
+    return ParsedPayCommand(
+        amount=amount_cents,
+        payers=payers,
+        description=description,
+        split_spec=typed_split_spec,
+        expense_date=expense_date,
+        payer_username=payer_username,
+        participants=participants,
+    )
 
 
 def parse_payback_message(text: str) -> Dict[str, Any]:
@@ -394,7 +405,7 @@ def parse_payback_message(text: str) -> Dict[str, Any]:
 
     amount_match = re.search(r"\b(\d+(?:\.\d{1,2})?)\b", cleaned_text)
     if not amount_match:
-        return {"error": "No valid amount found in the message."}
+        return ParseErrorResult("No valid amount found in the message.")
 
     amount_str = amount_match.group(1)
 
@@ -414,10 +425,12 @@ def parse_payback_message(text: str) -> Dict[str, Any]:
         payer = mentions[0]["username"]
         payee = mentions[1]["username"]
     else:
-        return {"error": "Must mention at least the recipient (payee) of the payback."}
+        return ParseErrorResult(
+            "Must mention at least the recipient (payee) of the payback."
+        )
 
-    return {
-        "payer_username": payer,
-        "payee_username": payee,
-        "amount": amount_cents,
-    }
+    return ParsedPaybackCommand(
+        payer_username=payer,
+        payee_username=payee,
+        amount=amount_cents,
+    )
