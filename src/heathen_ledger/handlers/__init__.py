@@ -27,6 +27,7 @@ from .history import history_command, history_delete_callback_handler
 from .voice import (
     voice_command_handler,
     voice_mention_handler,
+    voice_callback_handler,
 )
 
 
@@ -74,6 +75,9 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(register_callback_handler, pattern="^register:join$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(voice_callback_handler, pattern="^voice:")
     )
     application.add_handler(
         CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")

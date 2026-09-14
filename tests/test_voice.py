@@ -1,18 +1,25 @@
 import sys
 import os
 import unittest
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
+from tests.base import BaseDatabaseTestCase
 from heathen_ledger.handlers.voice import (
     voice_command_handler,
     voice_mention_handler,
     voice_message_handler,
+    voice_callback_handler,
+    store_pending_voice_command,
+    get_pending_voice_command,
+    clear_pending_voice_commands,
 )
 from heathen_ledger.handlers.expense import pay_command
 from heathen_ledger.voice import VoiceInterpretation
+from heathen_ledger.models import Expense, Payment
 
 
 class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
@@ -90,6 +97,14 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         reply = update.message.reply_text.call_args[0][0]
         self.assertIn("Alice paid 25 for dinner", reply)
         self.assertIn("/pay @Alice 25 for dinner", reply)
+        reply_markup = update.message.reply_text.call_args[1].get("reply_markup")
+        self.assertIsNotNone(reply_markup)
+        self.assertEqual(len(reply_markup.inline_keyboard[0]), 2)
+        confirm_btn, reject_btn = reply_markup.inline_keyboard[0]
+        self.assertIn("Confirm", confirm_btn.text)
+        self.assertTrue(confirm_btn.callback_data.startswith("voice:confirm:"))
+        self.assertIn("Reject", reject_btn.text)
+        self.assertTrue(reject_btn.callback_data.startswith("voice:reject:"))
 
     @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
@@ -355,6 +370,290 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
             await pay_command(update, context)
 
         mock_process_voice.assert_not_awaited()
+
+
+class TestVoiceConfirmationCallbacks(BaseDatabaseTestCase):
+    def setUp(self):
+        super().setUp()
+        clear_pending_voice_commands()
+
+    def tearDown(self):
+        clear_pending_voice_commands()
+        super().tearDown()
+
+    def test_reject_callback_success(self):
+        token = store_pending_voice_command(
+            command="/pay 25 for dinner",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="I paid 25 for dinner",
+        )
+
+        update = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:reject:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        # Query answered with rejection
+        update.callback_query.answer.assert_awaited_once_with(text="Command rejected.")
+        # Message edited to show Rejected and remove buttons
+        update.callback_query.edit_message_text.assert_awaited_once()
+        kwargs = update.callback_query.edit_message_text.call_args.kwargs
+        self.assertIn("❌ *Rejected*", kwargs["text"])
+        self.assertIsNone(kwargs["reply_markup"])
+        # Pending command popped
+        self.assertIsNone(get_pending_voice_command(token))
+        # No expenses created
+        expenses = self.session.query(Expense).all()
+        self.assertEqual(len(expenses), 0)
+
+    def test_reject_callback_unauthorized(self):
+        token = store_pending_voice_command(
+            command="/pay 25 for dinner",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="I paid 25 for dinner",
+        )
+
+        # Bob tries to reject Alice's voice command
+        update = self.create_mock_update(
+            telegram_user_id=self.bob.telegram_id,
+            callback_data=f"voice:reject:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        update.callback_query.answer.assert_awaited_once()
+        answer_kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(answer_kwargs.get("show_alert"))
+        self.assertIn(
+            "Only the person who sent or requested", answer_kwargs.get("text")
+        )
+        update.callback_query.edit_message_text.assert_not_awaited()
+        # Pending command remains in store
+        self.assertIsNotNone(get_pending_voice_command(token))
+
+    def test_confirm_pay_command_success(self):
+        token = store_pending_voice_command(
+            command="/pay 30 for pizza",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="I paid 30 for pizza",
+        )
+
+        update = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        # Status message updated
+        update.callback_query.edit_message_text.assert_awaited_once()
+        kwargs = update.callback_query.edit_message_text.call_args.kwargs
+        self.assertIn("Confirmed and executed", kwargs["text"])
+        self.assertIsNone(kwargs["reply_markup"])
+
+        # Result message replied in chat
+        update.callback_query.message.reply_text.assert_awaited_once()
+        reply_call = update.callback_query.message.reply_text.call_args
+        reply_text = reply_call.kwargs.get("text") or reply_call.args[0]
+        self.assertIn("Recorded expense", reply_text)
+        self.assertIn("pizza", reply_text)
+        self.assertIn("$30.00", reply_text)
+        reply_markup = reply_call.kwargs.get("reply_markup")
+        self.assertIsNotNone(reply_markup)
+
+        # Database record created
+        expense = (
+            self.session.query(Expense).filter(Expense.description == "pizza").first()
+        )
+        self.assertIsNotNone(expense)
+        self.assertEqual(expense.amount, 3000)
+        self.assertEqual(expense.payer_id, self.alice.id)
+        self.assertEqual(len(expense.splits), 3)
+
+    def test_confirm_payback_command_success(self):
+        token = store_pending_voice_command(
+            command="/payback @bob 15",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="I paid Bob 15",
+        )
+
+        update = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        # Payment created in database
+        payment = self.session.query(Payment).first()
+        self.assertIsNotNone(payment)
+        self.assertEqual(payment.amount, 1500)
+        self.assertEqual(payment.payer_id, self.alice.id)
+        self.assertEqual(payment.payee_id, self.bob.id)
+
+        update.callback_query.message.reply_text.assert_awaited_once()
+        reply_call = update.callback_query.message.reply_text.call_args
+        reply_text = reply_call.kwargs.get("text") or reply_call.args[0]
+        self.assertIn("Recorded payment", reply_text)
+
+    def test_confirm_balances_settle_and_history(self):
+        # 1. Balances
+        token_bal = store_pending_voice_command(
+            command="/balances",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="show balances",
+        )
+        update_bal = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token_bal}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        asyncio.run(voice_callback_handler(update_bal, MagicMock()))
+        update_bal.callback_query.message.reply_text.assert_awaited_once()
+        bal_text = update_bal.callback_query.message.reply_text.call_args.kwargs.get(
+            "text"
+        )
+        self.assertIn("Balances", bal_text)
+
+        # 2. Settle
+        token_set = store_pending_voice_command(
+            command="/settle",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="settle up",
+        )
+        update_set = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token_set}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        asyncio.run(voice_callback_handler(update_set, MagicMock()))
+        update_set.callback_query.message.reply_text.assert_awaited_once()
+        set_text = update_set.callback_query.message.reply_text.call_args.kwargs.get(
+            "text"
+        )
+        self.assertTrue("Settlement Plan" in set_text or "settled up" in set_text)
+
+        # 3. History
+        token_hist = store_pending_voice_command(
+            command="/history",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="view history",
+        )
+        update_hist = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token_hist}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        asyncio.run(voice_callback_handler(update_hist, MagicMock()))
+        update_hist.callback_query.message.reply_text.assert_awaited_once()
+
+    def test_confirm_unauthorized_user(self):
+        token = store_pending_voice_command(
+            command="/pay 10 for coffee",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="I paid 10 for coffee",
+        )
+
+        update = self.create_mock_update(
+            telegram_user_id=self.bob.telegram_id,
+            callback_data=f"voice:confirm:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        update.callback_query.answer.assert_awaited_once()
+        answer_kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(answer_kwargs.get("show_alert"))
+        self.assertIn(
+            "Only the person who sent or requested", answer_kwargs.get("text")
+        )
+        self.assertEqual(len(self.session.query(Expense).all()), 0)
+
+    def test_expired_or_already_processed_callback(self):
+        update = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data="voice:confirm:nonexistent_token",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        update.callback_query.answer.assert_awaited_once()
+        answer_kwargs = update.callback_query.answer.call_args.kwargs
+        self.assertTrue(answer_kwargs.get("show_alert"))
+        self.assertIn("expired or was already processed", answer_kwargs.get("text"))
+
+    def test_confirm_pay_with_unknown_user_error(self):
+        token = store_pending_voice_command(
+            command="/pay 20 split @unknown_user",
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="pay 20 split unknown",
+        )
+
+        update = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"voice:confirm:{token}",
+            chat_id=self.group.telegram_chat_id,
+        )
+        context = MagicMock()
+
+        asyncio.run(voice_callback_handler(update, context))
+
+        update.callback_query.message.reply_text.assert_awaited_once()
+        reply_text = update.callback_query.message.reply_text.call_args.kwargs.get(
+            "text"
+        )
+        self.assertIn("@unknown_user", reply_text)
+        self.assertEqual(len(self.session.query(Expense).all()), 0)
 
 
 if __name__ == "__main__":
