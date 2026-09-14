@@ -25,3 +25,7 @@ Please follow these instructions and rules during all interactions in this works
 
 ## 5. Continuous Knowledge Capture
 * Whenever an agent has to guess, discover, or troubleshoot an undocumented project convention, tool path, environment quirk, or command, update `AGENTS.md` with the verified instruction so future agent sessions do not have to rediscover it.
+
+## 6. File Creation and Editing Tools
+* **Never use shell commands to create or write files**: Do not use `cat << 'EOF' > ...`, `echo ... > ...`, or `tee` via `run_command` to create new files or write code. Antigravity treats shell commands under its terminal execution policy, triggering manual approval prompts.
+* **Always use native file tools**: Use `write_to_file` to create new files and `replace_file_content` to edit existing files. Because file editing is configured to auto-proceed, using native file tools avoids unnecessary approval interruptions.
