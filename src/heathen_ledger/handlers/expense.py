@@ -12,54 +12,10 @@ from ..parser import (
     split_amount_equally,
     parse_payback_message,
 )
+from ..formatters import generate_expense_reply_text
 from .voice import process_voice_audio
 
 logger = logging.getLogger(__name__)
-
-
-def generate_expense_reply_text(expense: Expense) -> str:
-    """Format the expense split summary."""
-    amount_formatted = f"{expense.amount / 100:.2f}"
-    desc_str = f" for '{expense.description}'" if expense.description else ""
-
-    # Sort the splits by the user's first_name to keep the display order stable
-    sorted_splits = sorted(expense.splits, key=lambda s: s.user.first_name)
-    participants = [s.user for s in sorted_splits]
-    parts_str = ", ".join([u.first_name for u in participants])
-
-    # Format Payers
-    if expense.payers and len(expense.payers) > 1:
-        payer_lines = []
-        for p in expense.payers:
-            payer_lines.append(f"  - {p.user.first_name}: ${p.amount / 100:.2f}")
-        paid_by_str = "• **Paid by:**\n" + "\n".join(payer_lines)
-    elif expense.payers and len(expense.payers) == 1:
-        paid_by_str = f"• **Paid by:** {expense.payers[0].user.first_name}"
-    elif expense.payer:
-        paid_by_str = f"• **Paid by:** {expense.payer.first_name}"
-    else:
-        paid_by_str = f"• **Paid by:** User {expense.payer_id}"
-
-    date_line = (
-        f"• **Date:** {expense.expense_date.isoformat()}\n"
-        if expense.expense_date
-        else ""
-    )
-
-    reply_text = (
-        f"✅ Recorded expense:\n"
-        f"{paid_by_str}\n"
-        f"• **Amount:** ${amount_formatted}{desc_str}\n"
-        f"{date_line}"
-        f"• **Split between:** {parts_str}\n"
-    )
-
-    if len(sorted_splits) > 1:
-        reply_text += "• **Shares:**\n"
-        for s in sorted_splits:
-            reply_text += f"  - {s.user.first_name}: ${s.amount / 100:.2f}\n"
-
-    return reply_text
 
 
 def build_expense_keyboard(

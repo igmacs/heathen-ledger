@@ -3,6 +3,11 @@ import re
 from typing import Optional, List, Dict, Any, Tuple
 
 from .domain.calculations import split_amount_equally, simplify_debts
+from .formatters import (
+    generate_balances_summary,
+    generate_settlements_summary,
+    generate_history_summary,
+)
 
 __all__ = [
     "parse_pay_message",
@@ -356,73 +361,6 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
     }
 
 
-def generate_balances_summary(
-    balances: Dict[int, int], users_by_id: Dict[int, Any]
-) -> str:
-    """
-    Formats the net balances of group members into a human-readable Markdown string.
-    """
-    if not balances:
-        return "ℹ️ No member balances to display."
-
-    lines = []
-    # Sort by balance descending (people who are owed the most first)
-    sorted_balances = sorted(balances.items(), key=lambda item: item[1], reverse=True)
-
-    for user_id, balance in sorted_balances:
-        user = users_by_id.get(user_id)
-        if not user:
-            continue
-        name = getattr(user, "first_name", f"User {user_id}")
-        amount = abs(balance) / 100
-
-        if balance > 0:
-            lines.append(f"• **{name}** is owed **${amount:.2f}**")
-        elif balance < 0:
-            lines.append(f"• **{name}** owes **${amount:.2f}**")
-        else:
-            lines.append(f"• **{name}** is settled up")
-
-    return "📊 **Current Net Balances:**\n" + "\n".join(lines)
-
-
-def generate_settlements_summary(
-    transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
-) -> str:
-    """
-    Formats the list of suggested payments into a human-readable Markdown string.
-    """
-    if not transactions:
-        return "✅ **Everyone is fully settled up! No transactions needed.**"
-
-    lines = []
-    for tx in transactions:
-        from_user = users_by_id.get(tx["from_user_id"])
-        to_user = users_by_id.get(tx["to_user_id"])
-        from_name = (
-            getattr(from_user, "first_name", f"User {tx['from_user_id']}")
-            if from_user
-            else f"User {tx['from_user_id']}"
-        )
-        to_name = (
-            getattr(to_user, "first_name", f"User {tx['to_user_id']}")
-            if to_user
-            else f"User {tx['to_user_id']}"
-        )
-        amount_formatted = f"{tx['amount'] / 100:.2f}"
-
-        lines.append(
-            f"• **{from_name}** should pay **{to_name}** **${amount_formatted}**"
-        )
-
-    return (
-        "🤝 **Suggested Payments to Settle Up:**\n"
-        + "\n".join(lines)
-        + "\n\n"
-        + "*To log a payment, use:* `/payback @recipient <amount>` or tap the checkmark buttons below."
-    )
-
-
 def parse_payback_message(text: str) -> Dict[str, Any]:
     """
     Parses a /payback command to extract direct payment details.
@@ -483,56 +421,3 @@ def parse_payback_message(text: str) -> Dict[str, Any]:
         "payee_username": payee,
         "amount": amount_cents,
     }
-
-
-def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
-    """
-    Formats recent transactions (expenses and payments) into a Markdown string.
-    """
-    if not transactions:
-        return "ℹ️ No recent transactions found in this group."
-
-    lines = []
-    for i, tx in enumerate(transactions, 1):
-        t_type = tx["type"]
-        obj = tx["obj"]
-        amount_formatted = f"{obj.amount / 100:.2f}"
-
-        if t_type == "expense":
-            if getattr(obj, "payers", None) and len(obj.payers) > 1:
-                payer_parts = [
-                    f"{p.user.first_name} (${p.amount / 100:.2f})"
-                    for p in obj.payers
-                    if p.user
-                ]
-                payer_str = (
-                    ", ".join(payer_parts) if payer_parts else "Multiple members"
-                )
-            elif (
-                getattr(obj, "payers", None)
-                and len(obj.payers) == 1
-                and obj.payers[0].user
-            ):
-                payer_str = obj.payers[0].user.first_name
-            elif getattr(obj, "payer", None) and obj.payer:
-                payer_str = obj.payer.first_name
-            else:
-                payer_str = f"User {obj.payer_id}"
-
-            desc = f" for '{obj.description}'" if obj.description else ""
-            date_str = (
-                f" on {obj.expense_date.isoformat()}"
-                if getattr(obj, "expense_date", None)
-                else ""
-            )
-            lines.append(
-                f"{i}. 💸 **Expense:** **{payer_str}** paid **${amount_formatted}**{desc}{date_str}"
-            )
-        elif t_type == "payment":
-            payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
-            payee_name = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
-            lines.append(
-                f"{i}. 🤝 **Payment:** **{payer_name}** paid **{payee_name}** **${amount_formatted}**"
-            )
-
-    return "📜 **Recent Group History:**\n" + "\n".join(lines)
