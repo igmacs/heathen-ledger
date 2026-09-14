@@ -56,9 +56,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 6. **Voice Messages**:
    - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
-   - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it.
-   - The bot transcribes the audio using Google Gemini and proposes the matching bot command (e.g. `/pay 25 for dinner`). Casual voice messages sent to the chat without a reply or mention are ignored.
-   - *(Note: Interactive confirmation buttons to execute the proposed command will be enabled in Phase 4)*.
+   - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it. Casual voice messages sent to the chat without a reply or mention are ignored.
+   - The bot transcribes the audio using Google Gemini and displays the interpreted ledger command with interactive confirmation buttons:
+     - `[ ✅ Confirm ]`: Executes the proposed command immediately in the group chat (recording expenses, paybacks, or generating summaries) and equips the response with interactive split toggles and undo buttons.
+     - `[ ❌ Reject ]`: Cancels the command without recording any changes to the ledger.
 
 7. **Members & Directory**:
    - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
@@ -378,3 +379,9 @@ when I had to correct or guide it
   - Implemented `/register` with no parameters to send an interactive `[ 📝 Register me ]` inline button, along with a callback handler (`register:join`) that announces registrations and prevents duplicate entries while keeping the button available for other members.
   - Enhanced `/register` when mentioning members: supporting message replies (`reply_to_message`), text mentions (`TEXT_MENTION`), chat administrator lookups (`get_chat_administrators`), cross-group Telegram user lookups, and multi-user mentions (`/register @alice @bob`).
   - Updated bot command descriptions, help texts, test fixtures, and comprehensive unit tests (89 passing tests).
+
+- I asked to implement the confirmation phase for audio commands, adding confirmation buttons so the user can execute or reject the command understood by the bot. The agent autonomously:
+  - Added pending command state tracking with short tokens to comply with Telegram's 64-byte `callback_data` limit and prevent double execution or unauthorized confirmation.
+  - Updated the voice audio processing pipeline to attach `[ ✅ Confirm ]` and `[ ❌ Reject ]` inline buttons to interpreted command responses.
+  - Implemented `execute_voice_command` and `voice_callback_handler` to execute confirmed commands (`/pay`, `/payback`, `/balances`, `/settle`, `/history`) in the chat with full interactive button support (participant toggles, undo, debt settlements) or mark rejected commands without modifying the ledger.
+  - Added comprehensive unit tests for confirmation, rejection, unauthorized click security, double clicks, and command execution across all supported commands (97 passing tests).
