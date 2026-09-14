@@ -358,3 +358,8 @@ when I had to correct or guide it
   - Introduced typed DTOs (`ParsedPayCommand`, `ParsedPaybackCommand`, `SplitSpec`, `ParseErrorResult`) with mapping backward-compatibility in `dto.py`.
   - Created a dedicated service layer (`ExpenseService` and `SettlementService`) in `heathen_ledger.services`, decoupling expense calculation, split toggling, paybacks, and settlements from Telegram `Update` handlers.
   - Added unit tests for the service layer and DTOs with all 81 tests passing.
+
+- I asked to proceed with improving tests (reducing fixture boilerplate and modularizing test files). The agent autonomously:
+  - Created `tests/base.py` with a reusable `BaseDatabaseTestCase` providing in-memory SQLite database setup, session patching, standard user/group fixtures, and Telegram mock update factory helpers.
+  - Modularized `tests/test_bot.py` by breaking down the 692-line monolithic callback test suite into focused test classes (`TestSettleCallback`, `TestUndoCallback`, `TestHistoryDeleteCallback`, `TestDismissCallback`, `TestPayToggleCallback`, `TestPayCommandHandler`, `TestRegistrationHandlers`), cutting duplicate setup boilerplate by ~300 lines.
+  - Migrated `tests/test_services.py` to inherit from `BaseDatabaseTestCase`. All 81 unit tests pass.
