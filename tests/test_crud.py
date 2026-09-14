@@ -213,6 +213,36 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(balances[alice.id], 1000)
             self.assertEqual(balances[john.id], -1000)
 
+    def test_link_external_user_on_registration(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+
+        with Session() as session:
+            group = crud.get_or_create_group(session, 12345, "Trip")
+            # Register external user John
+            ext_john = crud.create_external_user(
+                session, group, "John", username="johndoe"
+            )
+            session.commit()
+            self.assertTrue(ext_john.is_external)
+            self.assertIsNone(ext_john.telegram_id)
+            john_db_id = ext_john.id
+
+            # John now interacts with the bot using Telegram ID 9999 and handle @johndoe
+            linked_user = crud.get_or_create_user(
+                session, 9999, username="johndoe", first_name="John Doe"
+            )
+            session.commit()
+
+            # Verify it's the exact same user record upgraded to a Telegram user
+            self.assertEqual(linked_user.id, john_db_id)
+            self.assertEqual(linked_user.telegram_id, 9999)
+            self.assertFalse(linked_user.is_external)
+            self.assertEqual(linked_user.first_name, "John Doe")
+            self.assertEqual(linked_user.username, "johndoe")
+            self.assertIn(linked_user, group.members)
+
 
 if __name__ == "__main__":
     unittest.main()

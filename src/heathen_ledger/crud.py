@@ -24,6 +24,27 @@ def get_or_create_user(
     """Get an existing user or create a new user registry if they do not exist."""
     user = get_user_by_telegram_id(session, telegram_id)
     if not user:
+        if username:
+            clean_username = username.lower().lstrip("@")
+            external_user = (
+                session.query(User)
+                .filter(
+                    User.username == clean_username,
+                    User.is_external.is_(True),
+                    User.telegram_id.is_(None),
+                )
+                .first()
+            )
+            if external_user:
+                external_user.telegram_id = telegram_id
+                external_user.is_external = False
+                if first_name:
+                    external_user.first_name = first_name
+                logger.info(
+                    f"Linked external user @{clean_username} to Telegram ID {telegram_id}"
+                )
+                return external_user
+
         user = User(
             telegram_id=telegram_id,
             username=username,
