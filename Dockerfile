@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install system dependencies if any are needed (e.g. gcc for some python packages, though sqlite/sqlalchemy don't strictly require it)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+    build-essential sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy packaging configuration files first to cache dependency installation
