@@ -148,6 +148,53 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         await ephemeral_command(update2, context)
         update2.effective_message.reply_text.assert_not_called()
 
+    async def test_register_handlers_includes_ephemeral(self):
+        """Test that register_handlers adds the CommandHandler for ephemeral and test_ephemeral."""
+        from heathen_ledger.handlers import register_handlers
+        from telegram.ext import CommandHandler
+
+        app_mock = MagicMock()
+        register_handlers(app_mock)
+
+        # Collect registered command names
+        registered_commands = []
+        for call in app_mock.add_handler.call_args_list:
+            handler = call[0][0]
+            if isinstance(handler, CommandHandler):
+                registered_commands.extend(list(handler.commands))
+
+        self.assertIn("ephemeral", registered_commands)
+        self.assertIn("test_ephemeral", registered_commands)
+
+    async def test_post_init_sets_ephemeral_bot_command(self):
+        """Test that post_init registers the ephemeral command with is_ephemeral=True."""
+        from heathen_ledger.bot import post_init
+
+        app_mock = MagicMock()
+        app_mock.bot.set_my_commands = AsyncMock()
+
+        await post_init(app_mock)
+
+        app_mock.bot.set_my_commands.assert_awaited_once()
+        commands = app_mock.bot.set_my_commands.call_args[0][0]
+        ephemeral_cmd = next((c for c in commands if c.command == "ephemeral"), None)
+        self.assertIsNotNone(ephemeral_cmd)
+        self.assertTrue(ephemeral_cmd.api_kwargs.get("is_ephemeral"))
+
+    async def test_help_command_includes_ephemeral(self):
+        """Test that /help lists the ephemeral command."""
+        from heathen_ledger.handlers.base import help_command
+
+        update = MagicMock()
+        context = MagicMock()
+        update.message.reply_text = AsyncMock()
+
+        await help_command(update, context)
+
+        update.message.reply_text.assert_awaited_once()
+        reply_text = update.message.reply_text.call_args[0][0]
+        self.assertIn("/ephemeral", reply_text)
+
 
 if __name__ == "__main__":
     unittest.main()

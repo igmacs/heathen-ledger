@@ -440,6 +440,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/history` — View the last 10 transactions logged in the group chat.\n\n"
         "🎙️ **Voice Notes**\n"
         "• Reply to any voice note or audio message with `/voice`, `/pay`, or tag the bot to transcribe and interpret it into a ledger command.\n\n"
+        "👻 **Ephemeral Messages (Experimental PoC)**\n"
+        "• `/ephemeral` — Test receiving a private ephemeral response visible only to you in a group chat.\n\n"
         "⚠️ **User Registration:**\n"
         "Members can tap the button from `/register`, be registered via `/register @handle`, or be registered by replying to their message with `/register`."
     )

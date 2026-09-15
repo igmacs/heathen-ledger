@@ -27,6 +27,11 @@ async def post_init(application: Application) -> None:
         BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
         BotCommand("register", "Register a member or show registration button"),
         BotCommand("members", "List group members"),
+        BotCommand(
+            "ephemeral",
+            "Test ephemeral message (PoC)",
+            api_kwargs={"is_ephemeral": True},
+        ),
         BotCommand("help", "Display help message"),
     ]
     await application.bot.set_my_commands(commands)

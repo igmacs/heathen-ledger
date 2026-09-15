@@ -29,6 +29,7 @@ from .voice import (
     voice_mention_handler,
     voice_callback_handler,
 )
+from .ephemeral import ephemeral_command
 
 
 def register_handlers(application: Application) -> None:
@@ -58,6 +59,9 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("voice", voice_command_handler))
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("members", members_command))
+    application.add_handler(
+        CommandHandler(["ephemeral", "test_ephemeral"], ephemeral_command)
+    )
     application.add_handler(CommandHandler("help", help_command))
 
     # Callback Query Handlers
