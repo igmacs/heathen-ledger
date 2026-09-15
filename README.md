@@ -66,6 +66,9 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/register` (Generates an interactive button for members to tap and register themselves).
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
+8. **Ephemeral Messages (PoC)**:
+   - `/ephemeral` (or `/test_ephemeral`): Sends a proof of concept ephemeral response visible only to the triggering user inside a group chat, leveraging Telegram Bot API 10.2+ / 10.3+ `ephemeral_message_parameters`. In 1-on-1 private chats, explains how group ephemeral messaging works.
+
 ## Development
 
 ### Prerequisites
@@ -385,3 +388,9 @@ when I had to correct or guide it
   - Updated the voice audio processing pipeline to attach `[ ✅ Confirm ]` and `[ ❌ Reject ]` inline buttons to interpreted command responses.
   - Implemented `execute_voice_command` and `voice_callback_handler` to execute confirmed commands (`/pay`, `/payback`, `/balances`, `/settle`, `/history`) in the chat with full interactive button support (participant toggles, undo, debt settlements) or mark rejected commands without modifying the ledger.
   - Added comprehensive unit tests for confirmation, rejection, unauthorized click security, double clicks, and command execution across all supported commands (97 passing tests).
+
+- I asked for a proof of concept for Telegram's ephemeral messages feature, requesting a test command which the bot answers with an ephemeral message. The agent researched Telegram Bot API 10.2 / 10.3 ephemeral message capabilities (`ephemeral_message_parameters` and `is_ephemeral` on `BotCommand`), verified `python-telegram-bot` 22.8 integration via `api_kwargs`, and autonomously:
+  - Implemented the `/ephemeral` (and `/test_ephemeral`) command in `src/heathen_ledger/handlers/ephemeral.py`, targeting `receiver_user_id` in groups and providing friendly guidance and error fallback in private chats.
+  - Registered the command handler and updated `post_init` in `bot.py` with `BotCommand("ephemeral", ..., api_kwargs={"is_ephemeral": True})` to enable two-way ephemeral commands in Telegram clients.
+  - Documented `api_kwargs` usage for Bot API parameters in `AGENTS.md` and added `/ephemeral` to `/help` and `README.md`.
+  - Added unit tests for group chats, supergroups, private chats, missing message/user edge cases, handler registration, and bot command registration (all 106 tests passing).

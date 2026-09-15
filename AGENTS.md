@@ -29,3 +29,6 @@ Please follow these instructions and rules during all interactions in this works
 ## 6. File Creation and Editing Tools
 * **Never use shell commands to create or write files**: Do not use `cat << 'EOF' > ...`, `echo ... > ...`, or `tee` via `run_command` to create new files or write code. Antigravity treats shell commands under its terminal execution policy, triggering manual approval prompts.
 * **Always use native file tools**: Use `write_to_file` to create new files and `replace_file_content` to edit existing files. Because file editing is configured to auto-proceed, using native file tools avoids unnecessary approval interruptions.
+
+## 7. Telegram Bot API Conventions
+* **Ephemeral Messages & Bot API Parameters**: When using Telegram Bot API features (such as `ephemeral_message_parameters` on `sendMessage` or `is_ephemeral` on `BotCommand`) that do not have dedicated keyword parameters in `python-telegram-bot`, pass them via `api_kwargs` (e.g., `api_kwargs={"ephemeral_message_parameters": {"receiver_user_id": user_id}}` or `BotCommand(..., api_kwargs={"is_ephemeral": True})`). PTB merges `api_kwargs` directly into the outgoing request payload.
