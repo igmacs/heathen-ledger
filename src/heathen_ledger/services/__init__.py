@@ -16,6 +16,7 @@ from .settlement_service import (
     get_group_balances_and_settlements,
     record_settlement_payment,
 )
+from .registration_service import MemberRegistrationService
 
 __all__ = [
     "LedgerServiceError",
@@ -28,4 +29,5 @@ __all__ = [
     "undo_transaction",
     "get_group_balances_and_settlements",
     "record_settlement_payment",
+    "MemberRegistrationService",
 ]

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -7,8 +6,8 @@ from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
 
 from ..database import with_db_session
-from ..models import User
 from .. import crud
+from ..services import MemberRegistrationService
 from .common import send_response
 
 logger = logging.getLogger(__name__)
@@ -18,20 +17,9 @@ async def _resolve_admin_by_username(
     context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str
 ):
     """Helper to check if a username matches a chat administrator."""
-    clean_username = username.lower().lstrip("@")
-    if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
-        try:
-            res = context.bot.get_chat_administrators(chat_id)
-            admins = await res if asyncio.iscoroutine(res) else res
-            if isinstance(admins, (list, tuple)):
-                for adm in admins:
-                    adm_u = getattr(adm, "user", None)
-                    if adm_u and getattr(adm_u, "username", None):
-                        if adm_u.username.lower() == clean_username:
-                            return adm_u
-        except Exception as e:
-            logger.debug(f"Could not fetch chat administrators: {e}")
-    return None
+    return await MemberRegistrationService.resolve_admin_by_username(
+        context, chat_id, username
+    )
 
 
 @with_db_session
@@ -77,36 +65,10 @@ async def register_command(
     # 1. Replying to a message: register the author of that message
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
         target_user = update.message.reply_to_message.from_user
-        if target_user.is_bot:
-            await send_response(update, context, "⚠️ Cannot register a bot.")
-            return
-
-        if any(m.telegram_id == target_user.id for m in group.members):
-            handle_str = f" (`@{target_user.username}`)" if target_user.username else ""
-            await send_response(
-                update,
-                context,
-                f"ℹ️ Member *{target_user.first_name}*{handle_str} is already registered in this group.",
-                parse_mode="Markdown",
-            )
-            return
-
-        db_user = crud.get_or_create_user(
-            session,
-            telegram_id=target_user.id,
-            username=target_user.username,
-            first_name=target_user.first_name,
+        _, msg = MemberRegistrationService.register_reply_user(
+            session, group, target_user
         )
-        crud.add_user_to_group(session, db_user, group)
-        session.commit()
-
-        handle_str = f" (`@{target_user.username}`)" if target_user.username else ""
-        await send_response(
-            update,
-            context,
-            f"✅ Registered member *{target_user.first_name}*{handle_str} to this group ledger.",
-            parse_mode="Markdown",
-        )
+        await send_response(update, context, msg, parse_mode="Markdown")
         return
 
     # 2. Text mention entities (users without username or chosen from Telegram picker)
@@ -116,22 +78,11 @@ async def register_command(
         if e.type == MessageEntityType.TEXT_MENTION and e.user
     ]
     if text_mentions:
-        registered_names = []
-        already_registered_names = []
-        for tm in text_mentions:
-            u = tm.user
-            if u.is_bot:
-                continue
-            if any(m.telegram_id == u.id for m in group.members):
-                already_registered_names.append(u.first_name)
-                continue
-            db_u = crud.get_or_create_user(
-                session, telegram_id=u.id, username=u.username, first_name=u.first_name
+        registered_names, already_registered_names = (
+            MemberRegistrationService.register_text_mentions(
+                session, group, text_mentions
             )
-            crud.add_user_to_group(session, db_u, group)
-            registered_names.append(u.first_name)
-        session.commit()
-
+        )
         msgs = []
         if registered_names:
             msgs.append(
@@ -185,48 +136,12 @@ async def register_command(
     # Check if multiple @mentions are given (e.g. /register @alice @bob)
     all_mentions = [p.lstrip("@").lower() for p in parts if p.startswith("@")]
     if len(all_mentions) > 1 and len(all_mentions) == len(parts):
-        registered = []
-        already_registered = []
-
-        admins_by_username = {}
-        if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
-            try:
-                res = context.bot.get_chat_administrators(chat.id)
-                admins = await res if asyncio.iscoroutine(res) else res
-                if isinstance(admins, (list, tuple)):
-                    for adm in admins:
-                        adm_u = getattr(adm, "user", None)
-                        if adm_u and getattr(adm_u, "username", None):
-                            admins_by_username[adm_u.username.lower()] = adm_u
-            except Exception as e:
-                logger.debug(f"Could not fetch chat admins: {e}")
-
-        for h in all_mentions:
-            if any(m.username and m.username.lower() == h for m in group.members):
-                already_registered.append(f"@{h}")
-                continue
-            if h in admins_by_username:
-                adm_u = admins_by_username[h]
-                db_u = crud.get_or_create_user(
-                    session, adm_u.id, adm_u.username, adm_u.first_name
-                )
-                crud.add_user_to_group(session, db_u, group)
-                registered.append(f"@{h}")
-                continue
-            glob_u = (
-                session.query(User)
-                .filter(User.username == h, User.is_external.is_(False))
-                .first()
-            )
-            if glob_u:
-                crud.add_user_to_group(session, glob_u, group)
-                registered.append(f"@{h}")
-                continue
-            # Register as external/pending user
-            crud.create_external_user(session, group, h.capitalize(), username=h)
-            registered.append(f"@{h}")
-        session.commit()
-
+        admins_by_username = await MemberRegistrationService.get_admins_by_username(
+            context, chat.id
+        )
+        registered, already_registered = MemberRegistrationService.register_mentions(
+            session, group, all_mentions, admins_by_username
+        )
         msgs = []
         if registered:
             msgs.append(f"✅ Registered member(s): {', '.join(registered)}.")
@@ -238,116 +153,20 @@ async def register_command(
     first_token = parts[0]
     if first_token.startswith("@"):
         handle = first_token.lstrip("@").lower()
-        if len(parts) > 1:
-            first_name = " ".join(parts[1:]).strip()
-        else:
-            first_name = handle.capitalize()
-
-        # Check for duplicate handles within this group
-        for m in group.members:
-            if m.username and m.username.lower() == handle:
-                await send_response(
-                    update,
-                    context,
-                    f"ℹ️ Member *{m.first_name}* (`@{handle}`) is already registered in this group.",
-                    parse_mode="Markdown",
-                )
-                return
-
-        # Check if chat administrator
-        admin_u = await _resolve_admin_by_username(context, chat.id, handle)
-        if admin_u:
-            db_u = crud.get_or_create_user(
-                session, admin_u.id, admin_u.username, admin_u.first_name
-            )
-            crud.add_user_to_group(session, db_u, group)
-            session.commit()
-            await send_response(
-                update,
-                context,
-                f"✅ Registered member *{db_u.first_name}* (`@{handle}`) to this group ledger.",
-                parse_mode="Markdown",
-            )
-            return
-
-        # Check if registered Telegram user globally
-        glob_u = (
-            session.query(User)
-            .filter(User.username == handle, User.is_external.is_(False))
-            .first()
+        first_name = (
+            " ".join(parts[1:]).strip() if len(parts) > 1 else handle.capitalize()
         )
-        if glob_u:
-            crud.add_user_to_group(session, glob_u, group)
-            session.commit()
-            await send_response(
-                update,
-                context,
-                f"✅ Registered member *{glob_u.first_name}* (`@{handle}`) to this group ledger.",
-                parse_mode="Markdown",
-            )
-            return
-
-        # Register external / pending user
-        crud.create_external_user(
-            session=session,
-            group=group,
-            first_name=first_name,
-            username=handle,
+        admin_u = await MemberRegistrationService.resolve_admin_by_username(
+            context, chat.id, handle
         )
-        session.commit()
-
-        await send_response(
-            update,
-            context,
-            f"✅ Registered *{first_name}* (`@{handle}`) in this group ledger.\n\n"
-            f"They can now be included in expenses and settlements. "
-            f"When @{handle} interacts with the bot or taps Register, their account will link automatically.",
-            parse_mode="Markdown",
+        msg = MemberRegistrationService.register_handle(
+            session, group, handle, first_name, admin_u
         )
+        await send_response(update, context, msg, parse_mode="Markdown")
         return
     else:
-        # Register external user without handle (e.g. /register John or /register John Doe)
-        if len(parts) == 1:
-            first_name = first_token
-            handle = re.sub(r"[^\w]", "", first_token).lower()
-        else:
-            first_name = args_text
-            handle = re.sub(r"[^\w]+", "_", args_text).strip("_").lower()
-
-        if not handle:
-            await send_response(
-                update,
-                context,
-                "⚠️ Invalid handle or name. Please use alphanumeric characters.",
-            )
-            return
-
-        # Check for duplicate handles within this group
-        for m in group.members:
-            if m.username and m.username.lower() == handle:
-                await send_response(
-                    update,
-                    context,
-                    f"ℹ️ Member *{m.first_name}* (`@{handle}`) is already registered in this group.",
-                    parse_mode="Markdown",
-                )
-                return
-
-        crud.create_external_user(
-            session=session,
-            group=group,
-            first_name=first_name,
-            username=handle,
-        )
-        session.commit()
-
-        await send_response(
-            update,
-            context,
-            f"✅ Registered external member *{first_name}* (`@{handle}`) to this group.\n\n"
-            f"You can now include them in expenses (e.g. `/pay 50 split @{handle}`) or settlements.",
-            parse_mode="Markdown",
-        )
+        _, msg = MemberRegistrationService.register_name(session, group, args_text)
+        await send_response(update, context, msg, parse_mode="Markdown")
 
 
 @with_db_session

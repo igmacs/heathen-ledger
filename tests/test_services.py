@@ -7,7 +7,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 from tests.base import BaseDatabaseTestCase
 from heathen_ledger import crud
 from heathen_ledger.dto import ParsedPayCommand, ParsedPaybackCommand, SplitSpec
-from heathen_ledger.services import expense_service, settlement_service
+from heathen_ledger.services import (
+    expense_service,
+    settlement_service,
+    MemberRegistrationService,
+)
 from heathen_ledger.services.exceptions import (
     UserNotFoundError,
     PermissionDeniedError,
@@ -220,6 +224,95 @@ class TestServices(BaseDatabaseTestCase):
 
         # HistoryKeyboardBuilder empty
         self.assertIsNone(HistoryKeyboardBuilder.build_history_keyboard([]))
+
+    def test_member_registration_service(self):
+        from unittest.mock import MagicMock
+
+        # 1. register_reply_user
+        bot_user = MagicMock(is_bot=True)
+        ok, msg = MemberRegistrationService.register_reply_user(
+            self.session, self.group, bot_user
+        )
+        self.assertFalse(ok)
+        self.assertIn("Cannot register a bot", msg)
+
+        # Existing user
+        alice_tg = MagicMock(
+            id=self.alice.telegram_id,
+            username="alice",
+            first_name="Alice",
+            is_bot=False,
+        )
+        ok, msg = MemberRegistrationService.register_reply_user(
+            self.session, self.group, alice_tg
+        )
+        self.assertTrue(ok)
+        self.assertIn("already registered", msg)
+
+        # New user
+        dave_tg = MagicMock(id=999, username="dave", first_name="Dave", is_bot=False)
+        ok, msg = MemberRegistrationService.register_reply_user(
+            self.session, self.group, dave_tg
+        )
+        self.assertTrue(ok)
+        self.assertIn("Registered member", msg)
+
+        # 2. register_text_mentions
+        tm_bot = MagicMock(user=MagicMock(is_bot=True))
+        tm_alice = MagicMock(user=alice_tg)
+        eve_tg = MagicMock(id=1000, username="eve", first_name="Eve", is_bot=False)
+        tm_eve = MagicMock(user=eve_tg)
+        reg, already = MemberRegistrationService.register_text_mentions(
+            self.session, self.group, [tm_bot, tm_alice, tm_eve]
+        )
+        self.assertIn("Eve", reg)
+        self.assertIn("Alice", already)
+
+        # 3. register_mentions
+        admin_frank = MagicMock(
+            id=1001, username="frank", first_name="Frank", is_bot=False
+        )
+        reg_m, already_m = MemberRegistrationService.register_mentions(
+            self.session,
+            self.group,
+            ["alice", "frank", "george"],
+            {"frank": admin_frank},
+        )
+        self.assertIn("@alice", already_m)
+        self.assertIn("@frank", reg_m)
+        self.assertIn("@george", reg_m)
+
+        # 4. register_handle
+        msg_already = MemberRegistrationService.register_handle(
+            self.session, self.group, "alice", "Alice", None
+        )
+        self.assertIn("already registered", msg_already)
+
+        admin_helen = MagicMock(
+            id=1002, username="helen", first_name="Helen", is_bot=False
+        )
+        msg_admin = MemberRegistrationService.register_handle(
+            self.session, self.group, "helen", "Helen", admin_helen
+        )
+        self.assertIn("Registered member *Helen*", msg_admin)
+
+        msg_ext = MemberRegistrationService.register_handle(
+            self.session, self.group, "ian", "Ian", None
+        )
+        self.assertIn("Registered *Ian*", msg_ext)
+
+        # 5. register_name
+        ok_name, msg_name = MemberRegistrationService.register_name(
+            self.session, self.group, "Jack Sparrow"
+        )
+        self.assertTrue(ok_name)
+        self.assertIn("Jack Sparrow", msg_name)
+
+        ok_inv, msg_inv = MemberRegistrationService.register_name(
+            self.session, self.group, "???"
+        )
+        self.assertFalse(ok_inv)
+        self.assertIn("Invalid handle or name", msg_inv)
 
 
 if __name__ == "__main__":
