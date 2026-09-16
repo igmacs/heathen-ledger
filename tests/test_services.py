@@ -12,6 +12,12 @@ from heathen_ledger.services.exceptions import (
     UserNotFoundError,
     PermissionDeniedError,
 )
+from heathen_ledger.commands import CommandDispatcher
+from heathen_ledger.keyboards import (
+    SettlementKeyboardBuilder,
+    HistoryKeyboardBuilder,
+    VoiceKeyboardBuilder,
+)
 
 
 class TestServices(BaseDatabaseTestCase):
@@ -160,6 +166,60 @@ class TestServices(BaseDatabaseTestCase):
         self.assertEqual(new_balances[self.alice.id], 0)
         self.assertEqual(new_balances[self.bob.id], 0)
         self.assertEqual(len(new_txs), 0)
+
+    def test_command_dispatcher_pay_and_payback(self):
+        # Dispatch /pay
+        text, markup = CommandDispatcher.execute(
+            command_str="/pay 30 for Lunch",
+            chat_id=self.group.telegram_chat_id,
+            creator_id=self.alice.telegram_id,
+            creator_username=self.alice.username,
+            creator_first_name=self.alice.first_name,
+            session=self.session,
+        )
+        self.assertIn("Recorded expense", text)
+        self.assertIn("$30.00", text)
+        self.assertIsNotNone(markup)
+
+        # Dispatch /payback
+        text_pb, markup_pb = CommandDispatcher.execute(
+            command_str="/payback @alice 10",
+            chat_id=self.group.telegram_chat_id,
+            creator_id=self.bob.telegram_id,
+            creator_username=self.bob.username,
+            creator_first_name=self.bob.first_name,
+            session=self.session,
+        )
+        self.assertIn("Recorded payment", text_pb)
+        self.assertIn("$10.00", text_pb)
+        self.assertIsNotNone(markup_pb)
+
+        # Dispatch /balances
+        text_bal, markup_bal = CommandDispatcher.execute(
+            command_str="/balances",
+            chat_id=self.group.telegram_chat_id,
+            creator_id=self.alice.telegram_id,
+            creator_username=self.alice.username,
+            creator_first_name=self.alice.first_name,
+            session=self.session,
+        )
+        self.assertIn("Current Net Balances", text_bal)
+        self.assertIsNone(markup_bal)
+
+    def test_keyboard_builders(self):
+        # VoiceKeyboardBuilder
+        kb_v = VoiceKeyboardBuilder.build_confirmation_keyboard("tok123")
+        self.assertEqual(len(kb_v.inline_keyboard), 1)
+        self.assertEqual(len(kb_v.inline_keyboard[0]), 2)
+        self.assertEqual(
+            kb_v.inline_keyboard[0][0].callback_data, "voice:confirm:tok123"
+        )
+
+        # SettlementKeyboardBuilder empty
+        self.assertIsNone(SettlementKeyboardBuilder.build_settle_keyboard([], {}))
+
+        # HistoryKeyboardBuilder empty
+        self.assertIsNone(HistoryKeyboardBuilder.build_history_keyboard([]))
 
 
 if __name__ == "__main__":

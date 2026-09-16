@@ -1,9 +1,6 @@
 import logging
-import time
-import uuid
-from dataclasses import dataclass, field
 from typing import Optional, Set
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardMarkup
 from telegram.constants import ChatAction, MessageEntityType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -11,27 +8,18 @@ from sqlalchemy.orm import Session
 
 from ..database import with_db_session
 from .. import crud
-from ..voice import get_voice_interpreter
+from ..voice import (
+    get_voice_interpreter,
+    PendingVoiceCommand,
+    PendingVoiceCommandStore,
+    VoiceAudioDownloader,
+)
+from ..commands import CommandDispatcher
+from ..keyboards import VoiceKeyboardBuilder
 
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class PendingVoiceCommand:
-    """Represents an unconfirmed voice command awaiting user action."""
-
-    token: str
-    command: str
-    creator_id: Optional[int]
-    creator_username: Optional[str]
-    creator_first_name: Optional[str]
-    authorized_user_ids: Set[int]
-    chat_id: int
-    transcription: str
-    created_at: float = field(default_factory=time.time)
-
-
-_PENDING_VOICE_COMMANDS: dict[str, PendingVoiceCommand] = {}
+_VOICE_STORE = PendingVoiceCommandStore()
 
 
 def store_pending_voice_command(
@@ -44,17 +32,7 @@ def store_pending_voice_command(
     transcription: str,
 ) -> str:
     """Store an unconfirmed voice command and return a short unique token."""
-    # Prune expired commands (> 1 hour old)
-    now = time.time()
-    expired = [
-        t for t, p in _PENDING_VOICE_COMMANDS.items() if now - p.created_at > 3600
-    ]
-    for t in expired:
-        _PENDING_VOICE_COMMANDS.pop(t, None)
-
-    token = uuid.uuid4().hex[:10]
-    _PENDING_VOICE_COMMANDS[token] = PendingVoiceCommand(
-        token=token,
+    return _VOICE_STORE.store(
         command=command,
         creator_id=creator_id,
         creator_username=creator_username,
@@ -62,24 +40,22 @@ def store_pending_voice_command(
         authorized_user_ids=authorized_user_ids,
         chat_id=chat_id,
         transcription=transcription,
-        created_at=now,
     )
-    return token
 
 
 def get_pending_voice_command(token: str) -> Optional[PendingVoiceCommand]:
     """Retrieve a pending voice command by token."""
-    return _PENDING_VOICE_COMMANDS.get(token)
+    return _VOICE_STORE.get(token)
 
 
 def pop_pending_voice_command(token: str) -> Optional[PendingVoiceCommand]:
     """Atomically pop a pending voice command by token."""
-    return _PENDING_VOICE_COMMANDS.pop(token, None)
+    return _VOICE_STORE.pop(token)
 
 
 def clear_pending_voice_commands() -> None:
     """Clear all pending commands (useful for test isolation)."""
-    _PENDING_VOICE_COMMANDS.clear()
+    _VOICE_STORE.clear()
 
 
 async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -153,8 +129,9 @@ async def process_voice_audio(
 
     # Download audio bytes
     try:
-        telegram_file = await context.bot.get_file(media.file_id)
-        audio_bytes = bytes(await telegram_file.download_as_bytearray())
+        audio_bytes, mime_type = await VoiceAudioDownloader.download(
+            context.bot, media_message
+        )
     except Exception as e:
         logger.exception("Failed to download voice/audio file from Telegram")
         await response_message.reply_text(
@@ -172,11 +149,6 @@ async def process_voice_audio(
                     group_members.append(f"@{member.username}")
                 elif member.first_name:
                     group_members.append(member.first_name)
-
-    # Determine MIME type
-    mime_type = getattr(media, "mime_type", None) or (
-        "audio/ogg" if media_message.voice else "audio/mpeg"
-    )
 
     # Transcribe and interpret
     try:
@@ -224,18 +196,7 @@ async def process_voice_audio(
                 chat_id=chat_id,
                 transcription=interpretation.transcription,
             )
-            reply_markup = InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            text="✅ Confirm", callback_data=f"voice:confirm:{token}"
-                        ),
-                        InlineKeyboardButton(
-                            text="❌ Reject", callback_data=f"voice:reject:{token}"
-                        ),
-                    ]
-                ]
-            )
+            reply_markup = VoiceKeyboardBuilder.build_confirmation_keyboard(token)
     else:
         reply_lines.append("\n❓ _No ledger command was recognized from this message._")
 
@@ -339,147 +300,19 @@ def execute_voice_command(
     session: Session,
     chat_title: Optional[str] = None,
 ) -> tuple[str, Optional[InlineKeyboardMarkup]]:
-    """Execute an interpreted bot command and return (reply_text, reply_markup)."""
-    # Import locally to avoid circular dependencies between handler modules
-    from .expense import build_expense_keyboard
-    from .settle import build_settle_keyboard
-    from ..formatters import (
-        generate_expense_reply_text,
-        generate_balances_summary,
-        generate_settlements_summary,
-        format_cents,
+    """Execute an interpreted bot command and return (reply_text, reply_markup).
+
+    Delegates to CommandDispatcher.
+    """
+    return CommandDispatcher.execute(
+        command_str=command_str,
+        chat_id=chat_id,
+        creator_id=creator_id,
+        creator_username=creator_username,
+        creator_first_name=creator_first_name,
+        session=session,
+        chat_title=chat_title,
     )
-    from ..parser import (
-        parse_pay_message,
-        parse_payback_message,
-        generate_history_summary,
-    )
-    from ..services import expense_service, settlement_service
-    from ..services.exceptions import UserNotFoundError, ValidationError
-
-    cmd_clean = command_str.strip()
-    if not cmd_clean.startswith("/"):
-        cmd_clean = f"/{cmd_clean}"
-
-    cmd_parts = cmd_clean.split()
-    cmd_name = cmd_parts[0].split("@")[0].lower()
-
-    # Resolve group
-    group = crud.get_group_by_telegram_id(session, chat_id)
-    if not group:
-        group = crud.get_or_create_group(session, chat_id, chat_title)
-
-    # Resolve sender
-    sender = crud.get_user_by_telegram_id(session, creator_id)
-    if not sender:
-        sender = crud.get_or_create_user(
-            session,
-            telegram_id=creator_id,
-            username=creator_username,
-            first_name=creator_first_name or f"User{creator_id}",
-        )
-    crud.add_user_to_group(session, sender, group)
-
-    if cmd_name == "/pay":
-        parsed = parse_pay_message(cmd_clean)
-        if "error" in parsed:
-            return (
-                f"⚠️ Error parsing command: {parsed['error']}\n"
-                f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
-                None,
-            )
-        try:
-            expense = expense_service.record_expense(
-                session=session,
-                group=group,
-                sender=sender,
-                command=parsed,
-            )
-        except (UserNotFoundError, ValidationError) as e:
-            return f"⚠️ {e}", None
-
-        reply_text = generate_expense_reply_text(expense)
-        reply_markup = build_expense_keyboard(expense, group.members, sender.id)
-        return reply_text, reply_markup
-
-    elif cmd_name == "/payback":
-        parsed = parse_payback_message(cmd_clean)
-        if "error" in parsed:
-            return (
-                f"⚠️ Error parsing command: {parsed['error']}\n"
-                f"Usage: `/payback [@payer] @recipient <amount>`",
-                None,
-            )
-        try:
-            payment = expense_service.record_payback(
-                session=session,
-                group=group,
-                sender=sender,
-                command=parsed,
-            )
-        except (UserNotFoundError, ValidationError) as e:
-            return f"⚠️ {e}", None
-
-        amount_formatted = format_cents(payment.amount)
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    text="🗑️ Undo",
-                    callback_data=f"undo:payment:{payment.id}:{sender.id}",
-                )
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        reply_text = (
-            f"✅ **Recorded payment:**\n"
-            f"• **Paid by:** {payment.payer.first_name}\n"
-            f"• **Paid to:** {payment.payee.first_name}\n"
-            f"• **Amount:** {amount_formatted}"
-        )
-        return reply_text, reply_markup
-
-    elif cmd_name == "/balances":
-        if not group or not group.members:
-            return "ℹ️ No transactions or members recorded for this group yet.", None
-        balances, _, users_by_id = (
-            settlement_service.get_group_balances_and_settlements(session, group.id)
-        )
-        reply_text = generate_balances_summary(balances, users_by_id)
-        return reply_text, None
-
-    elif cmd_name == "/settle":
-        if not group or not group.members:
-            return "ℹ️ No transactions or members recorded for this group yet.", None
-        _, transactions, users_by_id = (
-            settlement_service.get_group_balances_and_settlements(session, group.id)
-        )
-        reply_text = generate_settlements_summary(transactions, users_by_id)
-        reply_markup = build_settle_keyboard(transactions, users_by_id)
-        return reply_text, reply_markup
-
-    elif cmd_name == "/history":
-        if not group:
-            return "ℹ️ No transactions or members recorded for this group yet.", None
-        txs = crud.get_recent_transactions(session, group.id, limit=10)
-        reply_text = generate_history_summary(txs)
-        keyboard = []
-        if txs:
-            for i, tx in enumerate(txs, 1):
-                t_type = tx["type"]
-                obj = tx["obj"]
-                callback_data = f"hist_del:{t_type}:{obj.id}"
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            text=f"🗑️ Delete {i}", callback_data=callback_data
-                        )
-                    ]
-                )
-        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-        return reply_text, reply_markup
-
-    else:
-        return f"⚠️ Unsupported command from voice note: `{cmd_clean}`", None
 
 
 @with_db_session
@@ -560,7 +393,7 @@ async def voice_callback_handler(
             if "Message is not modified" not in str(e):
                 raise
 
-        # Execute command
+        # Execute command via CommandDispatcher
         chat_title = None
         if query.message and query.message.chat:
             chat_title = getattr(query.message.chat, "title", None)

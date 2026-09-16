@@ -1,5 +1,5 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
@@ -8,6 +8,7 @@ from ..database import with_db_session
 from ..models import Expense, Payment
 from .. import crud
 from ..parser import generate_history_summary
+from ..keyboards import HistoryKeyboardBuilder
 from .common import send_response
 
 logger = logging.getLogger(__name__)
@@ -30,22 +31,7 @@ async def refresh_history_message(query, session: Session):
     # Fetch last 10 transactions
     txs = crud.get_recent_transactions(session, group.id, limit=10)
     reply_text = generate_history_summary(txs)
-
-    keyboard = []
-    if txs:
-        for i, tx in enumerate(txs, 1):
-            t_type = tx["type"]
-            obj = tx["obj"]
-            callback_data = f"hist_del:{t_type}:{obj.id}"
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"🗑️ Delete {i}", callback_data=callback_data
-                    )
-                ]
-            )
-
-    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    reply_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
     try:
         await query.edit_message_text(
             text=reply_text,
@@ -159,22 +145,7 @@ async def history_command(
     # Fetch last 10 transactions
     txs = crud.get_recent_transactions(session, group.id, limit=10)
     reply_text = generate_history_summary(txs)
-
-    keyboard = []
-    if txs:
-        for i, tx in enumerate(txs, 1):
-            t_type = tx["type"]
-            obj = tx["obj"]
-            callback_data = f"hist_del:{t_type}:{obj.id}"
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        text=f"🗑️ Delete {i}", callback_data=callback_data
-                    )
-                ]
-            )
-
-    reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+    reply_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
     await send_response(
         update,
         context,

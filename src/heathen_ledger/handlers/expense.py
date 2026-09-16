@@ -18,6 +18,7 @@ from ..services.exceptions import (
     ValidationError,
     PermissionDeniedError,
 )
+from ..keyboards import ExpenseKeyboardBuilder
 from .voice import process_voice_audio
 from .common import send_response
 
@@ -28,37 +29,9 @@ def build_expense_keyboard(
     expense: Expense, group_members: list, creator_id: int
 ) -> InlineKeyboardMarkup:
     """Build the inline keyboard with toggle buttons for each group member and an Undo button."""
-    participant_ids = {s.user_id for s in expense.splits}
-
-    # Sort members by first_name for UI consistency
-    sorted_members = sorted(group_members, key=lambda m: m.first_name)
-
-    keyboard = []
-    row = []
-    for member in sorted_members:
-        is_p = member.id in participant_ids
-        prefix = "✅" if is_p else "❌"
-        button = InlineKeyboardButton(
-            text=f"{prefix} {member.first_name}",
-            callback_data=f"pay_toggle:{expense.id}:{member.id}:{creator_id}",
-        )
-        row.append(button)
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
-
-    # Undo button below
-    keyboard.append(
-        [
-            InlineKeyboardButton(
-                text="🗑️ Undo",
-                callback_data=f"undo:expense:{expense.id}:{creator_id}",
-            )
-        ]
+    return ExpenseKeyboardBuilder.build_split_toggle_keyboard(
+        expense=expense, group_members=group_members, creator_id=creator_id
     )
-    return InlineKeyboardMarkup(keyboard)
 
 
 @with_db_session
@@ -266,15 +239,9 @@ async def payback_command(
     amount_formatted = format_cents(payment.amount)
     creator_id = sender.id
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                text="🗑️ Undo",
-                callback_data=f"undo:payment:{payment.id}:{creator_id}",
-            )
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = ExpenseKeyboardBuilder.build_payback_undo_keyboard(
+        payment.id, creator_id
+    )
 
     await send_response(
         update,

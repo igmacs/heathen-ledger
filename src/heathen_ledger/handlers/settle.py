@@ -2,7 +2,7 @@
 
 import logging
 from typing import List, Dict, Any, Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
@@ -17,6 +17,7 @@ from ..formatters import (
 )
 from ..services import settlement_service
 from ..services.exceptions import PermissionDeniedError
+from ..keyboards import SettlementKeyboardBuilder
 from .common import send_response
 
 logger = logging.getLogger(__name__)
@@ -26,25 +27,9 @@ def build_settle_keyboard(
     transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
 ) -> Optional[InlineKeyboardMarkup]:
     """Build inline confirmation buttons for suggested payback transactions."""
-    if not transactions:
-        return None
-
-    keyboard = []
-    for tx in transactions:
-        from_db_user = users_by_id.get(tx["from_user_id"])
-        to_db_user = users_by_id.get(tx["to_user_id"])
-        from_name = (
-            from_db_user.first_name if from_db_user else f"User {tx['from_user_id']}"
-        )
-        to_name = to_db_user.first_name if to_db_user else f"User {tx['to_user_id']}"
-        amount_formatted = format_cents(tx["amount"])
-
-        button_text = f"✅ {from_name} paid {to_name} {amount_formatted}"
-        callback_data = f"settle:{tx['from_user_id']}:{tx['to_user_id']}:{tx['amount']}"
-        keyboard.append(
-            [InlineKeyboardButton(text=button_text, callback_data=callback_data)]
-        )
-    return InlineKeyboardMarkup(keyboard)
+    return SettlementKeyboardBuilder.build_settle_keyboard(
+        transactions=transactions, users_by_id=users_by_id
+    )
 
 
 @with_db_session
