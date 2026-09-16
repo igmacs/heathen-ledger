@@ -29,7 +29,7 @@ from .voice import (
     voice_mention_handler,
     voice_callback_handler,
 )
-from .ephemeral import ephemeral_command
+from .ephemeral import ephemeral_command, ephemeral_callback_handler
 
 
 def register_handlers(application: Application) -> None:
@@ -85,4 +85,7 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(ephemeral_callback_handler, pattern="^ephemeral_cb$")
     )

@@ -60,6 +60,34 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
             {"ephemeral_message_parameters": {"receiver_user_id": 888}},
         )
 
+    async def test_ephemeral_with_incoming_ephemeral_message_id(self):
+        """Test sending an ephemeral message when incoming command carries ephemeral_message_id."""
+        update = MagicMock()
+        context = MagicMock()
+
+        update.effective_chat.type = ChatType.GROUP
+        update.effective_chat.id = -100123456
+        update.effective_user.id = 555
+        update.effective_user.first_name = "Frank"
+        update.effective_user.username = "frank"
+        update.effective_message.ephemeral_message_id = 1234
+        update.effective_message.api_kwargs = None
+
+        reply_mock = AsyncMock()
+        update.effective_message.reply_text = reply_mock
+
+        await ephemeral_command(update, context)
+
+        reply_mock.assert_awaited_once()
+        _, kwargs = reply_mock.call_args
+        self.assertEqual(
+            kwargs.get("api_kwargs"),
+            {
+                "ephemeral_message_parameters": {"receiver_user_id": 555},
+                "reply_parameters": {"ephemeral_message_id": 1234},
+            },
+        )
+
     async def test_ephemeral_group_bad_request_fallback(self):
         """Test fallback error message when Telegram rejects ephemeral parameters in group."""
         update = MagicMock()
@@ -80,7 +108,7 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(reply_mock.await_count, 2)
         fallback_call = reply_mock.await_args_list[1]
-        self.assertIn("Ephemeral message error", fallback_call[0][0])
+        self.assertIn("Ephemeral Message Error", fallback_call[0][0])
         self.assertIn("Ephemeral not supported", fallback_call[0][0])
 
     async def test_ephemeral_in_private_chat(self):
@@ -194,6 +222,79 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.message.reply_text.assert_awaited_once()
         reply_text = update.message.reply_text.call_args[0][0]
         self.assertIn("/ephemeral", reply_text)
+
+    async def test_ephemeral_callback_handler_success(self):
+        """Test ephemeral callback handler sends ephemeral message using callback_query_id."""
+        from heathen_ledger.handlers.ephemeral import ephemeral_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+
+        update.callback_query.id = "cq_12345"
+        update.callback_query.from_user.id = 444
+        update.callback_query.from_user.first_name = "Grace"
+        update.callback_query.from_user.username = "grace"
+        update.callback_query.answer = AsyncMock()
+
+        update.effective_chat.id = -100999
+        context.bot.send_message = AsyncMock()
+
+        await ephemeral_callback_handler(update, context)
+
+        context.bot.send_message.assert_awaited_once()
+        args, kwargs = context.bot.send_message.call_args
+        self.assertEqual(kwargs.get("chat_id"), -100999)
+        self.assertIn("Grace", kwargs.get("text"))
+        self.assertEqual(
+            kwargs.get("api_kwargs"),
+            {
+                "ephemeral_message_parameters": {
+                    "receiver_user_id": 444,
+                    "callback_query_id": "cq_12345",
+                }
+            },
+        )
+        update.callback_query.answer.assert_awaited_once_with()
+
+    async def test_ephemeral_callback_handler_bad_request(self):
+        """Test ephemeral callback handler handles BadRequest gracefully."""
+        from heathen_ledger.handlers.ephemeral import ephemeral_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+
+        update.callback_query.id = "cq_12345"
+        update.callback_query.from_user.id = 444
+        update.callback_query.from_user.first_name = "Grace"
+        update.callback_query.from_user.username = "grace"
+        update.callback_query.answer = AsyncMock()
+
+        update.effective_chat.id = -100999
+        context.bot.send_message = AsyncMock(side_effect=BadRequest("Expired query"))
+
+        await ephemeral_callback_handler(update, context)
+
+        update.callback_query.answer.assert_awaited_once()
+        _, kwargs = update.callback_query.answer.call_args
+        self.assertTrue(kwargs.get("show_alert"))
+
+    async def test_register_handlers_includes_ephemeral_callback(self):
+        """Test that register_handlers registers the ephemeral callback query handler."""
+        from heathen_ledger.handlers import register_handlers
+        from telegram.ext import CallbackQueryHandler
+
+        app_mock = MagicMock()
+        register_handlers(app_mock)
+
+        callback_patterns = []
+        for call in app_mock.add_handler.call_args_list:
+            handler = call[0][0]
+            if isinstance(handler, CallbackQueryHandler) and hasattr(
+                handler, "pattern"
+            ):
+                callback_patterns.append(str(handler.pattern.pattern))
+
+        self.assertTrue(any("ephemeral_cb" in p for p in callback_patterns))
 
 
 if __name__ == "__main__":

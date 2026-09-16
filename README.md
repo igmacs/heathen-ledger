@@ -67,7 +67,8 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
 8. **Ephemeral Messages (PoC)**:
-   - `/ephemeral` (or `/test_ephemeral`): Sends a proof of concept ephemeral response visible only to the triggering user inside a group chat, leveraging Telegram Bot API 10.2+ / 10.3+ `ephemeral_message_parameters`. In 1-on-1 private chats, explains how group ephemeral messaging works.
+   - `/ephemeral` (or `/test_ephemeral`): Sends a proof of concept ephemeral response visible only to the triggering user inside a group chat, leveraging Telegram Bot API 10.2+ / 10.3+ `ephemeral_message_parameters`.
+   - **Admin vs. Non-Admin Rules**: In group chats, Telegram requires the bot to be a **chat administrator** to send direct ephemeral replies to standard commands. Non-admin bots can only send ephemeral messages within 15 seconds by supplying `callback_query_id` (from an inline button tap) or `reply_parameters.ephemeral_message_id` (replying to an incoming ephemeral message). The bot includes an interactive button to demonstrate non-admin ephemeral callbacks.
 
 ## Development
 
@@ -394,3 +395,10 @@ when I had to correct or guide it
   - Registered the command handler and updated `post_init` in `bot.py` with `BotCommand("ephemeral", ..., api_kwargs={"is_ephemeral": True})` to enable two-way ephemeral commands in Telegram clients.
   - Documented `api_kwargs` usage for Bot API parameters in `AGENTS.md` and added `/ephemeral` to `/help` and `README.md`.
   - Added unit tests for group chats, supergroups, private chats, missing message/user edge cases, handler registration, and bot command registration (all 106 tests passing).
+
+- I corrected the agent that the bot failed when replying to `/ephemeral` without administrator rights, pointing out the distinction in Telegram's documentation (https://core.telegram.org/bots/api#ephemeral-messages-and-commands): non-admin bots can only send ephemeral messages within 15 seconds if they provide `callback_query_id` from a button tap or `reply_parameters.ephemeral_message_id` from an incoming ephemeral command, whereas direct replies to regular commands require the bot to be a chat administrator. The agent autonomously:
+  - Updated `src/heathen_ledger/handlers/ephemeral.py` to extract `ephemeral_message_id` from incoming messages for non-admin replies.
+  - Added an inline button (`ephemeral_cb`) and callback query handler (`ephemeral_callback_handler`) demonstrating non-admin ephemeral responses via `callback_query_id`.
+  - Updated error handling with clear explanations if a non-admin bot encounters permission errors on direct command invocations.
+  - Documented the administrator and callback reply target conditions in `AGENTS.md` and `README.md`.
+  - Added unit tests covering incoming `ephemeral_message_id`, callback query handling, and callback registration (all 110 tests passing).
