@@ -17,6 +17,7 @@ from ..formatters import (
 )
 from ..services import settlement_service
 from ..services.exceptions import PermissionDeniedError
+from .common import send_response
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,10 @@ async def balances_command(
 
     group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
     if not group or not group.members:
-        await update.message.reply_text(
-            "ℹ️ No transactions or members recorded for this group yet."
+        await send_response(
+            update,
+            context,
+            "ℹ️ No transactions or members recorded for this group yet.",
         )
         return
 
@@ -65,7 +68,7 @@ async def balances_command(
         session, group.id
     )
     reply_text = generate_balances_summary(balances, users_by_id)
-    await update.message.reply_text(reply_text, parse_mode="Markdown")
+    await send_response(update, context, reply_text, parse_mode="Markdown")
 
 
 @with_db_session
@@ -78,8 +81,10 @@ async def settle_command(
 
     group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
     if not group or not group.members:
-        await update.message.reply_text(
-            "ℹ️ No transactions or members recorded for this group yet."
+        await send_response(
+            update,
+            context,
+            "ℹ️ No transactions or members recorded for this group yet.",
         )
         return
 
@@ -89,8 +94,12 @@ async def settle_command(
     reply_text = generate_settlements_summary(transactions, users_by_id)
     reply_markup = build_settle_keyboard(transactions, users_by_id)
 
-    await update.message.reply_text(
-        reply_text, parse_mode="Markdown", reply_markup=reply_markup
+    await send_response(
+        update,
+        context,
+        reply_text,
+        parse_mode="Markdown",
+        reply_markup=reply_markup,
     )
 
 

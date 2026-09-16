@@ -66,8 +66,11 @@ class BaseDatabaseTestCase(unittest.TestCase):
         message = MagicMock()
         message.delete = AsyncMock()
         message.reply_text = AsyncMock()
+        from telegram.constants import ChatType
+
         chat = MagicMock()
         chat.id = chat_id
+        chat.type = ChatType.GROUP
         message.chat = chat
         message.reply_to_message = None
         query.message = message
@@ -75,6 +78,7 @@ class BaseDatabaseTestCase(unittest.TestCase):
         update.callback_query = query
         update.effective_user = from_user
         update.effective_chat = chat
+        update.effective_message = message
         return update
 
     def create_mock_message_update(
@@ -97,13 +101,15 @@ class BaseDatabaseTestCase(unittest.TestCase):
         user.id = sender_telegram_id
         user.username = sender_username
         user.first_name = sender_first_name
-        user.is_bot = False
+        from telegram.constants import ChatType
 
         chat = MagicMock()
         chat.id = chat_id
         chat.title = chat_title
+        chat.type = ChatType.GROUP
 
         update.message = message
+        update.effective_message = message
         update.effective_user = user
         update.effective_chat = chat
         return update

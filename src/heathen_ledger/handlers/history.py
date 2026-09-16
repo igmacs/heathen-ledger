@@ -8,6 +8,7 @@ from ..database import with_db_session
 from ..models import Expense, Payment
 from .. import crud
 from ..parser import generate_history_summary
+from .common import send_response
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +149,10 @@ async def history_command(
 
     group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
     if not group:
-        await update.message.reply_text(
-            "ℹ️ No transactions or members recorded for this group yet."
+        await send_response(
+            update,
+            context,
+            "ℹ️ No transactions or members recorded for this group yet.",
         )
         return
 
@@ -172,6 +175,10 @@ async def history_command(
             )
 
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-    await update.message.reply_text(
-        reply_text, parse_mode="Markdown", reply_markup=reply_markup
+    await send_response(
+        update,
+        context,
+        reply_text,
+        parse_mode="Markdown",
+        reply_markup=reply_markup,
     )

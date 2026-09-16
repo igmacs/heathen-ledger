@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ..database import with_db_session
 from ..models import User
 from .. import crud
+from .common import send_response
 
 logger = logging.getLogger(__name__)
 
@@ -77,12 +78,14 @@ async def register_command(
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
         target_user = update.message.reply_to_message.from_user
         if target_user.is_bot:
-            await update.message.reply_text("⚠️ Cannot register a bot.")
+            await send_response(update, context, "⚠️ Cannot register a bot.")
             return
 
         if any(m.telegram_id == target_user.id for m in group.members):
             handle_str = f" (`@{target_user.username}`)" if target_user.username else ""
-            await update.message.reply_text(
+            await send_response(
+                update,
+                context,
                 f"ℹ️ Member *{target_user.first_name}*{handle_str} is already registered in this group.",
                 parse_mode="Markdown",
             )
@@ -98,7 +101,9 @@ async def register_command(
         session.commit()
 
         handle_str = f" (`@{target_user.username}`)" if target_user.username else ""
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             f"✅ Registered member *{target_user.first_name}*{handle_str} to this group ledger.",
             parse_mode="Markdown",
         )
@@ -136,19 +141,25 @@ async def register_command(
             msgs.append(
                 f"ℹ️ Already registered: {', '.join(f'*{n}*' for n in already_registered_names)}."
             )
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             "\n".join(msgs) if msgs else "⚠️ No valid users found to register.",
             parse_mode="Markdown",
         )
         return
 
     text = update.message.text.strip()
-    args_text = re.sub(r"^/register(?:@\w+)?\s*", "", text, flags=re.IGNORECASE).strip()
+    args_text = re.sub(
+        r"^/register(?:_persistent)?(?:@\w+)?\s*", "", text, flags=re.IGNORECASE
+    ).strip()
 
     # 3. No parameters: show inline button to let members register themselves
     if not args_text:
         if chat.type == ChatType.PRIVATE:
-            await update.message.reply_text(
+            await send_response(
+                update,
+                context,
                 "ℹ️ In private chat, you are already registered with the bot! Add me to a group chat and use `/register` to register group members.",
                 parse_mode="Markdown",
             )
@@ -157,7 +168,9 @@ async def register_command(
         keyboard = [
             [InlineKeyboardButton("📝 Register me", callback_data="register:join")]
         ]
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             "📝 **Member Registration**\n\n"
             "Tap the button below to register in this group ledger:\n\n"
             "_Tip: You can also register others by mentioning them (e.g. `/register @handle`) or replying to their message with `/register`._",
@@ -219,7 +232,7 @@ async def register_command(
             msgs.append(f"✅ Registered member(s): {', '.join(registered)}.")
         if already_registered:
             msgs.append(f"ℹ️ Already registered: {', '.join(already_registered)}.")
-        await update.message.reply_text("\n".join(msgs), parse_mode="Markdown")
+        await send_response(update, context, "\n".join(msgs), parse_mode="Markdown")
         return
 
     first_token = parts[0]
@@ -233,7 +246,9 @@ async def register_command(
         # Check for duplicate handles within this group
         for m in group.members:
             if m.username and m.username.lower() == handle:
-                await update.message.reply_text(
+                await send_response(
+                    update,
+                    context,
                     f"ℹ️ Member *{m.first_name}* (`@{handle}`) is already registered in this group.",
                     parse_mode="Markdown",
                 )
@@ -247,7 +262,9 @@ async def register_command(
             )
             crud.add_user_to_group(session, db_u, group)
             session.commit()
-            await update.message.reply_text(
+            await send_response(
+                update,
+                context,
                 f"✅ Registered member *{db_u.first_name}* (`@{handle}`) to this group ledger.",
                 parse_mode="Markdown",
             )
@@ -262,7 +279,9 @@ async def register_command(
         if glob_u:
             crud.add_user_to_group(session, glob_u, group)
             session.commit()
-            await update.message.reply_text(
+            await send_response(
+                update,
+                context,
                 f"✅ Registered member *{glob_u.first_name}* (`@{handle}`) to this group ledger.",
                 parse_mode="Markdown",
             )
@@ -277,7 +296,9 @@ async def register_command(
         )
         session.commit()
 
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             f"✅ Registered *{first_name}* (`@{handle}`) in this group ledger.\n\n"
             f"They can now be included in expenses and settlements. "
             f"When @{handle} interacts with the bot or taps Register, their account will link automatically.",
@@ -294,15 +315,19 @@ async def register_command(
             handle = re.sub(r"[^\w]+", "_", args_text).strip("_").lower()
 
         if not handle:
-            await update.message.reply_text(
-                "⚠️ Invalid handle or name. Please use alphanumeric characters."
+            await send_response(
+                update,
+                context,
+                "⚠️ Invalid handle or name. Please use alphanumeric characters.",
             )
             return
 
         # Check for duplicate handles within this group
         for m in group.members:
             if m.username and m.username.lower() == handle:
-                await update.message.reply_text(
+                await send_response(
+                    update,
+                    context,
                     f"ℹ️ Member *{m.first_name}* (`@{handle}`) is already registered in this group.",
                     parse_mode="Markdown",
                 )
@@ -316,7 +341,9 @@ async def register_command(
         )
         session.commit()
 
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             f"✅ Registered external member *{first_name}* (`@{handle}`) to this group.\n\n"
             f"You can now include them in expenses (e.g. `/pay 50 split @{handle}`) or settlements.",
             parse_mode="Markdown",
@@ -390,8 +417,10 @@ async def members_command(
 
     group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
     if not group or not group.members:
-        await update.message.reply_text(
-            "ℹ️ No members are currently registered in this group ledger."
+        await send_response(
+            update,
+            context,
+            "ℹ️ No members are currently registered in this group ledger.",
         )
         return
 
@@ -401,19 +430,18 @@ async def members_command(
         ext_tag = " _[external]_" if m.is_external else ""
         lines.append(f"{idx}. **{m.first_name}**{handle}{ext_tag}")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await send_response(update, context, "\n".join(lines), parse_mode="Markdown")
 
 
 @with_db_session
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session):
     """Send a message when the command /start is issued."""
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=(
-            "👋 **Hello! I am Heathen Ledger.**\n\n"
-            '_*"This group deserves a better class of ledger, and I’m gonna give it to ‘em."*_\n\n'
-            "I help you track and settle shared expenses in group chats. Type /help to see all available commands."
-        ),
+    await send_response(
+        update,
+        context,
+        "👋 **Hello! I am Heathen Ledger.**\n\n"
+        '_*"This group deserves a better class of ledger, and I’m gonna give it to ‘em."*_\n\n'
+        "I help you track and settle shared expenses in group chats. Type /help to see all available commands.",
         parse_mode="Markdown",
     )
 
@@ -440,9 +468,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/history` — View the last 10 transactions logged in the group chat.\n\n"
         "🎙️ **Voice Notes**\n"
         "• Reply to any voice note or audio message with `/voice`, `/pay`, or tag the bot to transcribe and interpret it into a ledger command.\n\n"
-        "👻 **Ephemeral Messages & Commands (Experimental PoC)**\n"
-        "• `/ephemeral` or `/whisper` — Test two-way ephemeral commands (command invocation and response visible only to you in a group chat).\n\n"
+        "👻 **Ephemeral & Persistent Commands**\n"
+        "• All commands and responses in groups are **ephemeral** (visible only to you) by default to avoid cluttering the chat.\n"
+        "• Add `_persistent` to any reporting command (e.g., `/settle_persistent`, `/balances_persistent`, `/history_persistent`, `/register_persistent`, `/pay_persistent`) to publish the response publicly to the whole group!\n\n"
         "⚠️ **User Registration:**\n"
-        "Members can tap the button from `/register`, be registered via `/register @handle`, or be registered by replying to their message with `/register`."
+        "Members can tap the button from `/register` or `/register_persistent`, be registered via `/register @handle`, or be registered by replying to their message with `/register`."
     )
-    await update.message.reply_text(help_text, parse_mode="Markdown")
+    await send_response(update, context, help_text, parse_mode="Markdown")

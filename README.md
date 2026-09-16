@@ -66,10 +66,15 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/register` (Generates an interactive button for members to tap and register themselves).
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
-8. **Ephemeral Messages & Commands (PoC)**:
-   - `/ephemeral` or `/whisper`: Demonstrates Telegram Bot API 10.2+ / 10.3+ two-way ephemeral commands and messages.
-   - **Ephemeral Commands (Two-Way Privacy)**: Registered with `is_ephemeral=True` on `BotCommand` and scoped to group chats (`BotCommandScopeAllGroupChats`). When a user types `/` in a group and selects `/ephemeral` or `/whisper` from the autocomplete popup, Telegram transmits the command invocation ephemerally (`ephemeral_message_id`), rendering the command invisible to other group members. The bot replies directly within 15 seconds targeting `reply_parameters.ephemeral_message_id`, achieving complete two-way privacy **without requiring group administrator privileges**.
-   - **Admin vs. Non-Admin Rules**: If invoked as a regular text message (or without incoming `ephemeral_message_id`), Telegram requires the bot to be a **chat administrator** to send an ephemeral reply. Non-admin bots can only send ephemeral messages within 15 seconds by supplying `reply_parameters.ephemeral_message_id` (from an incoming ephemeral command) or `callback_query_id` (from an inline button tap).
+8. **Ephemeral & Persistent Commands**:
+   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you and the bot in the group), preventing spam and clutter in busy group chats.
+   - **Persistent Group Announcements (`_persistent`)**: Commands that benefit from being shared with the entire group support a `_persistent` variant (e.g. `/settle_persistent`, `/balances_persistent`, `/history_persistent`, `/pay_persistent`, `/payback_persistent`, `/register_persistent`, `/members_persistent`). The command invocation remains ephemeral/hidden, but the bot sends its response as a persistent message visible to all group members:
+     - `/settle_persistent`: Posts the debt settlement plan and payment buttons publicly so the group can coordinate payments.
+     - `/balances_persistent`: Publishes the group's current balance sheet to all members.
+     - `/history_persistent`: Publishes the recent transaction log to the group chat.
+     - `/pay_persistent`: Records an expense and posts the public confirmation with interactive participant toggles.
+     - `/payback_persistent`: Records a payback and posts the public confirmation with an undo button.
+     - `/register_persistent`: Posts the `[ 📝 Register me ]` button for other group members to see and tap.
 
 ## Development
 
@@ -409,3 +414,10 @@ when I had to correct or guide it
   - Updated `ephemeral_command` in `src/heathen_ledger/handlers/ephemeral.py` to remove the inline button dependency and directly answer with an ephemeral message, extracting `ephemeral_message_id` from `Mapping` proxies and message replies, and supplying `reply_parameters={"ephemeral_message_id": ...}` to satisfy Telegram's non-admin reply condition within 15 seconds.
   - Added diagnostic feedback displaying whether the command was received as ephemeral (two-way privacy active, non-admin allowed) or as a regular message (admin rights required).
   - Updated `tests/test_ephemeral.py` to mock `context.bot.send_message` and verify group, supergroup, and private chat behaviors (all 110 tests passing).
+
+- I asked to remove the proof of concept and make all commands and responses ephemeral instead, except for commands that benefit from having two versions (`command` and `command_persistent`, both commands ephemeral, but only the response for the first ephemeral), specifically requesting `/settle` and inviting suggestions for more. The agent autonomously:
+  - Removed the experimental `/ephemeral`, `/whisper`, and `/test_ephemeral` proof of concept handlers.
+  - Implemented `send_response` and `is_persistent_command` in `handlers/common.py` to automatically manage two-way ephemeral responses in group chats (passing `ephemeral_message_parameters` and `reply_parameters.ephemeral_message_id` within 15 seconds for non-admin bots, with graceful fallback).
+  - Registered all group commands with `api_kwargs={"is_ephemeral": True}` in `bot.py` under `BotCommandScopeAllGroupChats`.
+  - Implemented persistent command variants (`_persistent`) across key reporting and group-coordinating commands: `/settle_persistent` (public debt settlements with buttons), `/balances_persistent` (public balance sheet), `/history_persistent` (public audit log), `/pay_persistent` and `/payback_persistent` (public receipts with toggles/undo), and `/register_persistent` (public self-registration button).
+  - Updated parsers, command handlers, and documentation, and added comprehensive unit tests for ephemeral/persistent flows (all 116 tests passing).

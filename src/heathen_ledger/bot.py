@@ -19,32 +19,41 @@ logging.basicConfig(
 async def post_init(application: Application) -> None:
     """Set the bot commands for autocompletion."""
     commands = [
-        BotCommand("pay", "Log an expense split among members"),
-        BotCommand("balances", "View current group balances"),
-        BotCommand("settle", "Calculate payback transactions"),
-        BotCommand("payback", "Record a direct payment"),
-        BotCommand("history", "View last 10 transactions"),
+        BotCommand("pay", "Log an expense split among members (private response)"),
+        BotCommand("pay_persistent", "Log an expense and post announcement to group"),
+        BotCommand("balances", "View current group balances (private response)"),
+        BotCommand("balances_persistent", "Post group balances sheet to group"),
+        BotCommand("settle", "Calculate payback settlements (private response)"),
+        BotCommand(
+            "settle_persistent", "Post payback settlements with buttons to group"
+        ),
+        BotCommand("payback", "Record a direct payment (private response)"),
+        BotCommand("payback_persistent", "Record a direct payment and post to group"),
+        BotCommand("history", "View last 10 transactions (private response)"),
+        BotCommand("history_persistent", "Post last 10 transactions to group"),
+        BotCommand("register", "Register a member (private response)"),
+        BotCommand("register_persistent", "Post member registration button to group"),
+        BotCommand("members", "List group members (private response)"),
+        BotCommand("members_persistent", "Post group members list to group"),
         BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
-        BotCommand("register", "Register a member or show registration button"),
-        BotCommand("members", "List group members"),
-        BotCommand(
-            "ephemeral",
-            "Test ephemeral command (two-way privacy)",
-            api_kwargs={"is_ephemeral": True},
-        ),
-        BotCommand(
-            "whisper",
-            "Private whisper command (two-way ephemeral)",
-            api_kwargs={"is_ephemeral": True},
-        ),
         BotCommand("help", "Display help message"),
     ]
     await application.bot.set_my_commands(commands)
     try:
         from telegram import BotCommandScopeAllGroupChats
 
+        # In group chats, ALL commands are registered as ephemeral commands
+        # so the user's invocation is hidden from the group.
+        group_commands = [
+            BotCommand(
+                cmd.command,
+                cmd.description,
+                api_kwargs={"is_ephemeral": True},
+            )
+            for cmd in commands
+        ]
         await application.bot.set_my_commands(
-            commands, scope=BotCommandScopeAllGroupChats()
+            group_commands, scope=BotCommandScopeAllGroupChats()
         )
     except Exception as e:
         logging.getLogger(__name__).warning(

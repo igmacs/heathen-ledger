@@ -29,7 +29,6 @@ from .voice import (
     voice_mention_handler,
     voice_callback_handler,
 )
-from .ephemeral import ephemeral_command, ephemeral_callback_handler
 
 
 def register_handlers(application: Application) -> None:
@@ -49,18 +48,27 @@ def register_handlers(application: Application) -> None:
         )
     )
 
-    # Command Handlers
+    # Command Handlers (ephemeral by default, with persistent variants for group broadcasting)
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("pay", pay_command))
-    application.add_handler(CommandHandler("balances", balances_command))
-    application.add_handler(CommandHandler("settle", settle_command))
-    application.add_handler(CommandHandler("payback", payback_command))
-    application.add_handler(CommandHandler("history", history_command))
-    application.add_handler(CommandHandler("voice", voice_command_handler))
-    application.add_handler(CommandHandler("register", register_command))
-    application.add_handler(CommandHandler("members", members_command))
+    application.add_handler(CommandHandler(["pay", "pay_persistent"], pay_command))
     application.add_handler(
-        CommandHandler(["ephemeral", "whisper", "test_ephemeral"], ephemeral_command)
+        CommandHandler(["balances", "balances_persistent"], balances_command)
+    )
+    application.add_handler(
+        CommandHandler(["settle", "settle_persistent"], settle_command)
+    )
+    application.add_handler(
+        CommandHandler(["payback", "payback_persistent"], payback_command)
+    )
+    application.add_handler(
+        CommandHandler(["history", "history_persistent"], history_command)
+    )
+    application.add_handler(CommandHandler("voice", voice_command_handler))
+    application.add_handler(
+        CommandHandler(["register", "register_persistent"], register_command)
+    )
+    application.add_handler(
+        CommandHandler(["members", "members_persistent"], members_command)
     )
     application.add_handler(CommandHandler("help", help_command))
 
@@ -85,7 +93,4 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(ephemeral_callback_handler, pattern="^ephemeral_cb$")
     )

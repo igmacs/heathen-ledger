@@ -19,6 +19,7 @@ from ..services.exceptions import (
     PermissionDeniedError,
 )
 from .voice import process_voice_audio
+from .common import send_response
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,9 @@ async def pay_command(
     if "error" in parsed:
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             f"⚠️ Error parsing command: {parsed['error']}\n"
             f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
             reply_markup=reply_markup,
@@ -124,15 +127,15 @@ async def pay_command(
             command=parsed,
         )
     except (UserNotFoundError, ValidationError) as e:
-        await update.message.reply_text(f"⚠️ {e}")
+        await send_response(update, context, f"⚠️ {e}")
         return
 
     creator_id = sender.id
     reply_text = generate_expense_reply_text(expense)
     reply_markup = build_expense_keyboard(expense, group.members, creator_id)
 
-    await update.message.reply_text(
-        reply_text, parse_mode="Markdown", reply_markup=reply_markup
+    await send_response(
+        update, context, reply_text, parse_mode="Markdown", reply_markup=reply_markup
     )
 
 
@@ -221,7 +224,9 @@ async def payback_command(
     if "error" in parsed:
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(
+        await send_response(
+            update,
+            context,
             f"⚠️ Error parsing command: {parsed['error']}\n"
             f"Usage: `/payback [@payer] @recipient <amount>`",
             reply_markup=reply_markup,
@@ -255,7 +260,7 @@ async def payback_command(
             command=parsed,
         )
     except UserNotFoundError as e:
-        await update.message.reply_text(f"⚠️ {e}")
+        await send_response(update, context, f"⚠️ {e}")
         return
 
     amount_formatted = format_cents(payment.amount)
@@ -271,7 +276,9 @@ async def payback_command(
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_text(
+    await send_response(
+        update,
+        context,
         f"✅ **Recorded payment:**\n"
         f"• **Paid by:** {payment.payer.first_name}\n"
         f"• **Paid to:** {payment.payee.first_name}\n"

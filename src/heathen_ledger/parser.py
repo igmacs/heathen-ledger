@@ -103,8 +103,10 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
              - 'expense_date': Optional[datetime.date]
              - 'error': Error message string if parsing fails
     """
-    # 1. Strip the /pay command prefix
-    cleaned_text = re.sub(r"^/pay(?:\s+|$)", "", text, flags=re.IGNORECASE).strip()
+    # 1. Strip the /pay or /pay_persistent command prefix
+    cleaned_text = re.sub(
+        r"^/pay(?:_persistent)?(?:@\w+)?(?:\s+|$)", "", text, flags=re.IGNORECASE
+    ).strip()
     if not cleaned_text:
         return ParseErrorResult("No valid amount found in the message.")
 
@@ -391,7 +393,9 @@ def parse_payback_message(text: str) -> Dict[str, Any]:
              - 'amount': Amount in cents (int)
              - 'error': Error message string if parsing fails
     """
-    cleaned_text = re.sub(r"^/payback(?:\s+|$)", "", text, flags=re.IGNORECASE).strip()
+    cleaned_text = re.sub(
+        r"^/payback(?:_persistent)?(?:@\w+)?(?:\s+|$)", "", text, flags=re.IGNORECASE
+    ).strip()
 
     mentions: List[Dict[str, Any]] = []
     for match in re.finditer(r"@(\w+)", cleaned_text):
