@@ -10,6 +10,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from heathen_ledger.database import Base
 from heathen_ledger import crud
+from heathen_ledger.domain import BalanceCalculator
+from heathen_ledger.repositories import (
+    UserRepository,
+    GroupRepository,
+    ExpenseRepository,
+    PaymentRepository,
+)
 
 
 class TestCRUD(unittest.TestCase):
@@ -242,6 +249,61 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(linked_user.first_name, "John Doe")
             self.assertEqual(linked_user.username, "johndoe")
             self.assertIn(linked_user, group.members)
+
+    def test_direct_repository_and_balance_calculator(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        Session = sessionmaker(bind=engine)
+
+        with Session() as session:
+            user_repo = UserRepository(session)
+            group_repo = GroupRepository(session)
+            expense_repo = ExpenseRepository(session)
+            payment_repo = PaymentRepository(session)
+
+            group = group_repo.get_or_create(77777, "Trip")
+            u1 = user_repo.get_or_create(101, "u1", "User One")
+            u2 = user_repo.get_or_create(102, "u2", "User Two")
+            user_repo.add_to_group(u1, group)
+            user_repo.add_to_group(u2, group)
+            session.commit()
+
+            # Create expense: u1 paid 2000, split 1000 each
+            exp = expense_repo.create(
+                group_id=group.id,
+                payer_id=u1.id,
+                amount=2000,
+                description="Groceries",
+                splits={u1.id: 1000, u2.id: 1000},
+            )
+            session.commit()
+            self.assertIsNotNone(exp.id)
+
+            # Test pure balance calculation
+            balances = BalanceCalculator.calculate_net_balances(
+                members=group.members,
+                expenses=[exp],
+                payments=[],
+            )
+            self.assertEqual(balances[u1.id], 1000)
+            self.assertEqual(balances[u2.id], -1000)
+
+            # Record payback: u2 pays u1 1000
+            pay = payment_repo.create(
+                group_id=group.id,
+                payer_id=u2.id,
+                payee_id=u1.id,
+                amount=1000,
+            )
+            session.commit()
+
+            balances_settled = BalanceCalculator.calculate_net_balances(
+                members=group.members,
+                expenses=[exp],
+                payments=[pay],
+            )
+            self.assertEqual(balances_settled[u1.id], 0)
+            self.assertEqual(balances_settled[u2.id], 0)
 
 
 if __name__ == "__main__":
