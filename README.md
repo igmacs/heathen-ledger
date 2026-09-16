@@ -430,3 +430,12 @@ when I had to correct or guide it
   - Added unified `delete_message_or_ephemeral` and updated `send_response` to track ephemeral message IDs on action tokens (`dismiss:<token>`).
   - Updated `persist_callback_handler` and `dismiss_callback_handler` to delete ephemeral messages via `deleteEphemeralMessage` with graceful fallback to `editEphemeralMessageText`.
   - Documented the `message_id=0` deletion requirement in `AGENTS.md` and added unit tests covering ephemeral deletion and fallback behavior (all 125 tests passing).
+
+- I asked to improve the codebase structure by introducing small classes following the Single Responsibility Principle (SRP) as much as possible, while keeping full backward compatibility with existing tests and commands. The agent created an implementation plan proposing decomposition across the parser, data access repositories, command execution dispatchers, UI keyboard builders, ephemeral messaging adapters, and registration services. With my approval, the agent autonomously executed the refactoring incrementally across atomic commits:
+  - Decomposed `parser.py` into dedicated clause parsers (`AmountParser`, `UserTokenParser`, `DateClauseParser`, `SplitClauseParser`, `PayerClauseParser`, `PayCommandParser`, `PaybackCommandParser`) with `parser/__init__.py` serving as a backwards-compatible facade.
+  - Extracted database queries and domain logic from `crud.py` into focused repository classes (`UserRepository`, `GroupRepository`, `ExpenseRepository`, `PaymentRepository`) and a pure domain `BalanceCalculator`, keeping `crud.py` as a facade.
+  - Extracted UI keyboard construction into dedicated builders (`ExpenseKeyboardBuilder`, `SettlementKeyboardBuilder`, `HistoryKeyboardBuilder`, `VoiceKeyboardBuilder`).
+  - Extracted voice storage and audio downloading (`PendingVoiceCommandStore`, `VoiceAudioDownloader`) and created a unified `CommandDispatcher`, eliminating ~150 lines of duplicate command execution logic from `handlers/voice.py`.
+  - Extracted Telegram Bot API ephemeral messaging and payload caching into `EphemeralPayloadStore`, `TelegramEphemeralClient`, and `EphemeralActionKeyboardDecorator` in `heathen_ledger.telegram`.
+  - Extracted member registration logic into `MemberRegistrationService` in `heathen_ledger.services`, streamlining `/register` in `handlers/base.py`.
+  - Added unit tests for each new component and verified all 136 tests pass and pre-commit hooks succeed.
