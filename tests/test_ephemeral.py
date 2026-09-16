@@ -11,6 +11,10 @@ from heathen_ledger.handlers.common import (
     is_persistent_command,
     send_response,
 )
+from heathen_ledger.telegram import (
+    EphemeralPayloadStore,
+    EphemeralActionKeyboardDecorator,
+)
 from heathen_ledger.handlers.settle import balances_command, settle_command
 from heathen_ledger.handlers.history import history_command
 from heathen_ledger.handlers.expense import pay_command, payback_command
@@ -724,6 +728,38 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Share to group", help_text)
         self.assertIn("Dismiss", help_text)
         self.assertNotIn("/settle_persistent", help_text)
+
+
+class TestTelegramEphemeralClasses(unittest.TestCase):
+    def test_ephemeral_payload_store(self):
+        store = EphemeralPayloadStore()
+        token = store.store(
+            chat_id=123,
+            user_id=456,
+            text="Hello",
+            parse_mode="Markdown",
+            reply_markup=None,
+        )
+        self.assertIsNotNone(token)
+        payload = store.get(token)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["chat_id"], 123)
+
+        popped = store.pop(token)
+        self.assertEqual(popped["user_id"], 456)
+        self.assertIsNone(store.get(token))
+
+    def test_ephemeral_action_keyboard_decorator(self):
+        dec = EphemeralActionKeyboardDecorator
+        # Attach to None
+        kb = dec.attach_action_buttons(
+            None, token="tok", can_share=True, dismissible=True
+        )
+        self.assertIsNotNone(kb)
+        self.assertTrue(dec.has_dismiss_button(kb))
+        self.assertEqual(len(kb.inline_keyboard[0]), 2)
+        self.assertEqual(kb.inline_keyboard[0][0].callback_data, "persist:tok")
+        self.assertEqual(kb.inline_keyboard[0][1].callback_data, "dismiss:tok")
 
 
 if __name__ == "__main__":

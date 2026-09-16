@@ -1,267 +1,28 @@
 import asyncio
 import logging
-import time
-import uuid
-from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from ..telegram import (
+    EphemeralPayloadStore,
+    TelegramEphemeralClient,
+    EphemeralActionKeyboardDecorator,
+)
+
 logger = logging.getLogger(__name__)
 
 # Temporary in-memory cache for storing messages to be persisted to groups.
-# Stores: token -> {"chat_id": int, "user_id": int, "text": str, "parse_mode": str, "reply_markup": InlineKeyboardMarkup, "created_at": float}
-_PERSIST_PAYLOADS: dict[str, dict] = {}
-
-
-def _clean_old_persist_payloads(max_age_seconds: int = 3600) -> None:
-    """Remove stored persist payloads older than max_age_seconds or truncate if too large."""
-    now = time.time()
-    expired = [
-        k
-        for k, v in _PERSIST_PAYLOADS.items()
-        if now - v.get("created_at", 0) > max_age_seconds
-    ]
-    for k in expired:
-        _PERSIST_PAYLOADS.pop(k, None)
-    if len(_PERSIST_PAYLOADS) > 1000:
-        sorted_keys = sorted(
-            _PERSIST_PAYLOADS.keys(),
-            key=lambda k: _PERSIST_PAYLOADS[k].get("created_at", 0),
-        )
-        for k in sorted_keys[: len(_PERSIST_PAYLOADS) - 500]:
-            _PERSIST_PAYLOADS.pop(k, None)
-
-
-def _has_dismiss_button(reply_markup: InlineKeyboardMarkup | None) -> bool:
-    """Check if reply_markup already contains a button with dismiss callback_data."""
-    if not reply_markup or not getattr(reply_markup, "inline_keyboard", None):
-        return False
-    for row in reply_markup.inline_keyboard:
-        for btn in row:
-            cb = getattr(btn, "callback_data", None)
-            if cb and (cb == "dismiss" or cb.startswith("dismiss:")):
-                return True
-    return False
-
-
-def _get_ephemeral_message_id(message) -> int | None:
-    """Extract ephemeral_message_id from message or callback query if present."""
-    if not message:
-        return None
-    msg = getattr(message, "message", None) or message
-
-    for obj in (message, msg):
-        if not obj:
-            continue
-        val = getattr(obj, "ephemeral_message_id", None)
-        if isinstance(val, int):
-            return val
-        api_kwargs = getattr(obj, "api_kwargs", None)
-        if isinstance(api_kwargs, Mapping):
-            val = api_kwargs.get("ephemeral_message_id")
-            if isinstance(val, int):
-                return val
-        reply_msg = getattr(obj, "reply_to_message", None)
-        if reply_msg:
-            val = getattr(reply_msg, "ephemeral_message_id", None)
-            if isinstance(val, int):
-                return val
-            reply_kwargs = getattr(reply_msg, "api_kwargs", None)
-            if isinstance(reply_kwargs, Mapping):
-                val = reply_kwargs.get("ephemeral_message_id")
-                if isinstance(val, int):
-                    return val
-    return None
-
-
-async def delete_ephemeral_message(
-    bot,
-    chat_id: int | str,
-    receiver_user_id: int,
-    ephemeral_message_id: int,
-) -> bool:
-    """Delete an ephemeral message using Telegram Bot API's deleteEphemeralMessage."""
-    data = {
-        "chat_id": chat_id,
-        "receiver_user_id": receiver_user_id,
-        "ephemeral_message_id": ephemeral_message_id,
-    }
-
-    # 1. Use bot._post if available (standard in python-telegram-bot)
-    if hasattr(bot, "_post"):
-        post_fn = bot._post
-        if isinstance(post_fn, MagicMock) and not isinstance(post_fn, AsyncMock):
-            post_fn("deleteEphemeralMessage", data=data)
-            return True
-        res = post_fn("deleteEphemeralMessage", data=data)
-        if asyncio.iscoroutine(res):
-            return bool(await res)
-        return bool(res)
-
-    # 2. Check for custom delete_ephemeral_message method
-    del_fn = getattr(bot, "delete_ephemeral_message", None)
-    if del_fn is not None and callable(del_fn):
-        if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
-            return bool(
-                await del_fn(
-                    chat_id=chat_id,
-                    receiver_user_id=receiver_user_id,
-                    ephemeral_message_id=ephemeral_message_id,
-                )
-            )
-        res = del_fn(
-            chat_id=chat_id,
-            receiver_user_id=receiver_user_id,
-            ephemeral_message_id=ephemeral_message_id,
-        )
-        if asyncio.iscoroutine(res):
-            return bool(await res)
-        return bool(res)
-
-    # 3. Fallback to do_api_request if present
-    req_fn = getattr(bot, "do_api_request", None)
-    if req_fn is not None and callable(req_fn):
-        if isinstance(req_fn, MagicMock) and not isinstance(req_fn, AsyncMock):
-            req_fn("deleteEphemeralMessage", api_kwargs=data)
-            return True
-        res = req_fn("deleteEphemeralMessage", api_kwargs=data)
-        if asyncio.iscoroutine(res):
-            return bool(await res)
-        return bool(res)
-
-    return False
-
-
-async def edit_ephemeral_message_text(
-    bot,
-    chat_id: int | str,
-    receiver_user_id: int,
-    ephemeral_message_id: int,
-    text: str,
-) -> bool:
-    """Edit an ephemeral message text using Telegram Bot API's editEphemeralMessageText."""
-    data = {
-        "chat_id": chat_id,
-        "receiver_user_id": receiver_user_id,
-        "ephemeral_message_id": ephemeral_message_id,
-        "text": text,
-    }
-
-    # 1. Use bot._post if available (standard in python-telegram-bot)
-    if hasattr(bot, "_post"):
-        post_fn = bot._post
-        if isinstance(post_fn, MagicMock) and not isinstance(post_fn, AsyncMock):
-            post_fn("editEphemeralMessageText", data=data)
-            return True
-        res = post_fn("editEphemeralMessageText", data=data)
-        if asyncio.iscoroutine(res):
-            return bool(await res)
-        return bool(res)
-
-    # 2. Check for custom edit_ephemeral_message_text method
-    edit_fn = getattr(bot, "edit_ephemeral_message_text", None)
-    if edit_fn is not None and callable(edit_fn):
-        if isinstance(edit_fn, AsyncMock) or asyncio.iscoroutinefunction(edit_fn):
-            return bool(
-                await edit_fn(
-                    chat_id=chat_id,
-                    receiver_user_id=receiver_user_id,
-                    ephemeral_message_id=ephemeral_message_id,
-                    text=text,
-                )
-            )
-        res = edit_fn(
-            chat_id=chat_id,
-            receiver_user_id=receiver_user_id,
-            ephemeral_message_id=ephemeral_message_id,
-            text=text,
-        )
-        if asyncio.iscoroutine(res):
-            return bool(await res)
-        return bool(res)
-
-    return False
-
-
-async def delete_message_or_ephemeral(
-    context: ContextTypes.DEFAULT_TYPE,
-    chat_id: int | str,
-    *,
-    user_id: int | None = None,
-    ephemeral_message_id: int | None = None,
-    message: Message | None = None,
-) -> bool:
-    """Delete a message, using deleteEphemeralMessage if it's ephemeral, or deleteMessage if standard."""
-    bot = getattr(context, "bot", None)
-
-    # Trigger mock on message object if in a unit test fixture
-    if message and hasattr(message, "delete"):
-        del_fn = message.delete
-        if isinstance(del_fn, (AsyncMock, MagicMock)):
-            try:
-                if isinstance(del_fn, AsyncMock):
-                    await del_fn()
-                else:
-                    del_fn()
-            except BadRequest:
-                pass
-
-    if not bot:
-        return False
-
-    if ephemeral_message_id is None and message:
-        ephemeral_message_id = _get_ephemeral_message_id(message)
-
-    if user_id is None and message:
-        receiver_user = getattr(message, "receiver_user", None)
-        if receiver_user and hasattr(receiver_user, "id"):
-            user_id = receiver_user.id
-        elif isinstance(getattr(message, "api_kwargs", None), Mapping):
-            ru = message.api_kwargs.get("receiver_user")
-            if isinstance(ru, Mapping) and "id" in ru:
-                user_id = ru["id"]
-
-    msg_id = getattr(message, "message_id", None) if message else None
-
-    # 1. Ephemeral message deletion via deleteEphemeralMessage
-    if ephemeral_message_id is not None and user_id is not None:
-        try:
-            res = await delete_ephemeral_message(
-                bot,
-                chat_id=chat_id,
-                receiver_user_id=user_id,
-                ephemeral_message_id=ephemeral_message_id,
-            )
-            if res:
-                return True
-        except BadRequest as e:
-            logger.warning(
-                "Failed to delete ephemeral message %s in chat %s for user %s: %s",
-                ephemeral_message_id,
-                chat_id,
-                user_id,
-                e,
-            )
-
-    # 2. Standard message deletion if message_id is an integer non-zero
-    if isinstance(msg_id, int) and msg_id != 0:
-        try:
-            if hasattr(bot, "delete_message"):
-                del_fn = bot.delete_message
-                if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
-                    return await del_fn(chat_id=chat_id, message_id=msg_id)
-                elif callable(del_fn):
-                    res = del_fn(chat_id=chat_id, message_id=msg_id)
-                    if asyncio.iscoroutine(res):
-                        return await res
-                    return bool(res)
-        except BadRequest as e:
-            logger.debug("Failed to delete standard message %s: %s", msg_id, e)
-
-    return False
+_EPHEMERAL_STORE = EphemeralPayloadStore()
+_PERSIST_PAYLOADS = _EPHEMERAL_STORE.payloads
+_clean_old_persist_payloads = _EPHEMERAL_STORE.prune_expired
+_has_dismiss_button = EphemeralActionKeyboardDecorator.has_dismiss_button
+_get_ephemeral_message_id = TelegramEphemeralClient.extract_ephemeral_message_id
+delete_ephemeral_message = TelegramEphemeralClient.delete_ephemeral_message
+edit_ephemeral_message_text = TelegramEphemeralClient.edit_ephemeral_message_text
+delete_message_or_ephemeral = TelegramEphemeralClient.delete_message_or_ephemeral
 
 
 def is_persistent_command(update: Update) -> bool:
@@ -329,50 +90,28 @@ async def send_response(
         return await send_fn(**kwargs)
 
     if ephemeral and is_group and user:
-        # Determine whether to offer sharing and dismissing
         can_share = (
             shareable
             if shareable is not None
             else not (text.startswith("⚠️") or text.startswith("❌"))
         )
-        action_buttons: list[InlineKeyboardButton] = []
+
         token: str | None = None
-
         if can_share or (dismissible and not _has_dismiss_button(reply_markup)):
-            token = uuid.uuid4().hex[:12]
-            _clean_old_persist_payloads()
-            _PERSIST_PAYLOADS[token] = {
-                "chat_id": chat_id,
-                "user_id": user.id,
-                "text": text,
-                "parse_mode": parse_mode,
-                "reply_markup": reply_markup,
-                "created_at": time.time(),
-            }
-
-        if can_share and token:
-            action_buttons.append(
-                InlineKeyboardButton(
-                    "📢 Share to group", callback_data=f"persist:{token}"
-                )
+            token = _EPHEMERAL_STORE.store(
+                chat_id=chat_id,
+                user_id=user.id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
             )
 
-        if dismissible and not _has_dismiss_button(reply_markup):
-            cb_data = f"dismiss:{token}" if token else "dismiss"
-            action_buttons.append(
-                InlineKeyboardButton("✕ Dismiss", callback_data=cb_data)
-            )
-
-        effective_reply_markup = reply_markup
-        if action_buttons:
-            if reply_markup is not None and getattr(
-                reply_markup, "inline_keyboard", None
-            ):
-                new_keyboard = [list(row) for row in reply_markup.inline_keyboard]
-                new_keyboard.append(action_buttons)
-                effective_reply_markup = InlineKeyboardMarkup(new_keyboard)
-            else:
-                effective_reply_markup = InlineKeyboardMarkup([action_buttons])
+        effective_reply_markup = EphemeralActionKeyboardDecorator.attach_action_buttons(
+            reply_markup=reply_markup,
+            token=token,
+            can_share=can_share,
+            dismissible=dismissible,
+        )
 
         incoming_eph_id = _get_ephemeral_message_id(msg_obj)
         api_kwargs = {
@@ -393,11 +132,13 @@ async def send_response(
                 reply_markup=effective_reply_markup,
                 api_kwargs=api_kwargs,
             )
-            if token and token in _PERSIST_PAYLOADS:
+            if token and token in _EPHEMERAL_STORE.payloads:
                 sent_eph_id = _get_ephemeral_message_id(sent_msg)
                 if sent_eph_id is not None:
-                    _PERSIST_PAYLOADS[token]["ephemeral_message_id"] = sent_eph_id
-                _PERSIST_PAYLOADS[token]["message_id"] = getattr(
+                    _EPHEMERAL_STORE.payloads[token]["ephemeral_message_id"] = (
+                        sent_eph_id
+                    )
+                _EPHEMERAL_STORE.payloads[token]["message_id"] = getattr(
                     sent_msg, "message_id", None
                 )
             return sent_msg
@@ -409,7 +150,7 @@ async def send_response(
                 e,
             )
             if token:
-                _PERSIST_PAYLOADS.pop(token, None)
+                _EPHEMERAL_STORE.pop(token)
             return await _do_send(
                 chat_id=chat_id,
                 text=text,
@@ -440,7 +181,7 @@ async def persist_callback_handler(
         return
 
     token = query.data.split(":", 1)[1]
-    payload = _PERSIST_PAYLOADS.pop(token, None)
+    payload = _EPHEMERAL_STORE.pop(token)
 
     if not payload:
         try:
@@ -455,8 +196,7 @@ async def persist_callback_handler(
     # Check that the user clicking the button is the one who requested it
     user = getattr(update, "effective_user", None) or getattr(query, "from_user", None)
     if user and payload.get("user_id") and user.id != payload["user_id"]:
-        # Put payload back so the original user can still share it
-        _PERSIST_PAYLOADS[token] = payload
+        _EPHEMERAL_STORE.restore(token, payload)
         try:
             await query.answer(
                 "Only the person who requested this message can share it.",
@@ -551,9 +291,9 @@ async def dismiss_callback_handler(
     if query.data.startswith("dismiss:"):
         token = query.data.split(":", 1)[1]
 
-    payload = _PERSIST_PAYLOADS.pop(token, None) if token else None
+    payload = _EPHEMERAL_STORE.pop(token) if token else None
 
-    # Delete the original command message if it exists (requires bot to have admin delete rights in groups)
+    # Delete the original command message if it exists
     if query.message and getattr(query.message, "reply_to_message", None):
         reply_msg = query.message.reply_to_message
         if hasattr(reply_msg, "delete"):
