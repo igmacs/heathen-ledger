@@ -468,10 +468,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/history` — View the last 10 transactions logged in the group chat.\n\n"
         "🎙️ **Voice Notes**\n"
         "• Reply to any voice note or audio message with `/voice`, `/pay`, or tag the bot to transcribe and interpret it into a ledger command.\n\n"
-        "👻 **Ephemeral & Persistent Commands**\n"
-        "• All commands and responses in groups are **ephemeral** (visible only to you) by default to avoid cluttering the chat.\n"
-        "• Add `_persistent` to any reporting command (e.g., `/settle_persistent`, `/balances_persistent`, `/history_persistent`, `/register_persistent`, `/pay_persistent`) to publish the response publicly to the whole group!\n\n"
+        "👻 **Ephemeral Responses & Sharing**\n"
+        "• All commands and responses in groups are **ephemeral** (visible only to you) by default to keep the chat clean.\n"
+        "• Tap **📢 Share to group** on any ephemeral response to delete the preview and publish it publicly to the whole group.\n"
+        "• Tap **✕ Dismiss** to delete the ephemeral message from your view.\n\n"
         "⚠️ **User Registration:**\n"
-        "Members can tap the button from `/register` or `/register_persistent`, be registered via `/register @handle`, or be registered by replying to their message with `/register`."
+        "Members can tap the button from `/register`, be registered via `/register @handle`, or be registered by replying to their message with `/register`."
     )
     await send_response(update, context, help_text, parse_mode="Markdown")

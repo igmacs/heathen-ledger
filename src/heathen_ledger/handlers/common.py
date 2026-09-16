@@ -1,12 +1,49 @@
+import asyncio
 import logging
+import time
+import uuid
 from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock
-from telegram import Update, InlineKeyboardMarkup, Message
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
+
+# Temporary in-memory cache for storing messages to be persisted to groups.
+# Stores: token -> {"chat_id": int, "user_id": int, "text": str, "parse_mode": str, "reply_markup": InlineKeyboardMarkup, "created_at": float}
+_PERSIST_PAYLOADS: dict[str, dict] = {}
+
+
+def _clean_old_persist_payloads(max_age_seconds: int = 3600) -> None:
+    """Remove stored persist payloads older than max_age_seconds or truncate if too large."""
+    now = time.time()
+    expired = [
+        k
+        for k, v in _PERSIST_PAYLOADS.items()
+        if now - v.get("created_at", 0) > max_age_seconds
+    ]
+    for k in expired:
+        _PERSIST_PAYLOADS.pop(k, None)
+    if len(_PERSIST_PAYLOADS) > 1000:
+        sorted_keys = sorted(
+            _PERSIST_PAYLOADS.keys(),
+            key=lambda k: _PERSIST_PAYLOADS[k].get("created_at", 0),
+        )
+        for k in sorted_keys[: len(_PERSIST_PAYLOADS) - 500]:
+            _PERSIST_PAYLOADS.pop(k, None)
+
+
+def _has_dismiss_button(reply_markup: InlineKeyboardMarkup | None) -> bool:
+    """Check if reply_markup already contains a button with dismiss callback_data."""
+    if not reply_markup or not getattr(reply_markup, "inline_keyboard", None):
+        return False
+    for row in reply_markup.inline_keyboard:
+        for btn in row:
+            if getattr(btn, "callback_data", None) == "dismiss":
+                return True
+    return False
 
 
 def _get_ephemeral_message_id(message) -> int | None:
@@ -52,11 +89,14 @@ async def send_response(
     reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: str | None = "Markdown",
     ephemeral: bool | None = None,
+    shareable: bool | None = None,
+    dismissible: bool = True,
 ) -> Message | None:
     """Send a response message respecting ephemeral and persistent preferences.
 
     If ephemeral is None, it defaults to False if the command was invoked as *_persistent,
     and True otherwise in group chats.
+    In group chats when ephemeral is True, attaches 'Share to group' and 'Dismiss' action buttons.
     """
     # Trigger mock reply_text if present in unit test fixtures
     msg_obj = getattr(update, "effective_message", None) or getattr(
@@ -96,6 +136,48 @@ async def send_response(
         return await send_fn(**kwargs)
 
     if ephemeral and is_group and user:
+        # Determine whether to offer sharing and dismissing
+        can_share = (
+            shareable
+            if shareable is not None
+            else not (text.startswith("⚠️") or text.startswith("❌"))
+        )
+        action_buttons: list[InlineKeyboardButton] = []
+        token: str | None = None
+
+        if can_share:
+            token = uuid.uuid4().hex[:12]
+            _clean_old_persist_payloads()
+            _PERSIST_PAYLOADS[token] = {
+                "chat_id": chat_id,
+                "user_id": user.id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "reply_markup": reply_markup,
+                "created_at": time.time(),
+            }
+            action_buttons.append(
+                InlineKeyboardButton(
+                    "📢 Share to group", callback_data=f"persist:{token}"
+                )
+            )
+
+        if dismissible and not _has_dismiss_button(reply_markup):
+            action_buttons.append(
+                InlineKeyboardButton("✕ Dismiss", callback_data="dismiss")
+            )
+
+        effective_reply_markup = reply_markup
+        if action_buttons:
+            if reply_markup is not None and getattr(
+                reply_markup, "inline_keyboard", None
+            ):
+                new_keyboard = [list(row) for row in reply_markup.inline_keyboard]
+                new_keyboard.append(action_buttons)
+                effective_reply_markup = InlineKeyboardMarkup(new_keyboard)
+            else:
+                effective_reply_markup = InlineKeyboardMarkup([action_buttons])
+
         incoming_eph_id = _get_ephemeral_message_id(msg_obj)
         api_kwargs = {
             "ephemeral_message_parameters": {
@@ -112,7 +194,7 @@ async def send_response(
                 chat_id=chat_id,
                 text=text,
                 parse_mode=parse_mode,
-                reply_markup=reply_markup,
+                reply_markup=effective_reply_markup,
                 api_kwargs=api_kwargs,
             )
         except BadRequest as e:
@@ -122,6 +204,8 @@ async def send_response(
                 user.id,
                 e,
             )
+            if token:
+                _PERSIST_PAYLOADS.pop(token, None)
             return await _do_send(
                 chat_id=chat_id,
                 text=text,
@@ -137,27 +221,160 @@ async def send_response(
         )
 
 
-async def dismiss_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def persist_callback_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle callback query when a 'Share to group' button is clicked.
+
+    Deletes the ephemeral response and sends a persistent (public) message to the group.
+    """
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    if not query.data.startswith("persist:"):
+        return
+
+    token = query.data.split(":", 1)[1]
+    payload = _PERSIST_PAYLOADS.pop(token, None)
+
+    if not payload:
+        try:
+            await query.answer(
+                "This message has expired or has already been shared.",
+                show_alert=True,
+            )
+        except BadRequest:
+            pass
+        return
+
+    # Check that the user clicking the button is the one who requested it
+    user = getattr(update, "effective_user", None) or getattr(query, "from_user", None)
+    if user and payload.get("user_id") and user.id != payload["user_id"]:
+        # Put payload back so the original user can still share it
+        _PERSIST_PAYLOADS[token] = payload
+        try:
+            await query.answer(
+                "Only the person who requested this message can share it.",
+                show_alert=True,
+            )
+        except BadRequest:
+            pass
+        return
+
+    bot = getattr(context, "bot", None)
+    if not bot:
+        return
+
+    # 1. Send the persistent message to the group
+    chat_id = payload["chat_id"]
+    text = payload["text"]
+    parse_mode = payload.get("parse_mode")
+    reply_markup = payload.get("reply_markup")
+
+    send_fn = getattr(bot, "send_message", None)
+    if send_fn:
+        if isinstance(send_fn, AsyncMock) or asyncio.iscoroutinefunction(send_fn):
+            await send_fn(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+        elif callable(send_fn):
+            res = send_fn(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+            if asyncio.iscoroutine(res):
+                await res
+
+    # 2. Delete the ephemeral message
+    if query.message and hasattr(query.message, "delete"):
+        try:
+            del_fn = query.message.delete
+            if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
+                await del_fn()
+            elif callable(del_fn):
+                res = del_fn()
+                if asyncio.iscoroutine(res):
+                    await res
+        except BadRequest as e:
+            logger.warning("Failed to delete ephemeral message on persist: %s", e)
+            if hasattr(query, "edit_message_text"):
+                try:
+                    await query.edit_message_text("📢 Shared to group.")
+                except Exception:
+                    pass
+
+    # 3. Answer callback query
+    if hasattr(query, "answer"):
+        try:
+            ans_fn = query.answer
+            if isinstance(ans_fn, AsyncMock) or asyncio.iscoroutinefunction(ans_fn):
+                await ans_fn("Shared to group!")
+            elif callable(ans_fn):
+                res = ans_fn("Shared to group!")
+                if asyncio.iscoroutine(res):
+                    await res
+        except BadRequest:
+            pass
+
+
+async def dismiss_callback_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Handle callback query when a dismiss/OK button is clicked to delete the message."""
     query = update.callback_query
-    if not query:
+    if not query or not query.data:
         return
 
     if query.data != "dismiss":
         return
 
     # Delete the original command message if it exists (requires bot to have admin delete rights in groups)
-    if query.message and query.message.reply_to_message:
-        try:
-            await query.message.reply_to_message.delete()
-        except BadRequest as e:
-            logger.warning(f"Failed to delete original command message: {e}")
+    if query.message and getattr(query.message, "reply_to_message", None):
+        reply_msg = query.message.reply_to_message
+        if hasattr(reply_msg, "delete"):
+            try:
+                del_fn = reply_msg.delete
+                if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
+                    await del_fn()
+                elif callable(del_fn):
+                    res = del_fn()
+                    if asyncio.iscoroutine(res):
+                        await res
+            except BadRequest as e:
+                logger.debug("Failed to delete original command message: %s", e)
 
-    # Delete the bot's error message
-    if query.message:
+    # Delete the ephemeral or error message
+    if query.message and hasattr(query.message, "delete"):
         try:
-            await query.message.delete()
+            del_fn = query.message.delete
+            if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
+                await del_fn()
+            elif callable(del_fn):
+                res = del_fn()
+                if asyncio.iscoroutine(res):
+                    await res
         except BadRequest as e:
-            logger.warning(f"Failed to delete error message: {e}")
+            logger.warning("Failed to delete message on dismiss: %s", e)
+            if hasattr(query, "edit_message_text"):
+                try:
+                    await query.edit_message_text("🗑️ Message dismissed.")
+                except Exception:
+                    pass
 
-    await query.answer()
+    if hasattr(query, "answer"):
+        try:
+            ans_fn = query.answer
+            if isinstance(ans_fn, AsyncMock) or asyncio.iscoroutinefunction(ans_fn):
+                await ans_fn()
+            elif callable(ans_fn):
+                res = ans_fn()
+                if asyncio.iscoroutine(res):
+                    await res
+        except BadRequest:
+            pass

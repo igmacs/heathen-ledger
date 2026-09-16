@@ -66,15 +66,10 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/register` (Generates an interactive button for members to tap and register themselves).
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
-8. **Ephemeral & Persistent Commands**:
-   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you and the bot in the group), preventing spam and clutter in busy group chats.
-   - **Persistent Group Announcements (`_persistent`)**: Commands that benefit from being shared with the entire group support a `_persistent` variant (e.g. `/settle_persistent`, `/balances_persistent`, `/history_persistent`, `/pay_persistent`, `/payback_persistent`, `/register_persistent`, `/members_persistent`). The command invocation remains ephemeral/hidden, but the bot sends its response as a persistent message visible to all group members:
-     - `/settle_persistent`: Posts the debt settlement plan and payment buttons publicly so the group can coordinate payments.
-     - `/balances_persistent`: Publishes the group's current balance sheet to all members.
-     - `/history_persistent`: Publishes the recent transaction log to the group chat.
-     - `/pay_persistent`: Records an expense and posts the public confirmation with interactive participant toggles.
-     - `/payback_persistent`: Records a payback and posts the public confirmation with an undo button.
-     - `/register_persistent`: Posts the `[ 📝 Register me ]` button for other group members to see and tap.
+8. **Ephemeral Responses with Share & Dismiss Actions**:
+   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/voice`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you), keeping busy group chats clean and uncluttered.
+   - **Share to Group (`📢 Share to group`)**: Every ephemeral response includes an inline button to publish the message to the group. Tapping this button deletes the ephemeral preview and broadcasts the message publicly with all original operational buttons (such as settlement payback buttons, expense participant toggles, or registration buttons).
+   - **Dismiss (`✕ Dismiss`)**: Every ephemeral response also includes an inline button allowing you to immediately delete the ephemeral message from your view when you are done reviewing it.
 
 ## Development
 
@@ -421,3 +416,10 @@ when I had to correct or guide it
   - Registered all group commands with `api_kwargs={"is_ephemeral": True}` in `bot.py` under `BotCommandScopeAllGroupChats`.
   - Implemented persistent command variants (`_persistent`) across key reporting and group-coordinating commands: `/settle_persistent` (public debt settlements with buttons), `/balances_persistent` (public balance sheet), `/history_persistent` (public audit log), `/pay_persistent` and `/payback_persistent` (public receipts with toggles/undo), and `/register_persistent` (public self-registration button).
   - Updated parsers, command handlers, and documentation, and added comprehensive unit tests for ephemeral/persistent flows (all 116 tests passing).
+
+- I asked to simplify the command selection list because having duplicate `_persistent` command variants added too much noise to Telegram's command autocomplete menu. Instead, I proposed having a single command per operation, always returning an ephemeral response, with an inline button to persist it (deleting the ephemeral response and sending a new non-ephemeral one to the group) and a dismiss button to delete the ephemeral message for the user. The agent autonomously:
+  - Removed all `_persistent` commands from `bot.py`'s autocomplete list, keeping only clean single commands (`/pay`, `/balances`, `/settle`, `/payback`, `/history`, `/register`, `/members`, `/voice`, `/help`), all marked as ephemeral in group chats.
+  - Implemented payload caching with short tokens in `src/heathen_ledger/handlers/common.py` and updated `send_response` to append `[ 📢 Share to group ]` and `[ ✕ Dismiss ]` action buttons to ephemeral responses in group chats.
+  - Implemented `persist_callback_handler` (`^persist:`) to verify user authorization, broadcast the persistent message retaining operational keyboards (settlements, toggles, undo, register) without the share/dismiss row, delete the ephemeral message, and acknowledge the query.
+  - Enhanced `dismiss_callback_handler` (`^dismiss$`) to delete ephemeral messages with graceful fallback.
+  - Updated `/help` text, documentation, and added comprehensive unit tests covering button attachments, persist/dismiss workflows, token expiration, and authorization checks (all 122 tests passing).

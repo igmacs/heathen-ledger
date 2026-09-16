@@ -5,7 +5,6 @@ from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
 from telegram.constants import ChatType
 from telegram.error import BadRequest
-from telegram.ext import CommandHandler
 
 from heathen_ledger.handlers.common import (
     _get_ephemeral_message_id,
@@ -98,6 +97,40 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
                 "reply_parameters": {"ephemeral_message_id": 4321},
             },
         )
+        reply_markup = kwargs.get("reply_markup")
+        self.assertIsNotNone(reply_markup)
+        self.assertEqual(len(reply_markup.inline_keyboard), 1)
+        row = reply_markup.inline_keyboard[0]
+        self.assertEqual(len(row), 2)
+        self.assertTrue(row[0].text.startswith("📢 Share to group"))
+        self.assertTrue(row[0].callback_data.startswith("persist:"))
+        self.assertEqual(row[1].text, "✕ Dismiss")
+        self.assertEqual(row[1].callback_data, "dismiss")
+
+    async def test_send_response_error_only_has_dismiss(self):
+        update = MagicMock()
+        context = MagicMock()
+
+        update.effective_chat.type = ChatType.GROUP
+        update.effective_chat.id = -100123
+        update.effective_user.id = 555
+        update.effective_message.ephemeral_message_id = 4321
+        update.effective_message.api_kwargs = None
+        update.effective_message.text = "/pay invalid"
+
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
+
+        await send_response(update, context, "⚠️ Invalid amount")
+
+        send_mock.assert_awaited_once()
+        _, kwargs = send_mock.call_args
+        reply_markup = kwargs.get("reply_markup")
+        self.assertIsNotNone(reply_markup)
+        row = reply_markup.inline_keyboard[0]
+        self.assertEqual(len(row), 1)
+        self.assertEqual(row[0].text, "✕ Dismiss")
+        self.assertEqual(row[0].callback_data, "dismiss")
 
     async def test_send_response_persistent_in_group(self):
         update = MagicMock()
@@ -160,6 +193,140 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         _, kwargs = send_mock.call_args
         self.assertEqual(kwargs.get("chat_id"), 888)
         self.assertIsNone(kwargs.get("api_kwargs"))
+
+
+class TestPersistCallbackHandler(unittest.IsolatedAsyncioTestCase):
+    async def test_persist_callback_handler_success(self):
+        from heathen_ledger.handlers.common import (
+            _PERSIST_PAYLOADS,
+            persist_callback_handler,
+        )
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+        orig_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Pay $10", callback_data="settle:1:2:10")]]
+        )
+        token = "test_token_123"
+        _PERSIST_PAYLOADS[token] = {
+            "chat_id": -100999,
+            "user_id": 42,
+            "text": "Original settlement text",
+            "parse_mode": "Markdown",
+            "reply_markup": orig_keyboard,
+            "created_at": 100000.0,
+        }
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = f"persist:{token}"
+        update.callback_query.from_user.id = 42
+        update.effective_user.id = 42
+        update.callback_query.message.delete = AsyncMock()
+        update.callback_query.answer = AsyncMock()
+        context.bot.send_message = AsyncMock()
+
+        await persist_callback_handler(update, context)
+
+        # Verified public message sent with original markup (no Share/Dismiss buttons)
+        context.bot.send_message.assert_awaited_once_with(
+            chat_id=-100999,
+            text="Original settlement text",
+            parse_mode="Markdown",
+            reply_markup=orig_keyboard,
+        )
+        # Ephemeral deleted
+        update.callback_query.message.delete.assert_awaited_once()
+        # Answered
+        update.callback_query.answer.assert_awaited_once_with("Shared to group!")
+        # Token removed from cache
+        self.assertNotIn(token, _PERSIST_PAYLOADS)
+
+    async def test_persist_callback_handler_expired_or_missing(self):
+        from heathen_ledger.handlers.common import persist_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = "persist:nonexistent_token"
+        update.callback_query.answer = AsyncMock()
+        context.bot.send_message = AsyncMock()
+
+        await persist_callback_handler(update, context)
+
+        context.bot.send_message.assert_not_called()
+        update.callback_query.answer.assert_awaited_once_with(
+            "This message has expired or has already been shared.", show_alert=True
+        )
+
+    async def test_persist_callback_handler_other_user_prevented(self):
+        from heathen_ledger.handlers.common import (
+            _PERSIST_PAYLOADS,
+            persist_callback_handler,
+        )
+
+        token = "token_for_user_42"
+        _PERSIST_PAYLOADS[token] = {
+            "chat_id": -100999,
+            "user_id": 42,
+            "text": "Private report",
+            "parse_mode": "Markdown",
+            "reply_markup": None,
+            "created_at": 100000.0,
+        }
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = f"persist:{token}"
+        update.callback_query.from_user.id = 999  # Different user!
+        update.effective_user.id = 999
+        update.callback_query.answer = AsyncMock()
+        context.bot.send_message = AsyncMock()
+
+        await persist_callback_handler(update, context)
+
+        context.bot.send_message.assert_not_called()
+        update.callback_query.answer.assert_awaited_once_with(
+            "Only the person who requested this message can share it.", show_alert=True
+        )
+        # Payload remains available for user 42
+        self.assertIn(token, _PERSIST_PAYLOADS)
+
+
+class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
+    async def test_dismiss_deletes_message(self):
+        from heathen_ledger.handlers.common import dismiss_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = "dismiss"
+        update.callback_query.message.delete = AsyncMock()
+        update.callback_query.message.reply_to_message = None
+        update.callback_query.answer = AsyncMock()
+
+        await dismiss_callback_handler(update, context)
+
+        update.callback_query.message.delete.assert_awaited_once()
+        update.callback_query.answer.assert_awaited_once()
+
+    async def test_dismiss_fallback_to_edit_on_bad_request(self):
+        from heathen_ledger.handlers.common import dismiss_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = "dismiss"
+        update.callback_query.message.delete = AsyncMock(
+            side_effect=BadRequest("Cannot delete message")
+        )
+        update.callback_query.message.reply_to_message = None
+        update.callback_query.edit_message_text = AsyncMock()
+        update.callback_query.answer = AsyncMock()
+
+        await dismiss_callback_handler(update, context)
+
+        update.callback_query.message.delete.assert_awaited_once()
+        update.callback_query.edit_message_text.assert_awaited_once_with(
+            "🗑️ Message dismissed."
+        )
+        update.callback_query.answer.assert_awaited_once()
 
 
 class TestCommandsEphemeralAndPersistent(BaseDatabaseTestCase):
@@ -358,7 +525,7 @@ class TestCommandsEphemeralAndPersistent(BaseDatabaseTestCase):
 
 
 class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
-    async def test_post_init_sets_all_group_commands_as_ephemeral(self):
+    async def test_post_init_sets_only_single_commands(self):
         from heathen_ledger.bot import post_init
         from telegram import BotCommandScopeAllGroupChats
 
@@ -369,66 +536,62 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
 
         # At least two calls: default scope and group scope
         self.assertGreaterEqual(app_mock.bot.set_my_commands.await_count, 2)
+
+        # 1. Default commands should only contain single commands (no _persistent duplicates)
+        default_commands = app_mock.bot.set_my_commands.call_args_list[0].args[0]
+        cmd_names = [c.command for c in default_commands]
+        expected_commands = [
+            "pay",
+            "balances",
+            "settle",
+            "payback",
+            "history",
+            "register",
+            "members",
+            "voice",
+            "help",
+        ]
+        self.assertEqual(cmd_names, expected_commands)
+        for cmd in cmd_names:
+            self.assertFalse(
+                cmd.endswith("_persistent"),
+                f"Command '{cmd}' should not have _persistent variant in autocomplete list",
+            )
+
+        # 2. Group scope commands should be the exact same single commands with is_ephemeral=True
         group_call = next(
             call
             for call in app_mock.bot.set_my_commands.call_args_list
             if isinstance(call.kwargs.get("scope"), BotCommandScopeAllGroupChats)
         )
         group_commands = group_call.args[0]
+        group_cmd_names = [c.command for c in group_commands]
+        self.assertEqual(group_cmd_names, expected_commands)
         for cmd in group_commands:
             self.assertTrue(
                 cmd.api_kwargs.get("is_ephemeral"),
                 f"Command '{cmd.command}' should be ephemeral in group scope",
             )
 
-        cmd_names = [c.command for c in group_commands]
-        self.assertIn("settle", cmd_names)
-        self.assertIn("settle_persistent", cmd_names)
-        self.assertIn("balances", cmd_names)
-        self.assertIn("balances_persistent", cmd_names)
-        self.assertIn("history", cmd_names)
-        self.assertIn("history_persistent", cmd_names)
-        self.assertIn("pay", cmd_names)
-        self.assertIn("pay_persistent", cmd_names)
-
-        # Ensure removed PoC commands are not present
-        self.assertNotIn("ephemeral", cmd_names)
-        self.assertNotIn("whisper", cmd_names)
-        self.assertNotIn("test_ephemeral", cmd_names)
-
-    async def test_register_handlers_includes_persistent_variants(self):
+    async def test_register_handlers_includes_persist_and_dismiss_callbacks(self):
         from heathen_ledger.handlers import register_handlers
+        from telegram.ext import CallbackQueryHandler
 
         app_mock = MagicMock()
         register_handlers(app_mock)
 
-        registered_commands = []
+        patterns = []
         for call in app_mock.add_handler.call_args_list:
             handler = call[0][0]
-            if isinstance(handler, CommandHandler):
-                registered_commands.extend(list(handler.commands))
+            if isinstance(handler, CallbackQueryHandler):
+                patterns.append(
+                    getattr(handler.pattern, "pattern", str(handler.pattern))
+                )
 
-        self.assertIn("settle", registered_commands)
-        self.assertIn("settle_persistent", registered_commands)
-        self.assertIn("balances", registered_commands)
-        self.assertIn("balances_persistent", registered_commands)
-        self.assertIn("history", registered_commands)
-        self.assertIn("history_persistent", registered_commands)
-        self.assertIn("pay", registered_commands)
-        self.assertIn("pay_persistent", registered_commands)
-        self.assertIn("payback", registered_commands)
-        self.assertIn("payback_persistent", registered_commands)
-        self.assertIn("register", registered_commands)
-        self.assertIn("register_persistent", registered_commands)
-        self.assertIn("members", registered_commands)
-        self.assertIn("members_persistent", registered_commands)
+        self.assertIn("^persist:", patterns)
+        self.assertIn("^dismiss$", patterns)
 
-        # Removed PoC commands
-        self.assertNotIn("ephemeral", registered_commands)
-        self.assertNotIn("whisper", registered_commands)
-        self.assertNotIn("test_ephemeral", registered_commands)
-
-    async def test_help_command_explains_ephemeral_and_persistent(self):
+    async def test_help_command_explains_ephemeral_and_buttons(self):
         update = MagicMock()
         context = MagicMock()
         send_mock = AsyncMock()
@@ -440,8 +603,10 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
         help_text = (
             send_mock.call_args.kwargs.get("text") or send_mock.call_args.args[0]
         )
-        self.assertIn("Ephemeral & Persistent Commands", help_text)
-        self.assertIn("/settle_persistent", help_text)
+        self.assertIn("Ephemeral Responses & Sharing", help_text)
+        self.assertIn("Share to group", help_text)
+        self.assertIn("Dismiss", help_text)
+        self.assertNotIn("/settle_persistent", help_text)
 
 
 if __name__ == "__main__":

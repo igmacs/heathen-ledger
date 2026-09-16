@@ -15,7 +15,7 @@ from .base import (
     members_command,
     register_callback_handler,
 )
-from .common import dismiss_callback_handler
+from .common import dismiss_callback_handler, persist_callback_handler
 from .expense import (
     pay_command,
     payback_command,
@@ -90,6 +90,9 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(voice_callback_handler, pattern="^voice:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(persist_callback_handler, pattern="^persist:")
     )
     application.add_handler(
         CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")
