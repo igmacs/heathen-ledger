@@ -29,12 +29,27 @@ async def post_init(application: Application) -> None:
         BotCommand("members", "List group members"),
         BotCommand(
             "ephemeral",
-            "Test ephemeral message (PoC)",
+            "Test ephemeral command (two-way privacy)",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "whisper",
+            "Private whisper command (two-way ephemeral)",
             api_kwargs={"is_ephemeral": True},
         ),
         BotCommand("help", "Display help message"),
     ]
     await application.bot.set_my_commands(commands)
+    try:
+        from telegram import BotCommandScopeAllGroupChats
+
+        await application.bot.set_my_commands(
+            commands, scope=BotCommandScopeAllGroupChats()
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "Failed to set commands for all group chats: %s", e
+        )
 
 
 if __name__ == "__main__":

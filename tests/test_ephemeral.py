@@ -19,17 +19,20 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_user.id = 999
         update.effective_user.first_name = "Alice"
         update.effective_user.username = "alice"
+        update.effective_message.ephemeral_message_id = None
+        update.effective_message.api_kwargs = None
 
-        reply_mock = AsyncMock()
-        update.effective_message.reply_text = reply_mock
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
 
         await ephemeral_command(update, context)
 
-        reply_mock.assert_awaited_once()
-        args, kwargs = reply_mock.call_args
-        self.assertIn("Ephemeral Message Proof of Concept", args[0])
-        self.assertIn("Alice", args[0])
-        self.assertIn("999", args[0])
+        send_mock.assert_awaited_once()
+        _, kwargs = send_mock.call_args
+        self.assertEqual(kwargs.get("chat_id"), -100123456)
+        self.assertIn("Ephemeral Command Test", kwargs.get("text"))
+        self.assertIn("Alice", kwargs.get("text"))
+        self.assertIn("999", kwargs.get("text"))
         self.assertEqual(kwargs.get("parse_mode"), "Markdown")
         self.assertEqual(
             kwargs.get("api_kwargs"),
@@ -46,15 +49,17 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_user.id = 888
         update.effective_user.first_name = "Bob"
         update.effective_user.username = "bob"
+        update.effective_message.ephemeral_message_id = None
+        update.effective_message.api_kwargs = None
 
-        reply_mock = AsyncMock()
-        update.effective_message.reply_text = reply_mock
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
 
         await ephemeral_command(update, context)
 
-        reply_mock.assert_awaited_once()
-        args, kwargs = reply_mock.call_args
-        self.assertIn("Bob", args[0])
+        send_mock.assert_awaited_once()
+        _, kwargs = send_mock.call_args
+        self.assertIn("Bob", kwargs.get("text"))
         self.assertEqual(
             kwargs.get("api_kwargs"),
             {"ephemeral_message_parameters": {"receiver_user_id": 888}},
@@ -73,13 +78,14 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_message.ephemeral_message_id = 1234
         update.effective_message.api_kwargs = None
 
-        reply_mock = AsyncMock()
-        update.effective_message.reply_text = reply_mock
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
 
         await ephemeral_command(update, context)
 
-        reply_mock.assert_awaited_once()
-        _, kwargs = reply_mock.call_args
+        send_mock.assert_awaited_once()
+        _, kwargs = send_mock.call_args
+        self.assertIn("Two-way privacy active", kwargs.get("text"))
         self.assertEqual(
             kwargs.get("api_kwargs"),
             {
@@ -98,16 +104,19 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_user.id = 777
         update.effective_user.first_name = "Charlie"
         update.effective_user.username = "charlie"
+        update.effective_message.ephemeral_message_id = None
+        update.effective_message.api_kwargs = None
 
-        reply_mock = AsyncMock(
-            side_effect=[BadRequest("Ephemeral not supported"), AsyncMock()]
+        context.bot.send_message = AsyncMock(
+            side_effect=BadRequest("Ephemeral not supported")
         )
+        reply_mock = AsyncMock()
         update.effective_message.reply_text = reply_mock
 
         await ephemeral_command(update, context)
 
-        self.assertEqual(reply_mock.await_count, 2)
-        fallback_call = reply_mock.await_args_list[1]
+        reply_mock.assert_awaited_once()
+        fallback_call = reply_mock.call_args
         self.assertIn("Ephemeral Message Error", fallback_call[0][0])
         self.assertIn("Ephemeral not supported", fallback_call[0][0])
 
@@ -122,15 +131,16 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_user.first_name = "Dave"
         update.effective_user.username = "dave"
 
-        reply_mock = AsyncMock()
-        update.effective_message.reply_text = reply_mock
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
 
         await ephemeral_command(update, context)
 
-        reply_mock.assert_awaited_once()
-        args, kwargs = reply_mock.call_args
-        self.assertIn("In a private 1-on-1 chat", args[0])
-        self.assertIn("Dave", args[0])
+        send_mock.assert_awaited_once()
+        _, kwargs = send_mock.call_args
+        self.assertEqual(kwargs.get("chat_id"), 666)
+        self.assertIn("In a private 1-on-1 chat", kwargs.get("text"))
+        self.assertIn("Dave", kwargs.get("text"))
         self.assertEqual(
             kwargs.get("api_kwargs"),
             {"ephemeral_message_parameters": {"receiver_user_id": 666}},
@@ -147,15 +157,16 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
         update.effective_user.first_name = "Eve"
         update.effective_user.username = "eve"
 
-        reply_mock = AsyncMock(
-            side_effect=[BadRequest("Not allowed in private chat"), AsyncMock()]
+        context.bot.send_message = AsyncMock(
+            side_effect=BadRequest("Not allowed in private chat")
         )
+        reply_mock = AsyncMock()
         update.effective_message.reply_text = reply_mock
 
         await ephemeral_command(update, context)
 
-        self.assertEqual(reply_mock.await_count, 2)
-        fallback_call = reply_mock.await_args_list[1]
+        reply_mock.assert_awaited_once()
+        fallback_call = reply_mock.call_args
         self.assertIn("In a private 1-on-1 chat", fallback_call[0][0])
         self.assertIsNone(fallback_call[1].get("api_kwargs"))
 
@@ -192,10 +203,11 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
                 registered_commands.extend(list(handler.commands))
 
         self.assertIn("ephemeral", registered_commands)
+        self.assertIn("whisper", registered_commands)
         self.assertIn("test_ephemeral", registered_commands)
 
     async def test_post_init_sets_ephemeral_bot_command(self):
-        """Test that post_init registers the ephemeral command with is_ephemeral=True."""
+        """Test that post_init registers ephemeral and whisper commands with is_ephemeral=True."""
         from heathen_ledger.bot import post_init
 
         app_mock = MagicMock()
@@ -203,11 +215,14 @@ class TestEphemeralCommandHandler(unittest.IsolatedAsyncioTestCase):
 
         await post_init(app_mock)
 
-        app_mock.bot.set_my_commands.assert_awaited_once()
-        commands = app_mock.bot.set_my_commands.call_args[0][0]
+        self.assertGreaterEqual(app_mock.bot.set_my_commands.await_count, 1)
+        commands = app_mock.bot.set_my_commands.call_args_list[0][0][0]
         ephemeral_cmd = next((c for c in commands if c.command == "ephemeral"), None)
+        whisper_cmd = next((c for c in commands if c.command == "whisper"), None)
         self.assertIsNotNone(ephemeral_cmd)
         self.assertTrue(ephemeral_cmd.api_kwargs.get("is_ephemeral"))
+        self.assertIsNotNone(whisper_cmd)
+        self.assertTrue(whisper_cmd.api_kwargs.get("is_ephemeral"))
 
     async def test_help_command_includes_ephemeral(self):
         """Test that /help lists the ephemeral command."""
