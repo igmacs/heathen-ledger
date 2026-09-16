@@ -18,6 +18,11 @@ from heathen_ledger.parser import (
     ParsedPaybackCommand,
     SplitSpec,
     ParseErrorResult,
+    AmountParser,
+    UserTokenParser,
+    DateClauseParser,
+    SplitClauseParser,
+    PayerClauseParser,
 )
 
 
@@ -292,6 +297,60 @@ class TestParser(unittest.TestCase):
         self.assertEqual(err_res.error, "No valid amount found in the message.")
         self.assertEqual(err_res["error"], "No valid amount found in the message.")
         self.assertIn("error", err_res)
+
+    def test_amount_parser(self):
+        self.assertEqual(AmountParser.parse_cents("10"), 1000)
+        self.assertEqual(AmountParser.parse_cents("12.5"), 1250)
+        self.assertEqual(AmountParser.parse_cents("12.50"), 1250)
+        self.assertIsNone(AmountParser.parse_cents("abc"))
+
+    def test_user_token_parser(self):
+        self.assertEqual(UserTokenParser.parse_token("@alice"), ("alice", None))
+        self.assertEqual(UserTokenParser.parse_token("@Bob:30"), ("bob", 3000))
+        self.assertEqual(UserTokenParser.parse_token("me:25.50"), ("me", 2550))
+        self.assertIsNone(UserTokenParser.parse_token("not_a_valid_token!"))
+
+    def test_date_clause_parser(self):
+        dt, err = DateClauseParser.parse_clause("today")
+        self.assertIsNone(err)
+        self.assertEqual(dt, datetime.date.today())
+
+        dt, err = DateClauseParser.parse_clause("yesterday")
+        self.assertIsNone(err)
+        self.assertEqual(dt, datetime.date.today() - datetime.timedelta(days=1))
+
+        dt, err = DateClauseParser.parse_clause("2026-05-10")
+        self.assertIsNone(err)
+        self.assertEqual(dt, datetime.date(2026, 5, 10))
+
+        dt, err = DateClauseParser.parse_clause("not-a-date")
+        self.assertIsNone(dt)
+        self.assertIsNotNone(err)
+
+    def test_split_clause_parser(self):
+        spec, err = SplitClauseParser.parse_clause("all")
+        self.assertIsNone(err)
+        self.assertEqual(spec.mode, "all")
+
+        spec, err = SplitClauseParser.parse_clause("except @alice @bob")
+        self.assertIsNone(err)
+        self.assertEqual(spec.mode, "except")
+        self.assertEqual(spec.excluded, ["alice", "bob"])
+
+        spec, err = SplitClauseParser.parse_clause("@bob:20 @charlie:30")
+        self.assertIsNone(err)
+        self.assertEqual(spec.mode, "custom")
+        self.assertEqual(spec.shares, {"bob": 2000, "charlie": 3000})
+
+    def test_payer_clause_parser(self):
+        raw, err = PayerClauseParser.parse_raw_payers("@alice:30 @bob:20")
+        self.assertIsNone(err)
+        self.assertEqual(raw, [("alice", 3000), ("bob", 2000)])
+
+        payers, single, err = PayerClauseParser.finalize_payers(raw, 5000)
+        self.assertIsNone(err)
+        self.assertEqual(payers, {"alice": 3000, "bob": 2000})
+        self.assertIsNone(single)
 
 
 if __name__ == "__main__":
