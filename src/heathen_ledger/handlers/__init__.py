@@ -95,5 +95,5 @@ def register_handlers(application: Application) -> None:
         CallbackQueryHandler(persist_callback_handler, pattern="^persist:")
     )
     application.add_handler(
-        CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss$")
+        CallbackQueryHandler(dismiss_callback_handler, pattern="^dismiss(:.*)?$")
     )

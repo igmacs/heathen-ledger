@@ -105,7 +105,10 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(row[0].text.startswith("📢 Share to group"))
         self.assertTrue(row[0].callback_data.startswith("persist:"))
         self.assertEqual(row[1].text, "✕ Dismiss")
-        self.assertEqual(row[1].callback_data, "dismiss")
+        self.assertTrue(
+            row[1].callback_data == "dismiss"
+            or row[1].callback_data.startswith("dismiss:")
+        )
 
     async def test_send_response_error_only_has_dismiss(self):
         update = MagicMock()
@@ -130,7 +133,10 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         row = reply_markup.inline_keyboard[0]
         self.assertEqual(len(row), 1)
         self.assertEqual(row[0].text, "✕ Dismiss")
-        self.assertEqual(row[0].callback_data, "dismiss")
+        self.assertTrue(
+            row[0].callback_data == "dismiss"
+            or row[0].callback_data.startswith("dismiss:")
+        )
 
     async def test_send_response_persistent_in_group(self):
         update = MagicMock()
@@ -290,6 +296,45 @@ class TestPersistCallbackHandler(unittest.IsolatedAsyncioTestCase):
         # Payload remains available for user 42
         self.assertIn(token, _PERSIST_PAYLOADS)
 
+    async def test_persist_deletes_ephemeral_via_bot_post(self):
+        from heathen_ledger.handlers.common import (
+            _PERSIST_PAYLOADS,
+            persist_callback_handler,
+        )
+
+        token = "token_post_test"
+        _PERSIST_PAYLOADS[token] = {
+            "chat_id": -100999,
+            "user_id": 42,
+            "text": "Shared content",
+            "parse_mode": "Markdown",
+            "reply_markup": None,
+            "ephemeral_message_id": 9999,
+            "created_at": 100000.0,
+        }
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = f"persist:{token}"
+        update.callback_query.from_user.id = 42
+        update.effective_user.id = 42
+        update.callback_query.message.delete = None  # not a mock method
+        update.callback_query.answer = AsyncMock()
+        context.bot.send_message = AsyncMock()
+        context.bot._post = AsyncMock(return_value=True)
+
+        await persist_callback_handler(update, context)
+
+        context.bot._post.assert_awaited_once_with(
+            "deleteEphemeralMessage",
+            data={
+                "chat_id": -100999,
+                "receiver_user_id": 42,
+                "ephemeral_message_id": 9999,
+            },
+        )
+        update.callback_query.answer.assert_awaited_once_with("Shared to group!")
+
 
 class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
     async def test_dismiss_deletes_message(self):
@@ -307,24 +352,96 @@ class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
         update.callback_query.message.delete.assert_awaited_once()
         update.callback_query.answer.assert_awaited_once()
 
-    async def test_dismiss_fallback_to_edit_on_bad_request(self):
+    async def test_dismiss_deletes_ephemeral_with_token(self):
+        from heathen_ledger.handlers.common import (
+            _PERSIST_PAYLOADS,
+            dismiss_callback_handler,
+        )
+
+        token = "dismiss_tok_1"
+        _PERSIST_PAYLOADS[token] = {
+            "chat_id": -100888,
+            "user_id": 77,
+            "ephemeral_message_id": 8888,
+            "created_at": 100000.0,
+        }
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = f"dismiss:{token}"
+        update.callback_query.from_user.id = 77
+        update.callback_query.message.delete = None
+        update.callback_query.message.reply_to_message = None
+        update.callback_query.answer = AsyncMock()
+        context.bot._post = AsyncMock(return_value=True)
+
+        await dismiss_callback_handler(update, context)
+
+        context.bot._post.assert_awaited_once_with(
+            "deleteEphemeralMessage",
+            data={
+                "chat_id": -100888,
+                "receiver_user_id": 77,
+                "ephemeral_message_id": 8888,
+            },
+        )
+        update.callback_query.answer.assert_awaited_once()
+        self.assertNotIn(token, _PERSIST_PAYLOADS)
+
+    async def test_dismiss_deletes_ephemeral_from_query_message(self):
+        from types import MappingProxyType
         from heathen_ledger.handlers.common import dismiss_callback_handler
 
         update = MagicMock()
         context = MagicMock()
         update.callback_query.data = "dismiss"
-        update.callback_query.message.delete = AsyncMock(
-            side_effect=BadRequest("Cannot delete message")
+        update.callback_query.from_user.id = 55
+        update.callback_query.message.chat.id = -100555
+        update.callback_query.message.api_kwargs = MappingProxyType(
+            {"ephemeral_message_id": 5555}
         )
+        update.callback_query.message.delete = None
         update.callback_query.message.reply_to_message = None
-        update.callback_query.edit_message_text = AsyncMock()
         update.callback_query.answer = AsyncMock()
+        context.bot._post = AsyncMock(return_value=True)
 
         await dismiss_callback_handler(update, context)
 
-        update.callback_query.message.delete.assert_awaited_once()
-        update.callback_query.edit_message_text.assert_awaited_once_with(
-            "🗑️ Message dismissed."
+        context.bot._post.assert_awaited_once_with(
+            "deleteEphemeralMessage",
+            data={
+                "chat_id": -100555,
+                "receiver_user_id": 55,
+                "ephemeral_message_id": 5555,
+            },
+        )
+
+    async def test_dismiss_fallback_to_edit_on_bad_request(self):
+        from types import MappingProxyType
+        from heathen_ledger.handlers.common import dismiss_callback_handler
+
+        update = MagicMock()
+        context = MagicMock()
+        update.callback_query.data = "dismiss"
+        update.callback_query.from_user.id = 55
+        update.callback_query.message.chat.id = -100555
+        update.callback_query.message.api_kwargs = MappingProxyType(
+            {"ephemeral_message_id": 5555}
+        )
+        update.callback_query.message.reply_to_message = None
+        update.callback_query.answer = AsyncMock()
+        # First call (deleteEphemeralMessage) raises BadRequest, second call (editEphemeralMessageText) succeeds
+        context.bot._post = AsyncMock(
+            side_effect=[BadRequest("Message to delete not found"), True]
+        )
+
+        await dismiss_callback_handler(update, context)
+
+        self.assertEqual(context.bot._post.await_count, 2)
+        edit_call = context.bot._post.await_args_list[1]
+        self.assertEqual(edit_call.args[0], "editEphemeralMessageText")
+        self.assertEqual(
+            edit_call.kwargs.get("data", {}).get("text"), "🗑️ Message dismissed."
         )
         update.callback_query.answer.assert_awaited_once()
 
@@ -589,7 +706,7 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
                 )
 
         self.assertIn("^persist:", patterns)
-        self.assertIn("^dismiss$", patterns)
+        self.assertIn("^dismiss(:.*)?$", patterns)
 
     async def test_help_command_explains_ephemeral_and_buttons(self):
         update = MagicMock()

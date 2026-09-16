@@ -423,3 +423,10 @@ when I had to correct or guide it
   - Implemented `persist_callback_handler` (`^persist:`) to verify user authorization, broadcast the persistent message retaining operational keyboards (settlements, toggles, undo, register) without the share/dismiss row, delete the ephemeral message, and acknowledge the query.
   - Enhanced `dismiss_callback_handler` (`^dismiss$`) to delete ephemeral messages with graceful fallback.
   - Updated `/help` text, documentation, and added comprehensive unit tests covering button attachments, persist/dismiss workflows, token expiration, and authorization checks (all 122 tests passing).
+
+- I noticed that while the "📢 Share to group" button worked, neither the "Share to group" nor the "✕ Dismiss" buttons actually deleted the original ephemeral message. The agent investigated and discovered that Telegram sets `message_id = 0` on all ephemeral messages, causing standard `deleteMessage` calls to fail. The agent autonomously:
+  - Researched the Telegram Bot API 10.2 ephemeral message lifecycle methods (`deleteEphemeralMessage` and `editEphemeralMessageText`).
+  - Implemented `delete_ephemeral_message` and `edit_ephemeral_message_text` in `src/heathen_ledger/handlers/common.py` using `bot._post(...)`.
+  - Added unified `delete_message_or_ephemeral` and updated `send_response` to track ephemeral message IDs on action tokens (`dismiss:<token>`).
+  - Updated `persist_callback_handler` and `dismiss_callback_handler` to delete ephemeral messages via `deleteEphemeralMessage` with graceful fallback to `editEphemeralMessageText`.
+  - Documented the `message_id=0` deletion requirement in `AGENTS.md` and added unit tests covering ephemeral deletion and fallback behavior (all 125 tests passing).
