@@ -439,3 +439,8 @@ when I had to correct or guide it
   - Extracted Telegram Bot API ephemeral messaging and payload caching into `EphemeralPayloadStore`, `TelegramEphemeralClient`, and `EphemeralActionKeyboardDecorator` in `heathen_ledger.telegram`.
   - Extracted member registration logic into `MemberRegistrationService` in `heathen_ledger.services`, streamlining `/register` in `handlers/base.py`.
   - Added unit tests for each new component and verified all 136 tests pass and pre-commit hooks succeed.
+
+- I noticed that when registering the command handlers, references to the `_persistent` command variants were still present even though they had previously been removed from autocomplete in favor of the ephemeral share-to-group button workflow. The agent autonomously:
+  - Cleaned up `src/heathen_ledger/handlers/__init__.py` to register only standard command names (`pay`, `balances`, `settle`, `payback`, `history`, `register`, `members`) without duplicate `_persistent` variants.
+  - Added unit test coverage in `tests/test_ephemeral.py` ensuring no `_persistent` command handlers are registered.
+  - Verified all 137 unit tests pass and pre-commit checks succeed.
