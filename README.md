@@ -442,5 +442,5 @@ when I had to correct or guide it
 
 - I noticed that when registering the command handlers, references to the `_persistent` command variants were still present even though they had previously been removed from autocomplete in favor of the ephemeral share-to-group button workflow. The agent autonomously:
   - Cleaned up `src/heathen_ledger/handlers/__init__.py` to register only standard command names (`pay`, `balances`, `settle`, `payback`, `history`, `register`, `members`) without duplicate `_persistent` variants.
-  - Added unit test coverage in `tests/test_ephemeral.py` ensuring no `_persistent` command handlers are registered.
-  - Verified all 137 unit tests pass and pre-commit checks succeed.
+  - Verified all 136 unit tests pass and pre-commit checks succeed.
+- I questioned whether an additional unit test asserting the absence of `_persistent` command registrations was truly necessary. The agent agreed that negative assertions against deprecated legacy aliases added test bloat without behavioral value, and removed the test to keep the test suite clean.
