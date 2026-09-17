@@ -1,35 +1,28 @@
 """Handlers for balance inquiries, debt settlements, and interactive payback confirmations."""
 
 import logging
-from typing import List, Dict, Any, Optional
-from telegram import Update, InlineKeyboardMarkup
+from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
 
 from ..database import with_db_session
 from ..models import User
-from .. import crud
+from ..repositories import GroupRepository, UserRepository
 from ..formatters import (
     generate_balances_summary,
     generate_settlements_summary,
     format_cents,
 )
-from ..services import settlement_service
+from ..services import SettlementService
 from ..services.exceptions import PermissionDeniedError
 from ..keyboards import SettlementKeyboardBuilder
 from .common import send_response
 
 logger = logging.getLogger(__name__)
 
-
-def build_settle_keyboard(
-    transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
-) -> Optional[InlineKeyboardMarkup]:
-    """Build inline confirmation buttons for suggested payback transactions."""
-    return SettlementKeyboardBuilder.build_settle_keyboard(
-        transactions=transactions, users_by_id=users_by_id
-    )
+# Backward-compatible alias
+build_settle_keyboard = SettlementKeyboardBuilder.build_settle_keyboard
 
 
 @with_db_session
@@ -40,7 +33,7 @@ async def balances_command(
     if not update.effective_chat:
         return
 
-    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
+    group = GroupRepository(session).get_by_telegram_id(update.effective_chat.id)
     if not group or not group.members:
         await send_response(
             update,
@@ -49,7 +42,7 @@ async def balances_command(
         )
         return
 
-    balances, _, users_by_id = settlement_service.get_group_balances_and_settlements(
+    balances, _, users_by_id = SettlementService.get_group_balances_and_settlements(
         session, group.id
     )
     reply_text = generate_balances_summary(balances, users_by_id)
@@ -64,7 +57,7 @@ async def settle_command(
     if not update.effective_chat:
         return
 
-    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
+    group = GroupRepository(session).get_by_telegram_id(update.effective_chat.id)
     if not group or not group.members:
         await send_response(
             update,
@@ -73,11 +66,13 @@ async def settle_command(
         )
         return
 
-    _, transactions, users_by_id = (
-        settlement_service.get_group_balances_and_settlements(session, group.id)
+    _, transactions, users_by_id = SettlementService.get_group_balances_and_settlements(
+        session, group.id
     )
     reply_text = generate_settlements_summary(transactions, users_by_id)
-    reply_markup = build_settle_keyboard(transactions, users_by_id)
+    reply_markup = SettlementKeyboardBuilder.build_settle_keyboard(
+        transactions, users_by_id
+    )
 
     await send_response(
         update,
@@ -113,13 +108,13 @@ async def settle_callback_handler(
     if not query.message or not query.message.chat:
         return
 
-    group = crud.get_group_by_telegram_id(session, query.message.chat.id)
+    group = GroupRepository(session).get_by_telegram_id(query.message.chat.id)
     if not group:
         await query.answer(text="⚠️ Group not found in database.", show_alert=True)
         return
 
     # Security check: verify clicking user's role
-    clicking_user = crud.get_user_by_telegram_id(session, query.from_user.id)
+    clicking_user = UserRepository(session).get_by_telegram_id(query.from_user.id)
     if not clicking_user:
         await query.answer(
             text="⚠️ You are not registered in this group yet. Send a message first!",
@@ -128,7 +123,7 @@ async def settle_callback_handler(
         return
 
     try:
-        settlement_service.record_settlement_payment(
+        SettlementService.record_settlement_payment(
             session=session,
             group=group,
             clicking_user=clicking_user,
@@ -141,11 +136,13 @@ async def settle_callback_handler(
         return
 
     # Re-calculate balances and settlements
-    _, transactions, users_by_id = (
-        settlement_service.get_group_balances_and_settlements(session, group.id)
+    _, transactions, users_by_id = SettlementService.get_group_balances_and_settlements(
+        session, group.id
     )
     reply_text = generate_settlements_summary(transactions, users_by_id)
-    reply_markup = build_settle_keyboard(transactions, users_by_id)
+    reply_markup = SettlementKeyboardBuilder.build_settle_keyboard(
+        transactions, users_by_id
+    )
 
     # Inform Telegram that the callback was handled
     from_db_user = session.query(User).filter(User.id == from_id).first()

@@ -10,52 +10,18 @@ from ..database import with_db_session
 from .. import crud
 from ..voice import (
     get_voice_interpreter,
-    PendingVoiceCommand,
-    PendingVoiceCommandStore,
     VoiceAudioDownloader,
 )
-from ..commands import CommandDispatcher
 from ..keyboards import VoiceKeyboardBuilder
+
+from ..services import VoiceService
 
 logger = logging.getLogger(__name__)
 
-_VOICE_STORE = PendingVoiceCommandStore()
-
-
-def store_pending_voice_command(
-    command: str,
-    creator_id: Optional[int],
-    creator_username: Optional[str],
-    creator_first_name: Optional[str],
-    authorized_user_ids: Set[int],
-    chat_id: int,
-    transcription: str,
-) -> str:
-    """Store an unconfirmed voice command and return a short unique token."""
-    return _VOICE_STORE.store(
-        command=command,
-        creator_id=creator_id,
-        creator_username=creator_username,
-        creator_first_name=creator_first_name,
-        authorized_user_ids=authorized_user_ids,
-        chat_id=chat_id,
-        transcription=transcription,
-    )
-
-
-def get_pending_voice_command(token: str) -> Optional[PendingVoiceCommand]:
-    """Retrieve a pending voice command by token."""
-    return _VOICE_STORE.get(token)
-
-
-def pop_pending_voice_command(token: str) -> Optional[PendingVoiceCommand]:
-    """Atomically pop a pending voice command by token."""
-    return _VOICE_STORE.pop(token)
-
-
-def clear_pending_voice_commands() -> None:
-    """Clear all pending commands (useful for test isolation)."""
-    _VOICE_STORE.clear()
+store_pending_voice_command = VoiceService.store_pending_command
+get_pending_voice_command = VoiceService.get_pending_command
+pop_pending_voice_command = VoiceService.pop_pending_command
+clear_pending_voice_commands = VoiceService.clear_pending_commands
 
 
 async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -304,7 +270,7 @@ def execute_voice_command(
 
     Delegates to CommandDispatcher.
     """
-    return CommandDispatcher.execute(
+    return VoiceService.execute_confirmed_command(
         command_str=command_str,
         chat_id=chat_id,
         creator_id=creator_id,
@@ -425,3 +391,7 @@ async def voice_callback_handler(
                 parse_mode="Markdown",
                 reply_markup=reply_markup,
             )
+
+
+# Normalized alias
+voice_command = voice_command_handler

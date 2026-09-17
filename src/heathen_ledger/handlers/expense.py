@@ -5,14 +5,12 @@ from telegram.ext import ContextTypes
 from sqlalchemy.orm import Session
 
 from ..database import with_db_session
-from ..models import Expense
-from .. import crud
 from ..parser import (
     parse_pay_message,
     parse_payback_message,
 )
 from ..formatters import generate_expense_reply_text, format_cents
-from ..services import expense_service
+from ..services import ExpenseService, MemberRegistrationService
 from ..services.exceptions import (
     UserNotFoundError,
     ValidationError,
@@ -24,14 +22,8 @@ from .common import send_response
 
 logger = logging.getLogger(__name__)
 
-
-def build_expense_keyboard(
-    expense: Expense, group_members: list, creator_id: int
-) -> InlineKeyboardMarkup:
-    """Build the inline keyboard with toggle buttons for each group member and an Undo button."""
-    return ExpenseKeyboardBuilder.build_split_toggle_keyboard(
-        expense=expense, group_members=group_members, creator_id=creator_id
-    )
+# Backward-compatible alias for existing callers/tests
+build_expense_keyboard = ExpenseKeyboardBuilder.build_split_toggle_keyboard
 
 
 @with_db_session
@@ -74,26 +66,18 @@ async def pay_command(
         )
         return
 
-    # Get active group
-    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
-    if not group:
-        group = crud.get_or_create_group(
-            session, update.effective_chat.id, update.effective_chat.title
-        )
-
-    # Resolve sender
-    sender = crud.get_user_by_telegram_id(session, update.effective_user.id)
-    if not sender:
-        sender = crud.get_or_create_user(
-            session,
-            update.effective_user.id,
-            update.effective_user.username,
-            update.effective_user.first_name,
-        )
-    crud.add_user_to_group(session, sender, group)
+    # Ensure sender and group exist and are linked
+    sender, group = MemberRegistrationService.ensure_member_in_group(
+        session=session,
+        chat_id=update.effective_chat.id,
+        user_id=update.effective_user.id,
+        username=update.effective_user.username,
+        first_name=update.effective_user.first_name or "",
+        chat_title=update.effective_chat.title,
+    )
 
     try:
-        expense = expense_service.record_expense(
+        expense = ExpenseService.record_expense(
             session=session,
             group=group,
             sender=sender,
@@ -105,7 +89,9 @@ async def pay_command(
 
     creator_id = sender.id
     reply_text = generate_expense_reply_text(expense)
-    reply_markup = build_expense_keyboard(expense, group.members, creator_id)
+    reply_markup = ExpenseKeyboardBuilder.build_split_toggle_keyboard(
+        expense=expense, group_members=group.members, creator_id=creator_id
+    )
 
     await send_response(
         update, context, reply_text, parse_mode="Markdown", reply_markup=reply_markup
@@ -131,18 +117,19 @@ async def pay_toggle_callback_handler(
     target_user_id = int(user_id_str)
     creator_id = int(creator_id_str)
 
-    # 1. Resolve clicking user's database ID
-    clicker = crud.get_user_by_telegram_id(session, query.from_user.id)
-    if not clicker:
-        clicker = crud.get_or_create_user(
-            session,
-            query.from_user.id,
-            query.from_user.username,
-            query.from_user.first_name,
-        )
+    # Resolve clicking user
+    clicker, _ = MemberRegistrationService.ensure_member_in_group(
+        session=session,
+        chat_id=query.message.chat.id
+        if query.message and query.message.chat
+        else query.from_user.id,
+        user_id=query.from_user.id,
+        username=query.from_user.username,
+        first_name=query.from_user.first_name or "",
+    )
 
     try:
-        expense = expense_service.toggle_split_participant(
+        expense = ExpenseService.toggle_split_participant(
             session=session,
             expense_id=expense_id,
             target_user_id=target_user_id,
@@ -168,9 +155,11 @@ async def pay_toggle_callback_handler(
     # Refresh expense and get members to rebuild markup
     group = expense.group
 
-    # 6. Re-generate response
+    # Re-generate response
     reply_text = generate_expense_reply_text(expense)
-    reply_markup = build_expense_keyboard(expense, group.members, creator_id)
+    reply_markup = ExpenseKeyboardBuilder.build_split_toggle_keyboard(
+        expense=expense, group_members=group.members, creator_id=creator_id
+    )
 
     try:
         await query.edit_message_text(
@@ -207,26 +196,18 @@ async def payback_command(
         )
         return
 
-    # Get active group
-    group = crud.get_group_by_telegram_id(session, update.effective_chat.id)
-    if not group:
-        group = crud.get_or_create_group(
-            session, update.effective_chat.id, update.effective_chat.title
-        )
-
-    # Resolve sender
-    sender = crud.get_user_by_telegram_id(session, update.effective_user.id)
-    if not sender:
-        sender = crud.get_or_create_user(
-            session,
-            update.effective_user.id,
-            update.effective_user.username,
-            update.effective_user.first_name,
-        )
-    crud.add_user_to_group(session, sender, group)
+    # Ensure sender and group exist and are linked
+    sender, group = MemberRegistrationService.ensure_member_in_group(
+        session=session,
+        chat_id=update.effective_chat.id,
+        user_id=update.effective_user.id,
+        username=update.effective_user.username,
+        first_name=update.effective_user.first_name or "",
+        chat_title=update.effective_chat.title,
+    )
 
     try:
-        payment = expense_service.record_payback(
+        payment = ExpenseService.record_payback(
             session=session,
             group=group,
             sender=sender,
@@ -273,19 +254,19 @@ async def undo_callback_handler(
     tx_id = int(tx_id_str)
     creator_id = int(creator_id_str)
 
-    # Resolve clicking user's database ID
-    clicker = crud.get_user_by_telegram_id(session, query.from_user.id)
-    if not clicker:
-        # Fallback to auto-register them
-        clicker = crud.get_or_create_user(
-            session,
-            query.from_user.id,
-            query.from_user.username,
-            query.from_user.first_name,
-        )
+    # Resolve clicking user
+    clicker, _ = MemberRegistrationService.ensure_member_in_group(
+        session=session,
+        chat_id=query.message.chat.id
+        if query.message and query.message.chat
+        else query.from_user.id,
+        user_id=query.from_user.id,
+        username=query.from_user.username,
+        first_name=query.from_user.first_name or "",
+    )
 
     try:
-        audit_desc = expense_service.undo_transaction(
+        audit_desc = ExpenseService.undo_transaction(
             session=session,
             tx_type=tx_type,
             tx_id=tx_id,

@@ -3,7 +3,6 @@ from typing import Optional, Tuple
 from telegram import InlineKeyboardMarkup
 from sqlalchemy.orm import Session
 
-from ..repositories import UserRepository, GroupRepository, PaymentRepository
 from ..parser import PayCommandParser, PaybackCommandParser
 from ..formatters import (
     generate_expense_reply_text,
@@ -17,7 +16,12 @@ from ..keyboards import (
     SettlementKeyboardBuilder,
     HistoryKeyboardBuilder,
 )
-from ..services import expense_service, settlement_service
+from ..services import (
+    ExpenseService,
+    SettlementService,
+    HistoryService,
+    MemberRegistrationService,
+)
 from ..services.exceptions import UserNotFoundError, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -45,23 +49,15 @@ class CommandDispatcher:
         cmd_parts = cmd_clean.split()
         cmd_name = cmd_parts[0].split("@")[0].lower()
 
-        # Resolve group
-        group_repo = GroupRepository(session)
-        user_repo = UserRepository(session)
-
-        group = group_repo.get_by_telegram_id(chat_id)
-        if not group:
-            group = group_repo.get_or_create(chat_id, chat_title)
-
-        # Resolve sender
-        sender = user_repo.get_by_telegram_id(creator_id)
-        if not sender:
-            sender = user_repo.get_or_create(
-                telegram_id=creator_id,
-                username=creator_username,
-                first_name=creator_first_name or f"User{creator_id}",
-            )
-        user_repo.add_to_group(sender, group)
+        # Resolve sender and group
+        sender, group = MemberRegistrationService.ensure_member_in_group(
+            session=session,
+            chat_id=chat_id,
+            user_id=creator_id,
+            username=creator_username,
+            first_name=creator_first_name or f"User{creator_id}",
+            chat_title=chat_title,
+        )
 
         if cmd_name == "/pay":
             parsed = PayCommandParser.parse(cmd_clean)
@@ -72,7 +68,7 @@ class CommandDispatcher:
                     None,
                 )
             try:
-                expense = expense_service.record_expense(
+                expense = ExpenseService.record_expense(
                     session=session,
                     group=group,
                     sender=sender,
@@ -83,7 +79,7 @@ class CommandDispatcher:
 
             reply_text = generate_expense_reply_text(expense)
             reply_markup = ExpenseKeyboardBuilder.build_split_toggle_keyboard(
-                expense, group.members, sender.id
+                expense=expense, group_members=group.members, creator_id=sender.id
             )
             return reply_text, reply_markup
 
@@ -96,7 +92,7 @@ class CommandDispatcher:
                     None,
                 )
             try:
-                payment = expense_service.record_payback(
+                payment = ExpenseService.record_payback(
                     session=session,
                     group=group,
                     sender=sender,
@@ -124,7 +120,7 @@ class CommandDispatcher:
                     None,
                 )
             balances, _, users_by_id = (
-                settlement_service.get_group_balances_and_settlements(session, group.id)
+                SettlementService.get_group_balances_and_settlements(session, group.id)
             )
             reply_text = generate_balances_summary(balances, users_by_id)
             return reply_text, None
@@ -136,7 +132,7 @@ class CommandDispatcher:
                     None,
                 )
             _, transactions, users_by_id = (
-                settlement_service.get_group_balances_and_settlements(session, group.id)
+                SettlementService.get_group_balances_and_settlements(session, group.id)
             )
             reply_text = generate_settlements_summary(transactions, users_by_id)
             reply_markup = SettlementKeyboardBuilder.build_settle_keyboard(
@@ -150,7 +146,7 @@ class CommandDispatcher:
                     "ℹ️ No transactions or members recorded for this group yet.",
                     None,
                 )
-            txs = PaymentRepository(session).get_recent_transactions(group.id, limit=10)
+            txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
             reply_text = generate_history_summary(txs)
             reply_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
             return reply_text, reply_markup
