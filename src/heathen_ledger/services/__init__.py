@@ -28,6 +28,13 @@ from .history_service import (
     get_recent_transactions,
     delete_transaction,
 )
+from .voice_service import (
+    VoiceService,
+    store_pending_voice_command,
+    get_pending_voice_command,
+    pop_pending_voice_command,
+    clear_pending_voice_commands,
+)
 
 __all__ = [
     "LedgerServiceError",
@@ -48,4 +55,9 @@ __all__ = [
     "HistoryService",
     "get_recent_transactions",
     "delete_transaction",
+    "VoiceService",
+    "store_pending_voice_command",
+    "get_pending_voice_command",
+    "pop_pending_voice_command",
+    "clear_pending_voice_commands",
 ]

@@ -12,6 +12,7 @@ from heathen_ledger.services import (
     settlement_service,
     MemberRegistrationService,
     HistoryService,
+    VoiceService,
 )
 from heathen_ledger.services.exceptions import (
     UserNotFoundError,
@@ -424,6 +425,54 @@ class TestServices(BaseDatabaseTestCase):
             HistoryService.delete_transaction(
                 self.session, "expense", 99999, clicking_user=self.alice
             )
+
+    def test_voice_service(self):
+        # Store pending command
+        token = VoiceService.store_pending_command(
+            command="/pay 15 for Pizza",
+            creator_id=self.alice.telegram_id,
+            creator_username=self.alice.username,
+            creator_first_name=self.alice.first_name,
+            authorized_user_ids={self.alice.telegram_id},
+            chat_id=self.group.telegram_chat_id,
+            transcription="pay 15 for pizza",
+        )
+        self.assertIsNotNone(token)
+
+        # Retrieve command
+        pending = VoiceService.get_pending_command(token)
+        self.assertIsNotNone(pending)
+        self.assertEqual(pending.command, "/pay 15 for Pizza")
+
+        # Execute confirmed command
+        text, markup = VoiceService.execute_confirmed_command(
+            command_str=pending.command,
+            chat_id=pending.chat_id,
+            creator_id=self.alice.telegram_id,
+            creator_username=self.alice.username,
+            creator_first_name=self.alice.first_name,
+            session=self.session,
+        )
+        self.assertIn("Recorded expense", text)
+        self.assertIsNotNone(markup)
+
+        # Pop pending command
+        popped = VoiceService.pop_pending_command(token)
+        self.assertEqual(popped, pending)
+        self.assertIsNone(VoiceService.get_pending_command(token))
+
+        # Clear store
+        VoiceService.store_pending_command(
+            command="/balances",
+            creator_id=1,
+            creator_username=None,
+            creator_first_name="User",
+            authorized_user_ids={1},
+            chat_id=self.group.telegram_chat_id,
+            transcription="balances",
+        )
+        VoiceService.clear_pending_commands()
+        self.assertEqual(len(VoiceService.get_store()._commands), 0)
 
 
 if __name__ == "__main__":
