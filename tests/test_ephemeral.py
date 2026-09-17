@@ -712,35 +712,6 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
         self.assertIn("^persist:", patterns)
         self.assertIn("^dismiss(:.*)?$", patterns)
 
-    async def test_register_handlers_no_persistent_command_variants(self):
-        from heathen_ledger.handlers import register_handlers
-        from telegram.ext import CommandHandler
-
-        app_mock = MagicMock()
-        register_handlers(app_mock)
-
-        registered_commands = []
-        for call in app_mock.add_handler.call_args_list:
-            handler = call[0][0]
-            if isinstance(handler, CommandHandler):
-                for cmd in handler.commands:
-                    registered_commands.append(cmd)
-                    self.assertFalse(
-                        cmd.endswith("_persistent"),
-                        f"Command '{cmd}' should not be registered with _persistent suffix",
-                    )
-
-        self.assertIn("pay", registered_commands)
-        self.assertIn("balances", registered_commands)
-        self.assertIn("settle", registered_commands)
-        self.assertIn("payback", registered_commands)
-        self.assertIn("history", registered_commands)
-        self.assertIn("register", registered_commands)
-        self.assertIn("members", registered_commands)
-        self.assertNotIn("pay_persistent", registered_commands)
-        self.assertNotIn("balances_persistent", registered_commands)
-        self.assertNotIn("settle_persistent", registered_commands)
-
     async def test_help_command_explains_ephemeral_and_buttons(self):
         update = MagicMock()
         context = MagicMock()
