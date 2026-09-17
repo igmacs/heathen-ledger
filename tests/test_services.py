@@ -11,10 +11,12 @@ from heathen_ledger.services import (
     expense_service,
     settlement_service,
     MemberRegistrationService,
+    HistoryService,
 )
 from heathen_ledger.services.exceptions import (
     UserNotFoundError,
     PermissionDeniedError,
+    ValidationError,
 )
 from heathen_ledger.commands import CommandDispatcher
 from heathen_ledger.keyboards import (
@@ -313,6 +315,61 @@ class TestServices(BaseDatabaseTestCase):
         )
         self.assertFalse(ok_inv)
         self.assertIn("Invalid handle or name", msg_inv)
+
+    def test_history_service(self):
+        # 1. Create an expense and a payment
+        exp = crud.create_expense(
+            self.session,
+            group_id=self.group.id,
+            payer_id=self.alice.id,
+            amount=2000,
+            description="Groceries",
+            splits={self.alice.id: 1000, self.bob.id: 1000},
+        )
+        pay = crud.create_payment(
+            self.session,
+            group_id=self.group.id,
+            payer_id=self.bob.id,
+            payee_id=self.alice.id,
+            amount=500,
+        )
+        self.session.commit()
+
+        # Query recent transactions
+        txs = HistoryService.get_recent_transactions(self.session, self.group.id)
+        self.assertEqual(len(txs), 2)
+        tx_types = {t["type"] for t in txs}
+        self.assertEqual(tx_types, {"expense", "payment"})
+
+        # Unauthorized deletion of expense by Bob -> raises PermissionDeniedError
+        with self.assertRaises(PermissionDeniedError):
+            HistoryService.delete_transaction(
+                self.session, "expense", exp.id, clicking_user=self.bob
+            )
+
+        # Unauthorized deletion of payment by Charlie -> raises PermissionDeniedError
+        with self.assertRaises(PermissionDeniedError):
+            HistoryService.delete_transaction(
+                self.session, "payment", pay.id, clicking_user=self.charlie
+            )
+
+        # Authorized deletion of expense by Alice
+        msg_exp = HistoryService.delete_transaction(
+            self.session, "expense", exp.id, clicking_user=self.alice
+        )
+        self.assertEqual(msg_exp, "Expense deleted.")
+
+        # Authorized deletion of payment by Bob
+        msg_pay = HistoryService.delete_transaction(
+            self.session, "payment", pay.id, clicking_user=self.bob
+        )
+        self.assertEqual(msg_pay, "Payment deleted.")
+
+        # Deleting non-existent transaction -> raises ValidationError
+        with self.assertRaises(ValidationError):
+            HistoryService.delete_transaction(
+                self.session, "expense", 99999, clicking_user=self.alice
+            )
 
 
 if __name__ == "__main__":
