@@ -5,8 +5,8 @@ from typing import Optional, List, Tuple, Dict, Any
 from sqlalchemy.orm import Session
 from telegram import User as TgUser
 
-from ..models import Group
-from ..repositories import UserRepository
+from ..models import User, Group
+from ..repositories import UserRepository, GroupRepository
 
 logger = logging.getLogger(__name__)
 
@@ -226,3 +226,103 @@ class MemberRegistrationService:
             f"✅ Registered external member *{first_name}* (`@{handle}`) to this group.\n\n"
             f"You can now include them in expenses (e.g. `/pay 50 split @{handle}`) or settlements.",
         )
+
+    @classmethod
+    def auto_register_user_and_group(
+        cls,
+        session: Session,
+        user_id: int,
+        chat_id: int,
+        username: Optional[str] = None,
+        first_name: str = "",
+        chat_title: Optional[str] = None,
+    ) -> Tuple[User, Group]:
+        """Automatically register user and group chat if not already existing, and link them."""
+        user_repo = UserRepository(session)
+        group_repo = GroupRepository(session)
+
+        db_user = user_repo.get_or_create(
+            telegram_id=user_id, username=username, first_name=first_name
+        )
+        title = chat_title or f"Private Chat ({user_id})"
+        db_group = group_repo.get_or_create(telegram_chat_id=chat_id, title=title)
+        user_repo.add_to_group(user=db_user, group=db_group)
+        session.commit()
+        return db_user, db_group
+
+    @classmethod
+    def register_self(
+        cls,
+        session: Session,
+        chat_id: int,
+        user: TgUser,
+        chat_title: Optional[str] = None,
+    ) -> Tuple[bool, User, Group]:
+        """Handle inline button click for self-registration.
+
+        Returns:
+            (already_registered: bool, db_user: User, db_group: Group)
+        """
+        group_repo = GroupRepository(session)
+        user_repo = UserRepository(session)
+
+        group = group_repo.get_by_telegram_id(chat_id)
+        if not group:
+            title = chat_title or f"Chat ({chat_id})"
+            group = group_repo.get_or_create(telegram_chat_id=chat_id, title=title)
+
+        already_registered = any(m.telegram_id == user.id for m in group.members)
+        if already_registered:
+            db_user = user_repo.get_by_telegram_id(user.id)
+            return True, db_user, group
+
+        db_user = user_repo.get_or_create(
+            telegram_id=user.id,
+            username=user.username,
+            first_name=user.first_name or "",
+        )
+        user_repo.add_to_group(db_user, group)
+        session.commit()
+        return False, db_user, group
+
+    @classmethod
+    def get_group_members(cls, session: Session, chat_id: int) -> Optional[List[User]]:
+        """Retrieve the list of members for a group chat, or None if group doesn't exist."""
+        group = GroupRepository(session).get_by_telegram_id(chat_id)
+        if not group or not group.members:
+            return None
+        return group.members
+
+    @classmethod
+    def ensure_member_in_group(
+        cls,
+        session: Session,
+        chat_id: int,
+        user_id: int,
+        username: Optional[str] = None,
+        first_name: str = "",
+        chat_title: Optional[str] = None,
+    ) -> Tuple[User, Group]:
+        """Ensure both group and user exist and the user is linked to the group."""
+        group_repo = GroupRepository(session)
+        user_repo = UserRepository(session)
+
+        group = group_repo.get_by_telegram_id(chat_id)
+        if not group:
+            group = group_repo.get_or_create(telegram_chat_id=chat_id, title=chat_title)
+
+        user = user_repo.get_by_telegram_id(user_id)
+        if not user:
+            user = user_repo.get_or_create(
+                telegram_id=user_id,
+                username=username,
+                first_name=first_name or f"User{user_id}",
+            )
+        user_repo.add_to_group(user, group)
+        session.flush()
+        return user, group
+
+
+# Aliases for convenience
+MemberService = MemberRegistrationService
+RegistrationService = MemberRegistrationService

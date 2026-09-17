@@ -316,6 +316,60 @@ class TestServices(BaseDatabaseTestCase):
         self.assertFalse(ok_inv)
         self.assertIn("Invalid handle or name", msg_inv)
 
+        # 6. auto_register_user_and_group
+        u_auto, g_auto = MemberRegistrationService.auto_register_user_and_group(
+            self.session,
+            user_id=8888,
+            chat_id=-1008888,
+            username="auto_user",
+            first_name="Auto",
+            chat_title="Auto Group",
+        )
+        self.assertEqual(u_auto.telegram_id, 8888)
+        self.assertEqual(g_auto.telegram_chat_id, -1008888)
+        self.assertIn(u_auto, g_auto.members)
+
+        # 7. register_self (already registered vs new)
+        alice_tg_self = MagicMock(
+            id=self.alice.telegram_id,
+            username="alice",
+            first_name="Alice",
+            is_bot=False,
+        )
+        already_reg, u_self, _ = MemberRegistrationService.register_self(
+            self.session, self.group.telegram_chat_id, alice_tg_self
+        )
+        self.assertTrue(already_reg)
+        self.assertEqual(u_self.id, self.alice.id)
+
+        new_tg_self = MagicMock(
+            id=7777, username="self_user", first_name="Self", is_bot=False
+        )
+        already_reg2, u_self2, g_self2 = MemberRegistrationService.register_self(
+            self.session, self.group.telegram_chat_id, new_tg_self
+        )
+        self.assertFalse(already_reg2)
+        self.assertEqual(u_self2.telegram_id, 7777)
+        self.assertIn(u_self2, g_self2.members)
+
+        # 8. get_group_members
+        members = MemberRegistrationService.get_group_members(
+            self.session, self.group.telegram_chat_id
+        )
+        self.assertIsNotNone(members)
+        self.assertTrue(len(members) >= 3)
+
+        # 9. ensure_member_in_group
+        u_ens, g_ens = MemberRegistrationService.ensure_member_in_group(
+            self.session,
+            chat_id=self.group.telegram_chat_id,
+            user_id=6666,
+            username="ens_user",
+            first_name="Ens",
+        )
+        self.assertEqual(u_ens.telegram_id, 6666)
+        self.assertIn(u_ens, g_ens.members)
+
     def test_history_service(self):
         # 1. Create an expense and a payment
         exp = crud.create_expense(
