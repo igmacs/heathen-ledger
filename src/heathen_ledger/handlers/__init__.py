@@ -7,14 +7,14 @@ from telegram.ext import (
     filters,
 )
 
-from .base import (
+from .registration import (
     auto_register,
-    start,
-    help_command,
     register_command,
-    members_command,
     register_callback_handler,
 )
+from .members import members_command
+from .start import start
+from .help import help_command
 from .common import dismiss_callback_handler, persist_callback_handler
 from .expense import (
     pay_command,
