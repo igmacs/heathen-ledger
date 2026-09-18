@@ -29,6 +29,25 @@ from .voice import (
     voice_mention_handler,
     voice_callback_handler,
 )
+from .receipt import (
+    ticket_command_handler,
+    ticket_photo_handler,
+    ticket_mention_handler,
+)
+
+
+async def reply_mention_dispatcher(update, context):
+    """Dispatch reply mentions to voice or receipt handlers depending on media type."""
+    if not update.message or not update.message.reply_to_message:
+        return
+    reply_to = update.message.reply_to_message
+    if reply_to.voice or reply_to.audio:
+        await voice_mention_handler(update, context)
+    elif reply_to.photo or (
+        reply_to.document
+        and getattr(reply_to.document, "mime_type", "").startswith("image/")
+    ):
+        await ticket_mention_handler(update, context)
 
 
 def register_handlers(application: Application) -> None:
@@ -36,7 +55,7 @@ def register_handlers(application: Application) -> None:
     # Add auto-registration handler in a separate group (-1) so it runs before command handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
 
-    # Voice / Audio reply mention handler
+    # Voice / Audio and Receipt reply mention handler
     application.add_handler(
         MessageHandler(
             filters.REPLY
@@ -44,7 +63,15 @@ def register_handlers(application: Application) -> None:
                 filters.Entity(MessageEntityType.MENTION)
                 | filters.Entity(MessageEntityType.TEXT_MENTION)
             ),
-            voice_mention_handler,
+            reply_mention_dispatcher,
+        )
+    )
+
+    # Receipt photo handler (direct photos in private chats, or captioned photos with command/mention)
+    application.add_handler(
+        MessageHandler(
+            filters.PHOTO | filters.Document.IMAGE,
+            ticket_photo_handler,
         )
     )
 
@@ -56,6 +83,9 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("payback", payback_command))
     application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("voice", voice_command_handler))
+    application.add_handler(
+        CommandHandler(["ticket", "receipt"], ticket_command_handler)
+    )
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("members", members_command))
     application.add_handler(CommandHandler("help", help_command))

@@ -26,7 +26,11 @@ clear_pending_voice_commands = VoiceService.clear_pending_commands
 
 async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Check if the bot was mentioned in the update message."""
-    if not update.message or not update.message.text:
+    if not update.message:
+        return False
+
+    text = update.message.text or update.message.caption
+    if not text:
         return False
 
     bot_username = getattr(context.bot, "username", None)
@@ -37,12 +41,13 @@ async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         except Exception:
             bot_username = None
 
-    text = update.message.text
     if bot_username:
         if f"@{bot_username.lower()}" in text.lower():
             return True
 
-    entities = update.message.entities or []
+    entities = list(update.message.entities or []) + list(
+        update.message.caption_entities or []
+    )
     for entity in entities:
         if entity.type == MessageEntityType.MENTION and bot_username:
             mention = text[entity.offset : entity.offset + entity.length]
