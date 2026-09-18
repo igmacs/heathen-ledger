@@ -13,6 +13,7 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 - **Smart Debt Simplification**: When it's time to settle up, the bot calculates the minimum number of transactions needed to clear all debts. No more complex webs of "who owes who."
 - **Current Balances**: Instantly check how much you owe or are owed at any given time.
 - **Voice Commands**: Speak natural voice notes (e.g., *"I paid 25 for dinner"*) to automatically transcribe and interpret them into ledger commands via Google Gemini.
+- **Receipt & Ticket Scanning**: Share a photo of a restaurant bill or store receipt to automatically extract and itemize line items, subtotal, tax, tip, and total via multimodal Google Gemini vision.
 
 ## How it Works
 
@@ -58,16 +59,21 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
    - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it. Casual voice messages sent to the chat without a reply or mention are ignored.
    - The bot transcribes the audio using Google Gemini and displays the interpreted ledger command with interactive confirmation buttons:
-     - `[ ✅ Confirm ]`: Executes the proposed command immediately in the group chat (recording expenses, paybacks, or generating summaries) and equips the response with interactive split toggles and undo buttons.
-     - `[ ❌ Reject ]`: Cancels the command without recording any changes to the ledger.
+      - `[ ❌ Reject ]`: Cancels the command without recording any changes to the ledger.
 
-7. **Members & Directory**:
+7. **Receipt & Ticket Scanning**:
+   - Send or forward a photo of a restaurant bill or store receipt to the chat.
+   - In group chats, send the photo with caption `/ticket` (or `/receipt`), reply to an existing receipt photo with `/ticket`, or tag the bot (`@HeathenLedgerBot`) to parse it.
+   - In private chats (DM with the bot), simply send the photo directly to scan it automatically.
+   - The bot downloads the image in memory and uses Google Gemini vision with structured Pydantic schemas to extract all individual line items (names, quantities, prices), subtotal, tax, tip, and total into a clean Markdown breakdown.
+
+8. **Members & Directory**:
    - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
    - `/register` (Generates an interactive button for members to tap and register themselves).
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
-8. **Ephemeral Responses with Share & Dismiss Actions**:
-   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/voice`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you), keeping busy group chats clean and uncluttered.
+9. **Ephemeral Responses with Share & Dismiss Actions**:
+   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/voice`, `/ticket`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you), keeping busy group chats clean and uncluttered.
    - **Share to Group (`📢 Share to group`)**: Every ephemeral response includes an inline button to publish the message to the group. Tapping this button deletes the ephemeral preview and broadcasts the message publicly with all original operational buttons (such as settlement payback buttons, expense participant toggles, or registration buttons).
    - **Dismiss (`✕ Dismiss`)**: Every ephemeral response also includes an inline button allowing you to immediately delete the ephemeral message from your view when you are done reviewing it.
 
@@ -90,7 +96,7 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 3. Create a `.env` file in the project root (you can copy `.env.example`):
    ```env
    TELEGRAM_BOT_TOKEN=your_bot_token_here
-   GEMINI_API_KEY=your_gemini_api_key_here  # Optional: for voice message interpretation
+   GEMINI_API_KEY=your_gemini_api_key_here  # Optional: for voice interpretation and receipt scanning
    ```
 4. Run Alembic migrations to set up the SQLite database schema:
    ```bash
@@ -455,3 +461,11 @@ when I had to correct or guide it
   - Added `build_expense_undo_keyboard` to `ExpenseKeyboardBuilder`, providing a clean keyboard with only the `🗑️ Undo` button for standalone expense confirmations (matching `/payback`).
   - Updated `handlers/expense.py` (`pay_command`) and `CommandDispatcher.execute` to attach `build_expense_undo_keyboard` to `/pay` responses, removing the member toggle button grid while preserving the toggle callback handler and keyboard builder for future interactive interfaces.
   - Updated documentation in `README.md` and added unit tests for `ExpenseKeyboardBuilder` and the standalone `/pay` command keyboard (all 142 tests passing).
+
+- I asked to introduce a new receipt-scanning feature where users can share a photo of a restaurant bill or ticket and have an LLM extract and itemize each line item to prepare for bill splitting with interactive buttons. I asked if the existing Gemini LLM used for voice could be reused for receipt vision, and requested an implementation plan for Phase 1 (photo sharing and itemized list extraction without buttons). The agent confirmed Gemini's native multimodal capabilities and presented a phased plan, which I approved. The agent autonomously executed Phase 1:
+  - Created `ReceiptItem` and `Receipt` domain models and the `ReceiptParser` abstract base class in `heathen_ledger.receipt.base`.
+  - Implemented `GeminiReceiptParser` in `heathen_ledger.receipt.gemini` using structured Pydantic schemas (`ReceiptSchema`) to parse line items (descriptions, quantities, prices), subtotals, taxes, tips, and totals via Google Gemini vision.
+  - Implemented `ReceiptImageDownloader` in `heathen_ledger.receipt.image_downloader` supporting both compressed Telegram photos (`PhotoSize`) and uncompressed image documents in memory.
+  - Implemented `ReceiptService` in `heathen_ledger.services.receipt_service` orchestrating downloading, OCR analysis, price formatting, and human-friendly Markdown receipt presentation.
+  - Implemented `/ticket` (and `/receipt`) command handling, photo caption inspection, private chat auto-scanning, and unified reply mention dispatching in `handlers/receipt.py` and `handlers/__init__.py`.
+  - Registered `/ticket` in `bot.py` command autocompletion under ephemeral group scopes, updated `/help` text, updated documentation in `README.md`, and added comprehensive unit tests for models, parsers, downloaders, services, and handlers (all 168 tests passing).
