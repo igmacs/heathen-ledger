@@ -1,0 +1,24 @@
+"""Receipt photo parsing and processing package."""
+
+from typing import Optional
+from .base import ReceiptParser, Receipt, ReceiptItem
+from .gemini import GeminiReceiptParser
+
+
+def get_receipt_parser(
+    provider: str = "gemini",
+    api_key: Optional[str] = None,
+) -> ReceiptParser:
+    """Factory function to get a ReceiptParser instance for the configured provider."""
+    if provider.lower() == "gemini":
+        return GeminiReceiptParser(api_key=api_key)
+    raise ValueError(f"Unsupported receipt provider: '{provider}'")
+
+
+__all__ = [
+    "ReceiptParser",
+    "Receipt",
+    "ReceiptItem",
+    "GeminiReceiptParser",
+    "get_receipt_parser",
+]
