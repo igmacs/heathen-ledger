@@ -3,6 +3,7 @@
 from typing import Optional
 from .base import ReceiptParser, Receipt, ReceiptItem
 from .gemini import GeminiReceiptParser
+from .image_downloader import ReceiptImageDownloader
 
 
 def get_receipt_parser(
@@ -20,5 +21,6 @@ __all__ = [
     "Receipt",
     "ReceiptItem",
     "GeminiReceiptParser",
+    "ReceiptImageDownloader",
     "get_receipt_parser",
 ]
