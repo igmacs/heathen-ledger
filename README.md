@@ -29,8 +29,8 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
      - `/pay 60 for escape room split @Alice @Bob` (Split equally only between Alice and Bob).
      - `/pay 30 for drinks split @Bob:10 @Charlie:20` (Custom shares: Bob owes $10.00, Charlie owes $20.00).
      - `/pay 45 for groceries split except @Dave` (Split equally among all members except Dave).
-   - **Interactive Toggles & Undo**:
-     - After recording an expense, the bot shows inline buttons for all group members. The creator of the expense can tap these buttons to dynamically toggle members in/out of the split, which automatically recalculates and updates the shares, or tap `🗑️ Undo` to delete it.
+   - **Standalone Execution & Undo**:
+     - The `/pay` command with parameters is standalone: it immediately logs the expense as specified and replies with a confirmation and a `🗑️ Undo` button. The creator of the expense can tap `🗑️ Undo` to delete the transaction if recorded by mistake.
 
    > [!IMPORTANT]
    > **User Registration & Privacy Mode:**
@@ -450,3 +450,8 @@ when I had to correct or guide it
   - Split the omnibus `handlers/base.py` into dedicated handler modules: `handlers/registration.py` (auto-registration, `/register`, and self-registration callbacks), `handlers/members.py` (`/members`), `handlers/start.py` (`/start`), and `handlers/help.py` (`/help`), preserving `handlers/base.py` as a backward-compatible facade.
   - Refactored `handlers/history.py`, `handlers/expense.py`, `handlers/settle.py`, `handlers/voice.py`, and `commands/dispatcher.py` to delegate business logic, authorization, and queries to their respective services, eliminated repetitive group/user resolution boilerplate, and standardized direct `KeyboardBuilder` usage.
   - Added unit tests for the new services and methods (138 total passing tests) and verified all pre-commit formatting and linting hooks pass.
+
+- While testing the bot, I found that `/pay` commands did not work well because even when explicitly indicating the members involved in an expense, the bot still displayed inline buttons to select/toggle members. I clarified that although a button-based payment interface will be implemented in the future, the `/pay` command with parameters should be standalone. The agent autonomously:
+  - Added `build_expense_undo_keyboard` to `ExpenseKeyboardBuilder`, providing a clean keyboard with only the `🗑️ Undo` button for standalone expense confirmations (matching `/payback`).
+  - Updated `handlers/expense.py` (`pay_command`) and `CommandDispatcher.execute` to attach `build_expense_undo_keyboard` to `/pay` responses, removing the member toggle button grid while preserving the toggle callback handler and keyboard builder for future interactive interfaces.
+  - Updated documentation in `README.md` and added unit tests for `ExpenseKeyboardBuilder` and the standalone `/pay` command keyboard (all 142 tests passing).

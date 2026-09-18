@@ -28,6 +28,8 @@ from heathen_ledger.handlers.expense import (
 )
 from heathen_ledger.handlers.history import history_delete_callback_handler
 from heathen_ledger.handlers.common import dismiss_callback_handler
+from heathen_ledger.keyboards import ExpenseKeyboardBuilder
+from heathen_ledger.commands.dispatcher import CommandDispatcher
 
 
 class TestSettleCallback(BaseDatabaseTestCase):
@@ -452,6 +454,68 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         self.assertNotIn(self.charlie.id, splits_map)
         self.assertEqual(splits_map[self.alice.id], 2000)
         self.assertEqual(splits_map[self.bob.id], 2000)
+
+    def test_pay_command_standalone_undo_keyboard(self):
+        update = self.create_mock_message_update(
+            "/pay 60 for escape room split @Alice @Bob"
+        )
+        context = MagicMock()
+        asyncio.run(pay_command(update, context))
+
+        update.message.reply_text.assert_called_once()
+        reply_call = update.message.reply_text.call_args
+        reply_markup = reply_call.kwargs.get("reply_markup")
+        self.assertIsNotNone(reply_markup)
+        # Standalone: exactly 1 row with 1 Undo button, NO member toggle buttons
+        self.assertEqual(len(reply_markup.inline_keyboard), 1)
+        self.assertEqual(len(reply_markup.inline_keyboard[0]), 1)
+        undo_button = reply_markup.inline_keyboard[0][0]
+        self.assertEqual(undo_button.text, "🗑️ Undo")
+        self.assertTrue(undo_button.callback_data.startswith("undo:expense:"))
+        for row in reply_markup.inline_keyboard:
+            for btn in row:
+                self.assertFalse(btn.callback_data.startswith("pay_toggle:"))
+
+    def test_command_dispatcher_pay_standalone_undo_keyboard(self):
+        reply_text, reply_markup = CommandDispatcher.execute(
+            command_str="/pay 50 for dinner split @Bob",
+            chat_id=self.group.telegram_chat_id,
+            creator_id=self.alice.telegram_id,
+            creator_username="alice",
+            creator_first_name="Alice",
+            session=self.db_session,
+        )
+        self.assertIn("Recorded expense", reply_text)
+        self.assertIsNotNone(reply_markup)
+        self.assertEqual(len(reply_markup.inline_keyboard), 1)
+        undo_button = reply_markup.inline_keyboard[0][0]
+        self.assertEqual(undo_button.text, "🗑️ Undo")
+        self.assertTrue(undo_button.callback_data.startswith("undo:expense:"))
+        for row in reply_markup.inline_keyboard:
+            for btn in row:
+                self.assertFalse(btn.callback_data.startswith("pay_toggle:"))
+
+
+class TestExpenseKeyboardBuilder(unittest.TestCase):
+    def test_build_expense_undo_keyboard(self):
+        markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+            expense_id=42, creator_id=11
+        )
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(len(markup.inline_keyboard[0]), 1)
+        btn = markup.inline_keyboard[0][0]
+        self.assertEqual(btn.text, "🗑️ Undo")
+        self.assertEqual(btn.callback_data, "undo:expense:42:11")
+
+    def test_build_payback_undo_keyboard(self):
+        markup = ExpenseKeyboardBuilder.build_payback_undo_keyboard(
+            payment_id=99, creator_id=22
+        )
+        self.assertEqual(len(markup.inline_keyboard), 1)
+        self.assertEqual(len(markup.inline_keyboard[0]), 1)
+        btn = markup.inline_keyboard[0][0]
+        self.assertEqual(btn.text, "🗑️ Undo")
+        self.assertEqual(btn.callback_data, "undo:payment:99:22")
 
 
 class TestRegistrationHandlers(BaseDatabaseTestCase):

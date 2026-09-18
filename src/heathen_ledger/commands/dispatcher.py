@@ -78,8 +78,8 @@ class CommandDispatcher:
                 return f"⚠️ {e}", None
 
             reply_text = generate_expense_reply_text(expense)
-            reply_markup = ExpenseKeyboardBuilder.build_split_toggle_keyboard(
-                expense=expense, group_members=group.members, creator_id=sender.id
+            reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+                expense_id=expense.id, creator_id=sender.id
             )
             return reply_text, reply_markup
 

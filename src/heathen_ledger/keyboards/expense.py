@@ -7,6 +7,22 @@ class ExpenseKeyboardBuilder:
     """Builds inline keyboards for expenses and paybacks."""
 
     @classmethod
+    def build_expense_undo_keyboard(
+        cls, expense_id: int, creator_id: int
+    ) -> InlineKeyboardMarkup:
+        """Build inline keyboard containing a single Undo button for an expense."""
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        text="🗑️ Undo",
+                        callback_data=f"undo:expense:{expense_id}:{creator_id}",
+                    )
+                ]
+            ]
+        )
+
+    @classmethod
     def build_split_toggle_keyboard(
         cls, expense: Expense, group_members: List[Any], creator_id: int
     ) -> InlineKeyboardMarkup:

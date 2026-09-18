@@ -22,8 +22,9 @@ from .common import send_response
 
 logger = logging.getLogger(__name__)
 
-# Backward-compatible alias for existing callers/tests
+# Backward-compatible aliases for existing callers/tests
 build_expense_keyboard = ExpenseKeyboardBuilder.build_split_toggle_keyboard
+build_expense_undo_keyboard = ExpenseKeyboardBuilder.build_expense_undo_keyboard
 
 
 @with_db_session
@@ -89,8 +90,8 @@ async def pay_command(
 
     creator_id = sender.id
     reply_text = generate_expense_reply_text(expense)
-    reply_markup = ExpenseKeyboardBuilder.build_split_toggle_keyboard(
-        expense=expense, group_members=group.members, creator_id=creator_id
+    reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+        expense_id=expense.id, creator_id=creator_id
     )
 
     await send_response(
