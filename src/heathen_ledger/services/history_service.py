@@ -35,11 +35,18 @@ class HistoryService:
                 raise ValidationError("Expense not found or already deleted.")
 
             payer_ids = {p.user_id for p in expense.payers} if expense.payers else set()
-            if expense.payer_id:
-                payer_ids.add(expense.payer_id)
 
             if clicking_user.id not in payer_ids:
-                payer_name = expense.payer.first_name if expense.payer else "the payer"
+                if (
+                    expense.payers
+                    and len(expense.payers) == 1
+                    and expense.payers[0].user
+                ):
+                    payer_name = expense.payers[0].user.first_name
+                elif expense.payers:
+                    payer_name = "one of the payers"
+                else:
+                    payer_name = "the payer"
                 raise PermissionDeniedError(
                     f"Only {payer_name} can delete this expense."
                 )

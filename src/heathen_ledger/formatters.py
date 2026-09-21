@@ -103,7 +103,7 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
             elif getattr(obj, "payer", None) and obj.payer:
                 payer_str = obj.payer.first_name
             else:
-                payer_str = f"User {obj.payer_id}"
+                payer_str = "Unknown"
 
             desc = f" for '{obj.description}'" if obj.description else ""
             date_str = (
@@ -145,7 +145,7 @@ def generate_expense_reply_text(expense: Any) -> str:
     elif expense.payer:
         paid_by_str = f"• **Paid by:** {expense.payer.first_name}"
     else:
-        paid_by_str = f"• **Paid by:** User {expense.payer_id}"
+        paid_by_str = "• **Paid by:** Unknown"
 
     date_line = (
         f"• **Date:** {expense.expense_date.isoformat()}\n"

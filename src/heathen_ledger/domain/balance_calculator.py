@@ -39,10 +39,6 @@ class BalanceCalculator:
                     if p.user_id not in balances:
                         balances[p.user_id] = 0
                     balances[p.user_id] += p.amount
-            elif getattr(exp, "payer_id", None):
-                if exp.payer_id not in balances:
-                    balances[exp.payer_id] = 0
-                balances[exp.payer_id] += exp.amount
 
             if getattr(exp, "splits", None):
                 for split in exp.splits:
