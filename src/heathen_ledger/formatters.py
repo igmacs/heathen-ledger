@@ -1,5 +1,6 @@
 """Presentation layer: formatting monetary amounts, balances, settlements, history, and expenses."""
 
+import html
 from typing import Dict, List, Any
 
 
@@ -122,6 +123,61 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
             )
 
     return "📜 **Recent Group History:**\n" + "\n".join(lines)
+
+
+def generate_history_rich_html(transactions: List[Dict[str, Any]]) -> str:
+    """Formats recent transactions into Telegram Rich HTML with embedded delete buttons beside each entry."""
+    if not transactions:
+        return "<p>ℹ️ No recent transactions found in this group.</p>"
+
+    lines = ["<p><b>📜 Recent Group History:</b></p>"]
+    for i, tx in enumerate(transactions, 1):
+        t_type = tx["type"]
+        obj = tx["obj"]
+        amount_formatted = format_cents(obj.amount)
+        callback_data = f"hist_del:{t_type}:{obj.id}"
+        delete_btn = f'<tg-button type="callback_data" style="danger" data="{callback_data}">🗑️</tg-button>'
+
+        if t_type == "expense":
+            if getattr(obj, "payers", None) and len(obj.payers) > 1:
+                payer_parts = [
+                    f"{html.escape(p.user.first_name)} ({format_cents(p.amount)})"
+                    for p in obj.payers
+                    if p.user
+                ]
+                payer_str = (
+                    ", ".join(payer_parts) if payer_parts else "Multiple members"
+                )
+            elif (
+                getattr(obj, "payers", None)
+                and len(obj.payers) == 1
+                and obj.payers[0].user
+            ):
+                payer_str = html.escape(obj.payers[0].user.first_name)
+            elif getattr(obj, "payer", None) and obj.payer:
+                payer_str = html.escape(obj.payer.first_name)
+            else:
+                payer_str = "Unknown"
+
+            desc = f" for '{html.escape(obj.description)}'" if obj.description else ""
+            date_str = (
+                f" on {html.escape(obj.expense_date.isoformat())}"
+                if getattr(obj, "expense_date", None)
+                else ""
+            )
+            lines.append(
+                f"<p>{i}. 💸 <b>Expense:</b> <b>{payer_str}</b> paid <b>{amount_formatted}</b>{desc}{date_str} {delete_btn}</p>"
+            )
+        elif t_type == "payment":
+            payer_raw = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
+            payee_raw = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
+            payer_name = html.escape(payer_raw)
+            payee_name = html.escape(payee_raw)
+            lines.append(
+                f"<p>{i}. 🤝 <b>Payment:</b> <b>{payer_name}</b> paid <b>{payee_name}</b> <b>{amount_formatted}</b> {delete_btn}</p>"
+            )
+
+    return "\n".join(lines)
 
 
 def generate_expense_reply_text(expense: Any) -> str:

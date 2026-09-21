@@ -7,7 +7,9 @@ from ..formatters import (
     generate_balances_summary,
     generate_settlements_summary,
     generate_history_summary,
+    generate_history_rich_html,
 )
+
 from ..dto import (
     CommandParseError,
     ParseErrorResult,
@@ -55,6 +57,7 @@ __all__ = [
     "generate_balances_summary",
     "generate_settlements_summary",
     "generate_history_summary",
+    "generate_history_rich_html",
     "CommandParseError",
     "ParseErrorResult",
     "SplitSpec",

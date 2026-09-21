@@ -14,6 +14,7 @@ from heathen_ledger.parser import (
     generate_settlements_summary,
     parse_payback_message,
     generate_history_summary,
+    generate_history_rich_html,
     ParsedPayCommand,
     ParsedPaybackCommand,
     SplitSpec,
@@ -269,6 +270,54 @@ class TestParser(unittest.TestCase):
             "1. 💸 **Expense:** **Alice** paid **$50.00** for 'Dinner'", summary
         )
         self.assertIn("2. 🤝 **Payment:** **Bob** paid **Alice** **$20.00**", summary)
+
+    def test_generate_history_rich_html(self):
+        class MockUser:
+            def __init__(self, first_name):
+                self.first_name = first_name
+
+        class MockExpense:
+            def __init__(self, payer, amount, description):
+                self.id = 101
+                self.payer = payer
+                self.payer_id = 1
+                self.amount = amount
+                self.description = description
+
+        class MockPayment:
+            def __init__(self, payer, payee, amount):
+                self.id = 202
+                self.payer = payer
+                self.payer_id = 1
+                self.payee = payee
+                self.payee_id = 2
+                self.amount = amount
+
+        alice = MockUser("Alice")
+        bob = MockUser("Bob")
+        exp = MockExpense(alice, 5000, "Dinner & Drinks")
+        pay = MockPayment(bob, alice, 2000)
+
+        txs = [
+            {"type": "expense", "obj": exp, "created_at": None},
+            {"type": "payment", "obj": pay, "created_at": None},
+        ]
+
+        rich_html = generate_history_rich_html(txs)
+        self.assertIn("<p><b>📜 Recent Group History:</b></p>", rich_html)
+        self.assertIn(
+            '<p>1. 💸 <b>Expense:</b> <b>Alice</b> paid <b>$50.00</b> for \'Dinner &amp; Drinks\' <tg-button type="callback_data" style="danger" data="hist_del:expense:101">🗑️</tg-button></p>',
+            rich_html,
+        )
+        self.assertIn(
+            '<p>2. 🤝 <b>Payment:</b> <b>Bob</b> paid <b>Alice</b> <b>$20.00</b> <tg-button type="callback_data" style="danger" data="hist_del:payment:202">🗑️</tg-button></p>',
+            rich_html,
+        )
+
+        empty_html = generate_history_rich_html([])
+        self.assertEqual(
+            empty_html, "<p>ℹ️ No recent transactions found in this group.</p>"
+        )
 
     def test_typed_dto_attributes(self):
         # Test ParsedPayCommand DTO
