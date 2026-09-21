@@ -469,3 +469,10 @@ when I had to correct or guide it
   - Implemented `ReceiptService` in `heathen_ledger.services.receipt_service` orchestrating downloading, OCR analysis, price formatting, and human-friendly Markdown receipt presentation.
   - Implemented `/ticket` (and `/receipt`) command handling, photo caption inspection, private chat auto-scanning, and unified reply mention dispatching in `handlers/receipt.py` and `handlers/__init__.py`.
   - Registered `/ticket` in `bot.py` command autocompletion under ephemeral group scopes, updated `/help` text, updated documentation in `README.md`, and added comprehensive unit tests for models, parsers, downloaders, services, and handlers (all 168 tests passing).
+
+- I asked the agent to explain the database schema for expenses. The agent explained the schema and tables (`expenses`, `expense_payers`, `expense_splits`). I questioned why `Expense.payer_id` was kept for backwards compatibility instead of running an Alembic migration script to backfill `expense_payers` and drop `payer_id`. The agent agreed that keeping it had introduced unnecessary technical debt and duplicate sources of truth. I asked the agent to implement the cleanup. The agent autonomously:
+  - Created Alembic migration `d4e5f6a7b8c9_remove_expense_payer_id.py` to backfill legacy expenses into `expense_payers` and drop `payer_id` (and its index) from `expenses`, verifying upgrade and downgrade.
+  - Removed `payer_id` column and legacy relationships from `models.py`, adding convenience `@property` getters (`payer` and `payer_id`) on `Expense`.
+  - Updated `ExpenseRepository` to stop writing to `payer_id` and use `expense_payers` as the single source of truth for both single and multi-payer expenses.
+  - Removed redundant `payer_id` fallback branching from `BalanceCalculator`, `formatters.py`, and `HistoryService`.
+  - Added unit test assertions in `tests/test_crud.py` verifying single/multi payer property resolution and `ExpensePayer` cascade deletion (all 168 tests passing).
