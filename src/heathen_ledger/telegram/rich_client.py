@@ -54,10 +54,12 @@ class TelegramRichClient:
         and test mock fallback to `bot.send_message`.
         """
         # 1. Check for future native PTB send_rich_message method
-        if hasattr(bot, "send_rich_message") and callable(
-            getattr(bot, "send_rich_message")
-        ):
+        has_native_send = hasattr(type(bot), "send_rich_message") or (
+            "send_rich_message" in getattr(bot, "__dict__", {})
+        )
+        if has_native_send and callable(getattr(bot, "send_rich_message", None)):
             send_fn = getattr(bot, "send_rich_message")
+
             call_kwargs: Dict[str, Any] = {
                 "chat_id": chat_id,
                 "rich_message": cls.build_rich_message_payload(rich_html),
@@ -175,11 +177,13 @@ class TelegramRichClient:
             else:
                 data["reply_markup"] = reply_markup
 
-        if hasattr(bot, "edit_rich_message_text") and callable(
-            getattr(bot, "edit_rich_message_text")
-        ):
+        has_native_edit = hasattr(type(bot), "edit_rich_message_text") or (
+            "edit_rich_message_text" in getattr(bot, "__dict__", {})
+        )
+        if has_native_edit and callable(getattr(bot, "edit_rich_message_text", None)):
             # Future PTB native support
             edit_fn = getattr(bot, "edit_rich_message_text")
+
             if isinstance(edit_fn, (AsyncMock, MagicMock)):
                 if isinstance(edit_fn, AsyncMock):
                     return bool(await edit_fn(**data))
@@ -260,10 +264,14 @@ class TelegramRichClient:
             else:
                 data["reply_markup"] = reply_markup
 
-        if hasattr(bot, "edit_ephemeral_rich_message_text") and callable(
-            getattr(bot, "edit_ephemeral_rich_message_text")
+        has_native_edit_eph = hasattr(
+            type(bot), "edit_ephemeral_rich_message_text"
+        ) or ("edit_ephemeral_rich_message_text" in getattr(bot, "__dict__", {}))
+        if has_native_edit_eph and callable(
+            getattr(bot, "edit_ephemeral_rich_message_text", None)
         ):
             edit_fn = getattr(bot, "edit_ephemeral_rich_message_text")
+
             if isinstance(edit_fn, (AsyncMock, MagicMock)):
                 if isinstance(edit_fn, AsyncMock):
                     return bool(await edit_fn(**data))

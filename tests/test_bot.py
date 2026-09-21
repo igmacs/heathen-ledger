@@ -234,6 +234,8 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
         )
         update.callback_query.answer.assert_called_once_with(text="Expense deleted.")
         update.callback_query.edit_message_text.assert_called_once()
+        edit_kwargs = update.callback_query.edit_message_text.call_args.kwargs
+        self.assertIn("rich_message", edit_kwargs.get("api_kwargs", {}))
 
     def test_history_delete_authorized_payment(self):
         payment = crud.create_payment(
@@ -252,6 +254,8 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
         )
         update.callback_query.answer.assert_called_once_with(text="Payment deleted.")
         update.callback_query.edit_message_text.assert_called_once()
+        edit_kwargs_p = update.callback_query.edit_message_text.call_args.kwargs
+        self.assertIn("rich_message", edit_kwargs_p.get("api_kwargs", {}))
 
 
 class TestDismissCallback(BaseDatabaseTestCase):

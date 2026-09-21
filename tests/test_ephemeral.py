@@ -512,27 +512,32 @@ class TestCommandsEphemeralAndPersistent(BaseDatabaseTestCase):
         update_eph.effective_chat.type = ChatType.GROUP
         update_eph.effective_message.ephemeral_message_id = 333
         context_eph = MagicMock()
-        send_eph = AsyncMock()
-        context_eph.bot.send_message = send_eph
+        post_eph = AsyncMock()
+        context_eph.bot._post = post_eph
 
         import asyncio
 
         asyncio.run(history_command(update_eph, context_eph))
-        send_eph.assert_awaited_once()
-        self.assertIn(
-            "ephemeral_message_parameters",
-            send_eph.call_args.kwargs.get("api_kwargs", {}),
-        )
+        post_eph.assert_awaited_once()
+        call_method = post_eph.call_args[0][0]
+        call_data = post_eph.call_args.kwargs.get("data", {})
+        self.assertEqual(call_method, "sendRichMessage")
+        self.assertIn("ephemeral_message_parameters", call_data)
+        self.assertIn("rich_message", call_data)
 
         update_pers = self.create_mock_message_update("/history_persistent")
         update_pers.effective_chat.type = ChatType.GROUP
         context_pers = MagicMock()
-        send_pers = AsyncMock()
-        context_pers.bot.send_message = send_pers
+        post_pers = AsyncMock()
+        context_pers.bot._post = post_pers
 
         asyncio.run(history_command(update_pers, context_pers))
-        send_pers.assert_awaited_once()
-        self.assertIsNone(send_pers.call_args.kwargs.get("api_kwargs"))
+        post_pers.assert_awaited_once()
+        call_method_p = post_pers.call_args[0][0]
+        call_data_p = post_pers.call_args.kwargs.get("data", {})
+        self.assertEqual(call_method_p, "sendRichMessage")
+        self.assertNotIn("ephemeral_message_parameters", call_data_p)
+        self.assertIn("rich_message", call_data_p)
 
     def test_pay_ephemeral_vs_persistent(self):
         update_eph = self.create_mock_message_update("/pay 20 for Snacks")
