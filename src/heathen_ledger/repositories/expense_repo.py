@@ -27,8 +27,6 @@ class ExpenseRepository:
         if payers:
             if amount == 0:
                 amount = sum(payers.values())
-            if payer_id is None:
-                payer_id = next(iter(payers)) if len(payers) == 1 else None
         elif payer_id is not None:
             payers = {payer_id: amount}
         else:
@@ -36,7 +34,6 @@ class ExpenseRepository:
 
         expense = Expense(
             group_id=group_id,
-            payer_id=payer_id,
             amount=amount,
             description=description,
             expense_date=expense_date,
