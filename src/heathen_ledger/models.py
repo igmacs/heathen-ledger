@@ -44,7 +44,6 @@ class User(Base):
 
     # Relationships
     groups = relationship("Group", secondary=group_members, back_populates="members")
-    expenses_paid = relationship("Expense", back_populates="payer")
     expense_contributions = relationship("ExpensePayer", back_populates="user")
     splits = relationship("ExpenseSplit", back_populates="user")
     payments_sent = relationship(
@@ -84,9 +83,6 @@ class Expense(Base):
     group_id = Column(
         Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    payer_id = Column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
-    )
     amount = Column(Integer, nullable=False)  # Stored in cents
     description = Column(String, nullable=True)
     expense_date = Column(Date, nullable=True)
@@ -98,15 +94,26 @@ class Expense(Base):
 
     # Relationships
     group = relationship("Group", back_populates="expenses")
-    payer = relationship(
-        "User", foreign_keys=[payer_id], back_populates="expenses_paid"
-    )
     payers = relationship(
         "ExpensePayer", back_populates="expense", cascade="all, delete-orphan"
     )
     splits = relationship(
         "ExpenseSplit", back_populates="expense", cascade="all, delete-orphan"
     )
+
+    @property
+    def payer(self):
+        """Single payer convenience property (None if multiple or no payers)."""
+        if self.payers and len(self.payers) == 1:
+            return self.payers[0].user
+        return None
+
+    @property
+    def payer_id(self):
+        """Single payer ID convenience property (None if multiple or no payers)."""
+        if self.payers and len(self.payers) == 1:
+            return self.payers[0].user_id
+        return None
 
 
 class ExpensePayer(Base):
