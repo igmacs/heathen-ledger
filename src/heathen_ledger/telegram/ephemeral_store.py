@@ -37,6 +37,7 @@ class EphemeralPayloadStore:
         text: str,
         parse_mode: Optional[str],
         reply_markup: Optional[InlineKeyboardMarkup],
+        rich_html: Optional[str] = None,
     ) -> str:
         """Store a new persist payload and return a unique token."""
         self.prune_expired()
@@ -47,6 +48,7 @@ class EphemeralPayloadStore:
             "text": text,
             "parse_mode": parse_mode,
             "reply_markup": reply_markup,
+            "rich_html": rich_html,
             "created_at": time.time(),
         }
         return token

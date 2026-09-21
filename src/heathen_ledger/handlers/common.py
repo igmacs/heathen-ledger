@@ -10,7 +10,9 @@ from ..telegram import (
     EphemeralPayloadStore,
     TelegramEphemeralClient,
     EphemeralActionKeyboardDecorator,
+    TelegramRichClient,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +47,14 @@ async def send_response(
     ephemeral: bool | None = None,
     shareable: bool | None = None,
     dismissible: bool = True,
+    rich_html: str | None = None,
 ) -> Message | None:
     """Send a response message respecting ephemeral and persistent preferences.
 
     If ephemeral is None, it defaults to False if the command was invoked as *_persistent,
     and True otherwise in group chats.
     In group chats when ephemeral is True, attaches 'Share to group' and 'Dismiss' action buttons.
+    Supports Telegram Bot API 10.3 Rich Messages via rich_html.
     """
     # Trigger mock reply_text if present in unit test fixtures
     msg_obj = getattr(update, "effective_message", None) or getattr(
@@ -104,6 +108,7 @@ async def send_response(
                 text=text,
                 parse_mode=parse_mode,
                 reply_markup=reply_markup,
+                rich_html=rich_html,
             )
 
         effective_reply_markup = EphemeralActionKeyboardDecorator.attach_action_buttons(
@@ -125,13 +130,26 @@ async def send_response(
             }
 
         try:
-            sent_msg = await _do_send(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-                reply_markup=effective_reply_markup,
-                api_kwargs=api_kwargs,
-            )
+            if rich_html and bot:
+                sent_msg = await TelegramRichClient.send_rich_message(
+                    bot=bot,
+                    chat_id=chat_id,
+                    rich_html=rich_html,
+                    reply_markup=effective_reply_markup,
+                    ephemeral_message_parameters=api_kwargs[
+                        "ephemeral_message_parameters"
+                    ],
+                    fallback_text=text,
+                    parse_mode=parse_mode,
+                )
+            else:
+                sent_msg = await _do_send(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=effective_reply_markup,
+                    api_kwargs=api_kwargs,
+                )
             if token and token in _EPHEMERAL_STORE.payloads:
                 sent_eph_id = _get_ephemeral_message_id(sent_msg)
                 if sent_eph_id is not None:
@@ -158,6 +176,15 @@ async def send_response(
                 reply_markup=reply_markup,
             )
     else:
+        if rich_html and bot:
+            return await TelegramRichClient.send_rich_message(
+                bot=bot,
+                chat_id=chat_id,
+                rich_html=rich_html,
+                reply_markup=reply_markup,
+                fallback_text=text,
+                parse_mode=parse_mode,
+            )
         return await _do_send(
             chat_id=chat_id,
             text=text,
@@ -213,27 +240,38 @@ async def persist_callback_handler(
     # 1. Send the persistent message to the group
     chat_id = payload["chat_id"]
     text = payload["text"]
+    rich_html = payload.get("rich_html")
     parse_mode = payload.get("parse_mode")
     reply_markup = payload.get("reply_markup")
 
-    send_fn = getattr(bot, "send_message", None)
-    if send_fn:
-        if isinstance(send_fn, AsyncMock) or asyncio.iscoroutinefunction(send_fn):
-            await send_fn(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup,
-            )
-        elif callable(send_fn):
-            res = send_fn(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup,
-            )
-            if asyncio.iscoroutine(res):
-                await res
+    if rich_html:
+        await TelegramRichClient.send_rich_message(
+            bot=bot,
+            chat_id=chat_id,
+            rich_html=rich_html,
+            reply_markup=reply_markup,
+            fallback_text=text,
+            parse_mode=parse_mode,
+        )
+    else:
+        send_fn = getattr(bot, "send_message", None)
+        if send_fn:
+            if isinstance(send_fn, AsyncMock) or asyncio.iscoroutinefunction(send_fn):
+                await send_fn(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                )
+            elif callable(send_fn):
+                res = send_fn(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=parse_mode,
+                    reply_markup=reply_markup,
+                )
+                if asyncio.iscoroutine(res):
+                    await res
 
     # 2. Delete the ephemeral message using delete_message_or_ephemeral
     eph_id = payload.get("ephemeral_message_id") or _get_ephemeral_message_id(
