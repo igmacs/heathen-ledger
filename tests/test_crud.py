@@ -10,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from heathen_ledger.database import Base
 from heathen_ledger import crud
+from heathen_ledger.models import ExpensePayer, ExpenseSplit
 from heathen_ledger.domain import BalanceCalculator
 from heathen_ledger.repositories import (
     UserRepository,
@@ -44,7 +45,7 @@ class TestCRUD(unittest.TestCase):
             # 3. Log a split expense
             # Alice paid 30.00 (3000 cents) for dinner, split equally between Alice, Bob, and Charlie (1000 each)
             splits = {alice.id: 1000, bob.id: 1000, charlie.id: 1000}
-            crud.create_expense(
+            exp1 = crud.create_expense(
                 session,
                 group_id=group.id,
                 payer_id=alice.id,
@@ -53,6 +54,11 @@ class TestCRUD(unittest.TestCase):
                 splits=splits,
             )
             session.commit()
+
+            self.assertEqual(len(exp1.payers), 1)
+            self.assertEqual(exp1.payers[0].user_id, alice.id)
+            self.assertEqual(exp1.payer, alice)
+            self.assertEqual(exp1.payer_id, alice.id)
 
             # Verify balances: Alice should be owed 20.00 (+2000), Bob and Charlie owe 10.00 (-1000) each.
             balances = crud.get_group_balances(session, group.id)
@@ -154,6 +160,8 @@ class TestCRUD(unittest.TestCase):
             session.commit()
 
             self.assertEqual(len(expense.payers), 2)
+            self.assertIsNone(expense.payer)
+            self.assertIsNone(expense.payer_id)
             self.assertEqual(expense.expense_date, exp_date)
 
             balances = crud.get_group_balances(session, group.id)
@@ -162,10 +170,14 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(balances[charlie.id], -2000)
 
             # Cascade delete check
+            self.assertEqual(session.query(ExpensePayer).count(), 2)
+            self.assertEqual(session.query(ExpenseSplit).count(), 3)
             success_exp = crud.delete_expense(session, expense.id)
             session.commit()
             self.assertTrue(success_exp)
             self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
+            self.assertEqual(session.query(ExpensePayer).count(), 0)
+            self.assertEqual(session.query(ExpenseSplit).count(), 0)
 
     def test_external_user_crud(self):
         engine = create_engine("sqlite:///:memory:")
