@@ -43,6 +43,7 @@ class TelegramRichClient:
         *,
         reply_markup: Optional[InlineKeyboardMarkup] = None,
         ephemeral_message_parameters: Optional[Dict[str, Any]] = None,
+        reply_parameters: Optional[Dict[str, Any] | Any] = None,
         disable_notification: Optional[bool] = None,
         fallback_text: Optional[str] = None,
         parse_mode: Optional[str] = None,
@@ -71,6 +72,8 @@ class TelegramRichClient:
                 call_kwargs["ephemeral_message_parameters"] = (
                     ephemeral_message_parameters
                 )
+            if reply_parameters is not None:
+                call_kwargs["reply_parameters"] = reply_parameters
             if disable_notification is not None:
                 call_kwargs["disable_notification"] = disable_notification
 
@@ -105,6 +108,9 @@ class TelegramRichClient:
                 "reply_markup": reply_markup,
                 "api_kwargs": api_kwargs,
             }
+            if reply_parameters is not None:
+                call_kwargs["reply_parameters"] = reply_parameters
+
             if isinstance(send_msg, AsyncMock):
                 return await send_msg(**call_kwargs)
             res = send_msg(**call_kwargs)
@@ -119,6 +125,11 @@ class TelegramRichClient:
         }
         if ephemeral_message_parameters:
             data["ephemeral_message_parameters"] = ephemeral_message_parameters
+        if reply_parameters is not None:
+            if hasattr(reply_parameters, "to_dict"):
+                data["reply_parameters"] = reply_parameters.to_dict()
+            else:
+                data["reply_parameters"] = reply_parameters
         if disable_notification is not None:
             data["disable_notification"] = disable_notification
         if reply_markup is not None:
@@ -143,13 +154,16 @@ class TelegramRichClient:
                 api_kwargs["ephemeral_message_parameters"] = (
                     ephemeral_message_parameters
                 )
-            return await send_msg(
-                chat_id=chat_id,
-                text=fallback_text or rich_html,
-                parse_mode=parse_mode,
-                reply_markup=reply_markup,
-                api_kwargs=api_kwargs,
-            )
+            call_kwargs = {
+                "chat_id": chat_id,
+                "text": fallback_text or rich_html,
+                "parse_mode": parse_mode,
+                "reply_markup": reply_markup,
+                "api_kwargs": api_kwargs,
+            }
+            if reply_parameters is not None:
+                call_kwargs["reply_parameters"] = reply_parameters
+            return await send_msg(**call_kwargs)
 
         return None
 

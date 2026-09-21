@@ -72,6 +72,33 @@ class TestTelegramRichClient(unittest.TestCase):
             },
         )
 
+    def test_send_rich_message_with_reply_parameters_via_post(self):
+        bot = MagicMock(spec=["_post"])
+        bot._post = AsyncMock(return_value={"message_id": 100})
+
+        html = "<p>With reply params</p>"
+        reply_params = {"ephemeral_message_id": 4321}
+
+        res = asyncio.run(
+            TelegramRichClient.send_rich_message(
+                bot,
+                chat_id=123,
+                rich_html=html,
+                ephemeral_message_parameters={"receiver_user_id": 456},
+                reply_parameters=reply_params,
+            )
+        )
+        self.assertEqual(res, {"message_id": 100})
+        bot._post.assert_awaited_once_with(
+            "sendRichMessage",
+            data={
+                "chat_id": 123,
+                "rich_message": {"html": html},
+                "ephemeral_message_parameters": {"receiver_user_id": 456},
+                "reply_parameters": reply_params,
+            },
+        )
+
     def test_send_rich_message_mock_send_message_fallback(self):
         bot = MagicMock(spec=["send_message"])
         bot.send_message = AsyncMock(return_value="fallback_msg")

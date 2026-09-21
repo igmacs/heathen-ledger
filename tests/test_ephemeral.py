@@ -204,6 +204,130 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs.get("chat_id"), 888)
         self.assertIsNone(kwargs.get("api_kwargs"))
 
+    async def test_send_response_rich_html_passes_reply_parameters(self):
+        from unittest.mock import patch
+
+        update = MagicMock()
+        context = MagicMock()
+
+        update.effective_chat.type = ChatType.GROUP
+        update.effective_chat.id = -100123
+        update.effective_user.id = 555
+        update.effective_message.ephemeral_message_id = 9876
+        update.effective_message.api_kwargs = None
+        update.effective_message.text = "/history"
+
+        rich_html = "<p>History</p>"
+
+        with patch(
+            "heathen_ledger.telegram.TelegramRichClient.send_rich_message",
+            new_callable=AsyncMock,
+        ) as mock_rich:
+            await send_response(
+                update,
+                context,
+                text="History text",
+                rich_html=rich_html,
+            )
+
+            mock_rich.assert_awaited_once()
+            _, kwargs = mock_rich.call_args
+            self.assertEqual(kwargs.get("chat_id"), -100123)
+            self.assertEqual(kwargs.get("rich_html"), rich_html)
+            self.assertEqual(
+                kwargs.get("ephemeral_message_parameters"),
+                {"receiver_user_id": 555},
+            )
+            self.assertEqual(
+                kwargs.get("reply_parameters"),
+                {"ephemeral_message_id": 9876},
+            )
+
+    async def test_send_response_rich_html_fallback_to_public_rich_on_bad_request(self):
+        from unittest.mock import patch
+
+        update = MagicMock()
+        context = MagicMock()
+
+        update.effective_chat.type = ChatType.GROUP
+        update.effective_chat.id = -100123
+        update.effective_user.id = 555
+        update.effective_message.ephemeral_message_id = None
+        update.effective_message.api_kwargs = None
+        update.effective_message.text = "/history"
+
+        rich_html = "<p>History</p>"
+
+        with patch(
+            "heathen_ledger.telegram.TelegramRichClient.send_rich_message",
+            new_callable=AsyncMock,
+        ) as mock_rich:
+            # First call (ephemeral) fails with BadRequest("BOT_NOT_ADMIN")
+            # Second call (public fallback) succeeds
+            mock_rich.side_effect = [
+                BadRequest("BOT_NOT_ADMIN"),
+                MagicMock(),
+            ]
+
+            await send_response(
+                update,
+                context,
+                text="History text",
+                rich_html=rich_html,
+            )
+
+            self.assertEqual(mock_rich.await_count, 2)
+            # Second call should be public (no ephemeral_message_parameters)
+            _, second_kwargs = mock_rich.await_args_list[1]
+            self.assertEqual(second_kwargs.get("chat_id"), -100123)
+            self.assertEqual(second_kwargs.get("rich_html"), rich_html)
+            self.assertIsNone(second_kwargs.get("ephemeral_message_parameters"))
+
+    async def test_send_response_rich_html_fallback_uses_fallback_reply_markup(self):
+        from unittest.mock import patch
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+        update = MagicMock()
+        context = MagicMock()
+
+        update.effective_chat.type = ChatType.GROUP
+        update.effective_chat.id = -100123
+        update.effective_user.id = 555
+        update.effective_message.ephemeral_message_id = None
+        update.effective_message.api_kwargs = None
+        update.effective_message.text = "/history"
+
+        rich_html = "<p>History</p>"
+        fallback_kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("Delete", callback_data="del:1")]]
+        )
+
+        send_mock = AsyncMock()
+        context.bot.send_message = send_mock
+
+        with patch(
+            "heathen_ledger.telegram.TelegramRichClient.send_rich_message",
+            new_callable=AsyncMock,
+        ) as mock_rich:
+            # Both ephemeral and public rich fail
+            mock_rich.side_effect = [
+                BadRequest("BOT_NOT_ADMIN"),
+                Exception("Network error"),
+            ]
+
+            await send_response(
+                update,
+                context,
+                text="History text",
+                rich_html=rich_html,
+                reply_markup=None,
+                fallback_reply_markup=fallback_kb,
+            )
+
+            send_mock.assert_awaited_once()
+            _, send_kwargs = send_mock.call_args
+            self.assertEqual(send_kwargs.get("reply_markup"), fallback_kb)
+
 
 class TestPersistCallbackHandler(unittest.IsolatedAsyncioTestCase):
     async def test_persist_callback_handler_success(self):

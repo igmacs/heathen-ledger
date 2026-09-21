@@ -43,6 +43,7 @@ async def send_response(
     text: str,
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
+    fallback_reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: str | None = "Markdown",
     ephemeral: bool | None = None,
     shareable: bool | None = None,
@@ -139,6 +140,7 @@ async def send_response(
                     ephemeral_message_parameters=api_kwargs[
                         "ephemeral_message_parameters"
                     ],
+                    reply_parameters=api_kwargs.get("reply_parameters"),
                     fallback_text=text,
                     parse_mode=parse_mode,
                 )
@@ -169,27 +171,48 @@ async def send_response(
             )
             if token:
                 _EPHEMERAL_STORE.pop(token)
+            if rich_html and bot:
+                try:
+                    return await TelegramRichClient.send_rich_message(
+                        bot=bot,
+                        chat_id=chat_id,
+                        rich_html=rich_html,
+                        reply_markup=reply_markup,
+                        fallback_text=text,
+                        parse_mode=parse_mode,
+                    )
+                except Exception as rich_err:
+                    logger.warning(
+                        "Failed to send public rich fallback message in group %s: %s",
+                        chat_id,
+                        rich_err,
+                    )
             return await _do_send(
                 chat_id=chat_id,
                 text=text,
                 parse_mode=parse_mode,
-                reply_markup=reply_markup,
+                reply_markup=fallback_reply_markup or reply_markup,
             )
     else:
         if rich_html and bot:
-            return await TelegramRichClient.send_rich_message(
-                bot=bot,
-                chat_id=chat_id,
-                rich_html=rich_html,
-                reply_markup=reply_markup,
-                fallback_text=text,
-                parse_mode=parse_mode,
-            )
+            try:
+                return await TelegramRichClient.send_rich_message(
+                    bot=bot,
+                    chat_id=chat_id,
+                    rich_html=rich_html,
+                    reply_markup=reply_markup,
+                    fallback_text=text,
+                    parse_mode=parse_mode,
+                )
+            except Exception as rich_err:
+                logger.warning(
+                    "Failed to send rich message in chat %s: %s", chat_id, rich_err
+                )
         return await _do_send(
             chat_id=chat_id,
             text=text,
             parse_mode=parse_mode,
-            reply_markup=reply_markup,
+            reply_markup=fallback_reply_markup or reply_markup,
         )
 
 
