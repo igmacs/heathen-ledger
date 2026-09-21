@@ -53,7 +53,8 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - `/payback @Bob @Alice 12.50` (Logs that Bob paid Alice $12.50).
 
 5. **Audit History**:
-   - `/history` (Displays the last 10 logged transactions—expenses and payments—in chronological order).
+   - `/history` (Displays the last 10 logged transactions—expenses and payments—in chronological order using Telegram Rich Messages with embedded delete buttons beside each entry).
+
 
 6. **Voice Messages**:
    - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
@@ -476,3 +477,10 @@ when I had to correct or guide it
   - Updated `ExpenseRepository` to stop writing to `payer_id` and use `expense_payers` as the single source of truth for both single and multi-payer expenses.
   - Removed redundant `payer_id` fallback branching from `BalanceCalculator`, `formatters.py`, and `HistoryService`.
   - Added unit test assertions in `tests/test_crud.py` verifying single/multi payer property resolution and `ExpensePayer` cascade deletion (all 168 tests passing).
+
+- I expressed that I did not like having delete inline buttons stacked below the history view, and asked whether it is possible to display delete buttons at the side of each entry using Telegram Rich Messages (Bot API 10.3). The agent analyzed the Bot API capabilities, explaining that standard inline keyboards only appear below messages, whereas Rich Messages allow embedded `<tg-button>` tags directly beside text lines. I instructed the agent to implement Rich Messages for the history view, to structure it so that replacing the implementation with native `python-telegram-bot` methods will be easy once supported, and to add a reminder comment. The agent autonomously:
+  - Added `generate_history_rich_html` to `formatters.py` formatting transactions as Rich HTML with embedded `<tg-button type="callback_data" style="danger" data="hist_del:...">🗑️</tg-button>` on each line.
+  - Implemented `TelegramRichClient` in `src/heathen_ledger/telegram/rich_client.py` as a dedicated client adapter with explicit TODO/replacement comments for future PTB releases, wrapping `sendRichMessage`, `editMessageText`, and `editEphemeralMessageText`.
+  - Updated `EphemeralPayloadStore`, `send_response`, and `persist_callback_handler` in `handlers/common.py` to support `rich_html` in both ephemeral and persistent modes.
+  - Updated `handlers/history.py` (`history_command` and `refresh_history_message`) to send and refresh history using rich messages while preserving ephemeral action buttons (`Share to group` / `Dismiss`).
+  - Added unit test suite `tests/test_rich_client.py` and updated existing history tests (all 177 tests passing).
