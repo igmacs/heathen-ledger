@@ -484,3 +484,9 @@ when I had to correct or guide it
   - Updated `EphemeralPayloadStore`, `send_response`, and `persist_callback_handler` in `handlers/common.py` to support `rich_html` in both ephemeral and persistent modes.
   - Updated `handlers/history.py` (`history_command` and `refresh_history_message`) to send and refresh history using rich messages while preserving ephemeral action buttons (`Share to group` / `Dismiss`).
   - Added unit test suite `tests/test_rich_client.py` and updated existing history tests (all 177 tests passing).
+
+- When testing `/history` in a group chat, I reported that the response was no longer ephemeral, had no Dismiss or Share buttons, and had no delete buttons at all. The agent inspected container logs and diagnosed that non-admin bots in group chats require `reply_parameters.ephemeral_message_id` on `sendRichMessage` to send ephemeral replies to incoming ephemeral commands; without it, Telegram rejected the call with `Bot_not_admin`. In the exception handler, `send_response` had dropped rich HTML and used `reply_markup=None`, falling back to plain text with zero buttons. The agent autonomously:
+  - Updated `TelegramRichClient.send_rich_message` to accept and forward `reply_parameters` across native, mock, and raw `_post` payloads.
+  - Updated `send_response` in `handlers/common.py` to pass `reply_parameters` from incoming ephemeral messages, and enhanced the fallback handler to attempt public rich message delivery before falling back to `_do_send`.
+  - Added `fallback_reply_markup` support in `send_response` and updated `history_command` to supply the legacy delete keyboard as a safety net if rich messaging is completely unavailable.
+  - Added unit tests in `tests/test_rich_client.py` and `tests/test_ephemeral.py` (181 total passing tests), rebuilt the Docker container, and verified the fix.
