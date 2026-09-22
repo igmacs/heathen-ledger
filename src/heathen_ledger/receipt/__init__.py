@@ -1,9 +1,16 @@
 """Receipt photo parsing and processing package."""
 
 from typing import Optional
-from .base import ReceiptParser, Receipt, ReceiptItem
+from .base import ReceiptParser, Receipt, ReceiptItem, expand_receipt_items
 from .gemini import GeminiReceiptParser
 from .image_downloader import ReceiptImageDownloader
+from .pending_store import (
+    PendingTicketSession,
+    PendingTicketStore,
+    TicketItemState,
+    TicketParticipant,
+    extract_initials,
+)
 
 
 def get_receipt_parser(
@@ -23,4 +30,10 @@ __all__ = [
     "GeminiReceiptParser",
     "ReceiptImageDownloader",
     "get_receipt_parser",
+    "expand_receipt_items",
+    "PendingTicketSession",
+    "PendingTicketStore",
+    "TicketItemState",
+    "TicketParticipant",
+    "extract_initials",
 ]
