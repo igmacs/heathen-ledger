@@ -33,6 +33,8 @@ from .receipt import (
     ticket_command_handler,
     ticket_photo_handler,
     ticket_mention_handler,
+    ticket_callback_handler,
+    ticket_external_reply_handler,
 )
 
 
@@ -75,6 +77,14 @@ def register_handlers(application: Application) -> None:
         )
     )
 
+    # Ticket external participant name reply handler
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            ticket_external_reply_handler,
+        )
+    )
+
     # Command Handlers (ephemeral in group chats)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("pay", pay_command))
@@ -108,6 +118,9 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(
         CallbackQueryHandler(voice_callback_handler, pattern="^voice:")
+    )
+    application.add_handler(
+        CallbackQueryHandler(ticket_callback_handler, pattern="^tkt:")
     )
     application.add_handler(
         CallbackQueryHandler(persist_callback_handler, pattern="^persist:")

@@ -126,3 +126,50 @@ def format_ticket_split_summary(
     lines.append("────────────────────")
     lines.append("Tap *Record to Ledger* to create this expense in group balances.")
     return "\n".join(lines)
+
+
+def format_ticket_split_rich_html(
+    session: PendingTicketSession,
+    shares: Dict[str, Dict[str, Any]],
+) -> str:
+    """Format the calculated ticket split summary in Telegram Rich HTML."""
+    currency = session.receipt.currency
+    target_total = (
+        session.receipt.total
+        if session.receipt.total is not None
+        else round(sum(it.price for it in session.items), 2)
+    )
+    formatted_total = format_price(target_total, currency)
+    merchant = html.escape(session.receipt.merchant or "Receipt")
+
+    lines = [
+        "<p>🧾 <b>Bill Split Summary</b></p>",
+        f"<p>📍 <b>{merchant}</b> — Total: <b>{formatted_total}</b></p>",
+    ]
+
+    if not shares:
+        lines.append("<p>⚠️ <i>No items have been claimed yet.</i></p>")
+        return "\n".join(lines)
+
+    for p in shares.values():
+        name = html.escape(p["display_name"])
+        uname_str = f" (@{html.escape(p['username'])})" if p.get("username") else ""
+        ext_str = " <i>(external)</i>" if p.get("is_external") else ""
+        amt_str = format_price(p["total_share"], currency)
+
+        details = []
+        if p.get("items_subtotal"):
+            details.append(f"items: {format_price(p['items_subtotal'], currency)}")
+        if p.get("extra_fee_share"):
+            details.append(f"fees/tax: {format_price(p['extra_fee_share'], currency)}")
+        detail_str = f" <i>({', '.join(details)})</i>" if details else ""
+
+        lines.append(
+            f"<p>• <b>{name}</b>{uname_str}{ext_str}: <b>{amt_str}</b>{detail_str}</p>"
+        )
+
+    lines.append("<p>────────────────────</p>")
+    lines.append(
+        "<p>Tap <b>Record to Ledger</b> to create this expense in group balances.</p>"
+    )
+    return "\n".join(lines)

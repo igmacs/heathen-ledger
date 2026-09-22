@@ -194,8 +194,11 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(kb)
 
         # Build split message
-        md, kb_split, shares = ReceiptService.build_split_summary_message("tkt99")
+        md, kb_split, shares, rich_html = ReceiptService.build_split_summary_message(
+            "tkt99"
+        )
         self.assertIn("Bill Split Summary", md)
+        self.assertIn("Bill Split Summary", rich_html)
         self.assertEqual(len(shares), 2)
 
     def test_record_ticket_expense_executes_command(self):

@@ -16,6 +16,7 @@ from ..receipt import (
 from ..receipt.formatter import (
     format_price,
     format_ticket_rich_html,
+    format_ticket_split_rich_html,
     format_ticket_split_summary,
 )
 from ..keyboards.ticket import TicketKeyboardBuilder
@@ -216,15 +217,17 @@ class ReceiptService:
         Optional[str],
         Optional[InlineKeyboardMarkup],
         Optional[Dict[str, Dict[str, Any]]],
+        Optional[str],
     ]:
         """Calculate and format the split summary for a ticket session."""
         session = cls.get_session(token)
         if not session:
-            return None, None, None
+            return None, None, None, None
         shares = session.calculate_split()
         summary_md = format_ticket_split_summary(session, shares)
+        rich_html = format_ticket_split_rich_html(session, shares)
         keyboard = TicketKeyboardBuilder.build_split_confirmation_keyboard(token)
-        return summary_md, keyboard, shares
+        return summary_md, keyboard, shares, rich_html
 
     @classmethod
     async def process_receipt_image(
