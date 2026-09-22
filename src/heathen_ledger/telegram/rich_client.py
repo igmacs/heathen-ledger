@@ -45,8 +45,6 @@ class TelegramRichClient:
         ephemeral_message_parameters: Optional[Dict[str, Any]] = None,
         reply_parameters: Optional[Dict[str, Any] | Any] = None,
         disable_notification: Optional[bool] = None,
-        fallback_text: Optional[str] = None,
-        parse_mode: Optional[str] = None,
         **kwargs: Any,
     ) -> Any:
         """Send a rich formatted message using Telegram Bot API's sendRichMessage.
@@ -103,8 +101,7 @@ class TelegramRichClient:
 
             call_kwargs = {
                 "chat_id": chat_id,
-                "text": fallback_text or rich_html,
-                "parse_mode": parse_mode,
+                "text": rich_html,
                 "reply_markup": reply_markup,
                 "api_kwargs": api_kwargs,
             }
@@ -147,24 +144,6 @@ class TelegramRichClient:
                 return await res
             return res
 
-        # Fallback if bot has generic send_message
-        if send_msg and callable(send_msg):
-            api_kwargs = {"rich_message": cls.build_rich_message_payload(rich_html)}
-            if ephemeral_message_parameters:
-                api_kwargs["ephemeral_message_parameters"] = (
-                    ephemeral_message_parameters
-                )
-            call_kwargs = {
-                "chat_id": chat_id,
-                "text": fallback_text or rich_html,
-                "parse_mode": parse_mode,
-                "reply_markup": reply_markup,
-                "api_kwargs": api_kwargs,
-            }
-            if reply_parameters is not None:
-                call_kwargs["reply_parameters"] = reply_parameters
-            return await send_msg(**call_kwargs)
-
         return None
 
     @classmethod
@@ -176,7 +155,6 @@ class TelegramRichClient:
         rich_html: str,
         *,
         reply_markup: Optional[InlineKeyboardMarkup] = None,
-        fallback_text: Optional[str] = None,
         **kwargs: Any,
     ) -> bool:
         """Edit a standard rich message using editMessageText with rich_message."""
@@ -213,40 +191,6 @@ class TelegramRichClient:
                 post_fn("editMessageText", data=data)
                 return True
             res = post_fn("editMessageText", data=data)
-            if asyncio.iscoroutine(res):
-                return bool(await res)
-            return bool(res)
-
-        if hasattr(bot, "edit_message_text") and callable(
-            getattr(bot, "edit_message_text")
-        ):
-            edit_fn = getattr(bot, "edit_message_text")
-            api_kwargs = {"rich_message": cls.build_rich_message_payload(rich_html)}
-            if isinstance(edit_fn, (AsyncMock, MagicMock)):
-                if isinstance(edit_fn, AsyncMock):
-                    await edit_fn(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=fallback_text or "",
-                        reply_markup=reply_markup,
-                        api_kwargs=api_kwargs,
-                    )
-                else:
-                    edit_fn(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=fallback_text or "",
-                        reply_markup=reply_markup,
-                        api_kwargs=api_kwargs,
-                    )
-                return True
-            res = edit_fn(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=fallback_text or "",
-                reply_markup=reply_markup,
-                api_kwargs=api_kwargs,
-            )
             if asyncio.iscoroutine(res):
                 return bool(await res)
             return bool(res)
@@ -313,7 +257,6 @@ class TelegramRichClient:
         query: Any,
         bot: Any = None,
         rich_html: str = "",
-        fallback_text: str = "",
         reply_markup: Optional[InlineKeyboardMarkup] = None,
     ) -> bool:
         """Edit an existing rich message (ephemeral or standard) associated with a callback query."""
@@ -324,7 +267,7 @@ class TelegramRichClient:
                 try:
                     if isinstance(edit_fn, AsyncMock):
                         await edit_fn(
-                            text=fallback_text,
+                            text=rich_html,
                             reply_markup=reply_markup,
                             api_kwargs={
                                 "rich_message": cls.build_rich_message_payload(
@@ -334,7 +277,7 @@ class TelegramRichClient:
                         )
                     else:
                         edit_fn(
-                            text=fallback_text,
+                            text=rich_html,
                             reply_markup=reply_markup,
                             api_kwargs={
                                 "rich_message": cls.build_rich_message_payload(
@@ -384,7 +327,6 @@ class TelegramRichClient:
                     message_id=msg_id,
                     rich_html=rich_html,
                     reply_markup=reply_markup,
-                    fallback_text=fallback_text,
                 )
                 if res:
                     return True

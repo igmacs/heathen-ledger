@@ -23,7 +23,6 @@ _clean_old_persist_payloads = _EPHEMERAL_STORE.prune_expired
 _has_dismiss_button = EphemeralActionKeyboardDecorator.has_dismiss_button
 _get_ephemeral_message_id = TelegramEphemeralClient.extract_ephemeral_message_id
 delete_ephemeral_message = TelegramEphemeralClient.delete_ephemeral_message
-edit_ephemeral_message_text = TelegramEphemeralClient.edit_ephemeral_message_text
 delete_message_or_ephemeral = TelegramEphemeralClient.delete_message_or_ephemeral
 
 
@@ -40,7 +39,7 @@ def is_persistent_command(update: Update) -> bool:
 async def send_response(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
-    text: str,
+    text: str | None = None,
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
     parse_mode: str | None = "Markdown",
@@ -63,10 +62,15 @@ async def send_response(
     if msg_obj and hasattr(msg_obj, "reply_text"):
         reply_fn = getattr(msg_obj, "reply_text", None)
         if isinstance(reply_fn, (MagicMock, AsyncMock)):
+            effective_text = text if text is not None else (rich_html or "")
             if isinstance(reply_fn, AsyncMock):
-                await reply_fn(text, reply_markup=reply_markup, parse_mode=parse_mode)
+                await reply_fn(
+                    effective_text, reply_markup=reply_markup, parse_mode=parse_mode
+                )
             else:
-                reply_fn(text, reply_markup=reply_markup, parse_mode=parse_mode)
+                reply_fn(
+                    effective_text, reply_markup=reply_markup, parse_mode=parse_mode
+                )
 
     chat = getattr(update, "effective_chat", None)
     user = getattr(update, "effective_user", None)
@@ -97,7 +101,7 @@ async def send_response(
         can_share = (
             shareable
             if shareable is not None
-            else not (text.startswith("⚠️") or text.startswith("❌"))
+            else not (text and (text.startswith("⚠️") or text.startswith("❌")))
         )
 
         token: str | None = None
@@ -105,7 +109,7 @@ async def send_response(
             token = _EPHEMERAL_STORE.store(
                 chat_id=chat_id,
                 user_id=user.id,
-                text=text,
+                text=text or "",
                 parse_mode=parse_mode,
                 reply_markup=reply_markup,
                 rich_html=rich_html,
@@ -140,13 +144,11 @@ async def send_response(
                         "ephemeral_message_parameters"
                     ],
                     reply_parameters=api_kwargs.get("reply_parameters"),
-                    fallback_text=text,
-                    parse_mode=parse_mode,
                 )
             else:
                 sent_msg = await _do_send(
                     chat_id=chat_id,
-                    text=text,
+                    text=text or "",
                     parse_mode=parse_mode,
                     reply_markup=effective_reply_markup,
                     api_kwargs=api_kwargs,
@@ -178,12 +180,10 @@ async def send_response(
                 chat_id=chat_id,
                 rich_html=rich_html,
                 reply_markup=reply_markup,
-                fallback_text=text,
-                parse_mode=parse_mode,
             )
         return await _do_send(
             chat_id=chat_id,
-            text=text,
+            text=text or "",
             parse_mode=parse_mode,
             reply_markup=reply_markup,
         )
@@ -246,8 +246,6 @@ async def persist_callback_handler(
             chat_id=chat_id,
             rich_html=rich_html,
             reply_markup=reply_markup,
-            fallback_text=text,
-            parse_mode=parse_mode,
         )
     else:
         send_fn = getattr(bot, "send_message", None)
@@ -277,24 +275,13 @@ async def persist_callback_handler(
         query.from_user.id if query.from_user else None
     )
 
-    deleted = await delete_message_or_ephemeral(
+    await delete_message_or_ephemeral(
         context,
         chat_id=chat_id,
         user_id=user_id,
         ephemeral_message_id=eph_id,
         message=query.message,
     )
-    if not deleted and eph_id and user_id:
-        try:
-            await edit_ephemeral_message_text(
-                bot,
-                chat_id=chat_id,
-                receiver_user_id=user_id,
-                ephemeral_message_id=eph_id,
-                text="📢 Shared to group.",
-            )
-        except Exception:
-            pass
 
     # 3. Answer callback query
     if hasattr(query, "answer"):
@@ -358,28 +345,14 @@ async def dismiss_callback_handler(
         payload and payload.get("ephemeral_message_id")
     ) or _get_ephemeral_message_id(query.message)
 
-    bot = getattr(context, "bot", None)
-    deleted = False
     if chat_id:
-        deleted = await delete_message_or_ephemeral(
+        await delete_message_or_ephemeral(
             context,
             chat_id=chat_id,
             user_id=user_id,
             ephemeral_message_id=eph_id,
             message=query.message,
         )
-
-    if not deleted and bot and chat_id and user_id and eph_id:
-        try:
-            await edit_ephemeral_message_text(
-                bot,
-                chat_id=chat_id,
-                receiver_user_id=user_id,
-                ephemeral_message_id=eph_id,
-                text="🗑️ Message dismissed.",
-            )
-        except Exception:
-            pass
 
     if hasattr(query, "answer"):
         try:

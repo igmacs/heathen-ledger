@@ -109,15 +109,12 @@ class TestTelegramRichClient(unittest.TestCase):
                 bot,
                 chat_id=123,
                 rich_html=html,
-                fallback_text="Fallback text",
-                parse_mode="Markdown",
             )
         )
         self.assertEqual(res, "fallback_msg")
         bot.send_message.assert_awaited_once_with(
             chat_id=123,
-            text="Fallback text",
-            parse_mode="Markdown",
+            text=html,
             reply_markup=None,
             api_kwargs={"rich_message": {"html": html}},
         )
@@ -179,12 +176,11 @@ class TestTelegramRichClient(unittest.TestCase):
             TelegramRichClient.edit_rich_message_or_ephemeral(
                 query=query,
                 rich_html=html,
-                fallback_text="Fallback",
             )
         )
         self.assertTrue(res)
         query.edit_message_text.assert_awaited_once_with(
-            text="Fallback",
+            text=html,
             reply_markup=None,
             api_kwargs={"rich_message": {"html": html}},
         )

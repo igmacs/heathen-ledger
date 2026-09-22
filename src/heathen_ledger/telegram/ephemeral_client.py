@@ -89,17 +89,6 @@ class TelegramEphemeralClient:
                 return bool(await res)
             return bool(res)
 
-        # 3. Fallback to do_api_request if present
-        req_fn = getattr(bot, "do_api_request", None)
-        if req_fn is not None and callable(req_fn):
-            if isinstance(req_fn, MagicMock) and not isinstance(req_fn, AsyncMock):
-                req_fn("deleteEphemeralMessage", api_kwargs=data)
-                return True
-            res = req_fn("deleteEphemeralMessage", api_kwargs=data)
-            if asyncio.iscoroutine(res):
-                return bool(await res)
-            return bool(res)
-
         return False
 
     @classmethod

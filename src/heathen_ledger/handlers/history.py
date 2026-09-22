@@ -9,7 +9,7 @@ from ..database import with_db_session
 from ..repositories import GroupRepository
 from ..services import HistoryService, MemberRegistrationService
 from ..services.exceptions import PermissionDeniedError, ValidationError
-from ..formatters import generate_history_summary, generate_history_rich_html
+from ..formatters import generate_history_rich_html
 from ..telegram import TelegramRichClient
 from .common import send_response
 
@@ -27,14 +27,12 @@ async def refresh_history_message(
             query=query,
             bot=bot,
             rich_html="<p>ℹ️ No transactions or members recorded for this group yet.</p>",
-            fallback_text="ℹ️ No transactions or members recorded for this group yet.",
             reply_markup=None,
         )
         return
 
     txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
     rich_html = generate_history_rich_html(txs)
-    reply_text = generate_history_summary(txs)
 
     # Retain action buttons (Share to group / Dismiss) if present, ignoring bottom delete buttons
     msg = getattr(query, "message", None)
@@ -61,7 +59,6 @@ async def refresh_history_message(
         query=query,
         bot=bot,
         rich_html=rich_html,
-        fallback_text=reply_text,
         reply_markup=action_markup,
     )
 
@@ -130,20 +127,16 @@ async def history_command(
         await send_response(
             update,
             context,
-            "ℹ️ No transactions or members recorded for this group yet.",
             rich_html="<p>ℹ️ No transactions or members recorded for this group yet.</p>",
         )
         return
 
     # Fetch last 10 transactions
     txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
-    reply_text = generate_history_summary(txs)
     rich_html = generate_history_rich_html(txs)
     await send_response(
         update,
         context,
-        text=reply_text,
         rich_html=rich_html,
-        parse_mode="Markdown",
         reply_markup=None,
     )

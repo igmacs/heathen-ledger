@@ -496,3 +496,9 @@ when I had to correct or guide it
   - Removed `fallback_reply_markup` and dead fallback branching from `send_response` and `history_command`.
   - Updated `tests/test_ephemeral.py` to assert clean exception propagation and cache pruning (180 tests passing).
   - Updated `AGENTS.md` to reflect the fail-fast policy, and rebuilt the Docker container.
+
+- I asked if there were any other fallback mechanisms that could be cleaned up. The agent audited the codebase and identified three: (1) dual Markdown/Rich HTML generation with `fallback_text` in history commands and `TelegramRichClient`, (2) redundant adapter dispatch fallbacks in `TelegramEphemeralClient` (`do_api_request`) and `TelegramRichClient` (generic bot fallback calls), and (3) the "delete-then-edit" fallback in persist and dismiss handlers. I instructed the agent to clean up all three. The agent autonomously:
+  - Removed redundant `generate_history_summary` formatting from `history_command` and `refresh_history_message`, made the `text` parameter in `send_response` optional when `rich_html` is provided, and eliminated `fallback_text` and `parse_mode` from `TelegramRichClient`.
+  - Removed obsolete `do_api_request` and Layer 4 generic `send_message`/`edit_message_text` dispatch fallbacks from `TelegramEphemeralClient` and `TelegramRichClient`.
+  - Removed the fallback edit attempts (`edit_ephemeral_message_text`) from `persist_callback_handler` and `dismiss_callback_handler` to enforce clean deletion failure handling, and deleted the unused alias.
+  - Updated unit test assertions in `tests/test_rich_client.py` and `tests/test_ephemeral.py` to verify strict, fail-fast adapter behaviors (all 180 tests passing).

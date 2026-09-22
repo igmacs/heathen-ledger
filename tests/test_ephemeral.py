@@ -495,7 +495,7 @@ class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-    async def test_dismiss_fallback_to_edit_on_bad_request(self):
+    async def test_dismiss_no_edit_fallback_on_delete_failure(self):
         from types import MappingProxyType
         from heathen_ledger.handlers.common import dismiss_callback_handler
 
@@ -509,19 +509,17 @@ class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
         )
         update.callback_query.message.reply_to_message = None
         update.callback_query.answer = AsyncMock()
-        # First call (deleteEphemeralMessage) raises BadRequest, second call (editEphemeralMessageText) succeeds
+        # deleteEphemeralMessage raises BadRequest; no edit fallback is attempted
         context.bot._post = AsyncMock(
-            side_effect=[BadRequest("Message to delete not found"), True]
+            side_effect=BadRequest("Message to delete not found")
         )
 
         await dismiss_callback_handler(update, context)
 
-        self.assertEqual(context.bot._post.await_count, 2)
-        edit_call = context.bot._post.await_args_list[1]
-        self.assertEqual(edit_call.args[0], "editEphemeralMessageText")
-        self.assertEqual(
-            edit_call.kwargs.get("data", {}).get("text"), "🗑️ Message dismissed."
-        )
+        # Only one call to deleteEphemeralMessage was made (no editEphemeralMessageText fallback)
+        self.assertEqual(context.bot._post.await_count, 1)
+        del_call = context.bot._post.await_args_list[0]
+        self.assertEqual(del_call.args[0], "deleteEphemeralMessage")
         update.callback_query.answer.assert_awaited_once()
 
 
