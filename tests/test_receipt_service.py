@@ -96,7 +96,8 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Pizzeria Bella", formatted)
         self.assertIn("(2026-09-18)", formatted)
         self.assertIn("1. Margherita — 9.00 €", formatted)
-        self.assertIn("2. Beer (x2) — 10.00 €", formatted)
+        self.assertIn("2. Beer #1 — 5.00 €", formatted)
+        self.assertIn("3. Beer #2 — 5.00 €", formatted)
         self.assertIn("• *Subtotal:* 19.00 €", formatted)
         self.assertIn("• *Tax:* 1.90 €", formatted)
         self.assertIn("• *Tip:* 2.00 €", formatted)
@@ -152,6 +153,96 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ValidationError):
             await ReceiptService.process_receipt_image(bot, message)
+
+    def test_session_lifecycle_and_claiming(self):
+        ReceiptService.clear_sessions()
+        receipt = Receipt(
+            merchant="Osteria",
+            items=[ReceiptItem("Pizza", 12.0), ReceiptItem("Beer", 4.0)],
+            total=16.0,
+            currency="€",
+        )
+        session = ReceiptService.create_ticket_session(
+            chat_id=123,
+            creator_id=456,
+            creator_name="Ignacio",
+            receipt=receipt,
+            token="tkt99",
+        )
+        self.assertIsNotNone(session)
+        self.assertEqual(ReceiptService.get_session("tkt99"), session)
+
+        # Toggle me
+        s, added = ReceiptService.toggle_item_me(
+            token="tkt99", item_idx=0, user_id=1, display_name="Alice", username="alice"
+        )
+        self.assertTrue(added)
+        self.assertEqual(len(s.items[0].participants), 1)
+
+        # Toggle done
+        s, done = ReceiptService.toggle_item_done("tkt99", 0)
+        self.assertTrue(done)
+        self.assertTrue(s.items[0].is_completed)
+
+        # Assign external
+        s = ReceiptService.assign_external_member("tkt99", 1, "Carlos Guest")
+        self.assertIn("ext:carlos guest", s.items[1].participants)
+
+        # Build rich message
+        html, kb = ReceiptService.build_ticket_rich_message("tkt99")
+        self.assertIn("Osteria", html)
+        self.assertIsNotNone(kb)
+
+        # Build split message
+        md, kb_split, shares = ReceiptService.build_split_summary_message("tkt99")
+        self.assertIn("Bill Split Summary", md)
+        self.assertEqual(len(shares), 2)
+
+    def test_record_ticket_expense_executes_command(self):
+        ReceiptService.clear_sessions()
+        receipt = Receipt(
+            merchant="Pizzeria",
+            items=[ReceiptItem("Pizza", 10.0)],
+            total=10.0,
+            currency="€",
+        )
+        session = ReceiptService.create_ticket_session(
+            chat_id=123,
+            creator_id=1,
+            creator_name="Payer",
+            receipt=receipt,
+            token="tok_rec",
+        )
+        session.toggle_participant(0, user_id=1, display_name="Payer", username="payer")
+
+        db_session = MagicMock()
+        mock_group = MagicMock(id=10, members=[])
+
+        with patch(
+            "heathen_ledger.services.receipt_service.GroupRepository"
+        ) as mock_grp_repo_cls, patch(
+            "heathen_ledger.services.receipt_service.CommandDispatcher.execute"
+        ) as mock_exec:
+            mock_grp_repo = MagicMock()
+            mock_grp_repo.get_by_telegram_id.return_value = mock_group
+            mock_grp_repo_cls.return_value = mock_grp_repo
+
+            mock_exec.return_value = ("Expense recorded", MagicMock())
+
+            text, markup = ReceiptService.record_ticket_expense(
+                token="tok_rec",
+                db_session=db_session,
+                payer_id=1,
+                payer_username="payer",
+                payer_first_name="Payer",
+                chat_id=123,
+            )
+            self.assertEqual(text, "Expense recorded")
+            mock_exec.assert_called_once()
+            cmd_sent = mock_exec.call_args[1]["command_str"]
+            self.assertIn("/pay 10.00 for Pizzeria by me split me:10.00", cmd_sent)
+            # Session should be popped
+            self.assertIsNone(ReceiptService.get_session("tok_rec"))
 
 
 if __name__ == "__main__":
