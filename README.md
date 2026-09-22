@@ -62,11 +62,15 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - The bot transcribes the audio using Google Gemini and displays the interpreted ledger command with interactive confirmation buttons:
       - `[ ❌ Reject ]`: Cancels the command without recording any changes to the ledger.
 
-7. **Receipt & Ticket Scanning**:
+7. **Receipt & Ticket Scanning & Interactive Splitting**:
    - Send or forward a photo of a restaurant bill or store receipt to the chat.
    - In group chats, send the photo with caption `/ticket` (or `/receipt`), reply to an existing receipt photo with `/ticket`, or tag the bot (`@HeathenLedgerBot`) to parse it.
    - In private chats (DM with the bot), simply send the photo directly to scan it automatically.
-   - The bot downloads the image in memory and uses Google Gemini vision with structured Pydantic schemas to extract all individual line items (names, quantities, prices), subtotal, tax, tip, and total into a clean Markdown breakdown.
+   - The bot downloads the image in memory and uses Google Gemini vision with structured Pydantic schemas to extract all individual line items (names, quantities, prices), subtotal, tax, tip, and total.
+   - **Repeated Items Expansion**: When an item has a quantity greater than 1 (e.g., 5 beers), it is expanded into individual numbered entries (`Beer #1`, `Beer #2`, ...) with penny-perfect price rounding so friends can claim individual items independently.
+   - **Interactive Claiming & User Initials**: Each line item features an embedded `[👤 +Me]` button. Tapping it toggles your claim, displaying your initials (e.g., `(👤 AL)` or `(👥 IG, AL)`) for immediate visual feedback. Items can be marked complete with `[✅]`, striking them through.
+   - **Assigning Members & External Guests**: The `[👥 Assign...]` button opens an item and member picker allowing users to assign other group members or enter names for external guests who aren't on Telegram.
+   - **Proportional Split & Ledger Recording**: Tapping `[🧾 Finish & Split]` calculates each person's exact share, allocating taxes, tips, discounts, and extra fees proportionally to their claimed items. Tapping `[💾 Record to Ledger]` logs the final expense directly into group balances via the standard ledger command engine.
 
 8. **Members & Directory**:
    - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
@@ -502,3 +506,12 @@ when I had to correct or guide it
   - Removed obsolete `do_api_request` and Layer 4 generic `send_message`/`edit_message_text` dispatch fallbacks from `TelegramEphemeralClient` and `TelegramRichClient`.
   - Removed the fallback edit attempts (`edit_ephemeral_message_text`) from `persist_callback_handler` and `dismiss_callback_handler` to enforce clean deletion failure handling, and deleted the unused alias.
   - Updated unit test assertions in `tests/test_rich_client.py` and `tests/test_ephemeral.py` to verify strict, fail-fast adapter behaviors (all 180 tests passing).
+
+- I asked to implement the second part of the receipt feature: interactive buttons for line items so group members can claim items (single or shared), mark items complete, see visual feedback via initials, assign users not in the group, and split the bill cleanly. I inquired whether Mini Apps or Rich Messages were better suited, and how to deal with repeated items (e.g., 5 beers). The agent explained the technical requirements and group chat limitations of Telegram Mini Apps (which require external HTTPS hosting, backend web servers, and WebSockets to synchronize state across group members, as Mini Apps cannot post data directly into group chats) versus Telegram Rich Messages with embedded `<tg-button>` tags, and outlined two design options for repeated items. I decided against Mini Apps in favor of Rich Messages, and chose Option B (expanding repeated items into individual line items). The agent autonomously:
+  - Added item expansion logic (`expand_receipt_items` and `Receipt.expand_items()`) in `src/heathen_ledger/receipt/base.py` to break items with `quantity > 1` into separate entries (`#1`, `#2`, ...) with penny-perfect price distribution.
+  - Implemented the interactive session domain (`PendingTicketSession`, `TicketItemState`, `TicketParticipant`, `extract_initials`, and `PendingTicketStore`) in `src/heathen_ledger/receipt/pending_store.py` with 30-minute TTL, initials generation, participant toggling, and proportional split math allocating taxes, tips, and rounding.
+  - Created `format_ticket_rich_html` and `format_ticket_split_rich_html` in `src/heathen_ledger/receipt/formatter.py` displaying items with embedded claim buttons (`[👤 +Me]`), status buttons (`[✅]`), participant initials badges (e.g. `(👤 AL)` or `(👥 IG, AL)`), and strike-through formatting for completed entries.
+  - Created `TicketKeyboardBuilder` in `src/heathen_ledger/keyboards/ticket.py` with main, item selector, member selector, and split confirmation layouts adhering to Telegram's 64-byte callback limit.
+  - Implemented session lifecycle, claiming, member assignment, and ledger recording in `ReceiptService` (`src/heathen_ledger/services/receipt_service.py`), routing finalized splits into `CommandDispatcher.execute` to post expenses directly into group balances.
+  - Implemented callback query handling (`tkt:`) and external member text reply handling in `src/heathen_ledger/handlers/receipt.py`, and registered them in `src/heathen_ledger/handlers/__init__.py`.
+  - Added comprehensive test suites across `tests/test_ticket_session.py`, `tests/test_ticket_ui.py`, `tests/test_receipt_service.py`, and `tests/test_receipt_handler.py` (205 total tests passing) and verified clean pre-commit checks.
