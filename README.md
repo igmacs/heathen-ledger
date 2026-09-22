@@ -490,3 +490,9 @@ when I had to correct or guide it
   - Updated `send_response` in `handlers/common.py` to pass `reply_parameters` from incoming ephemeral messages, and enhanced the fallback handler to attempt public rich message delivery before falling back to `_do_send`.
   - Added `fallback_reply_markup` support in `send_response` and updated `history_command` to supply the legacy delete keyboard as a safety net if rich messaging is completely unavailable.
   - Added unit tests in `tests/test_rich_client.py` and `tests/test_ephemeral.py` (181 total passing tests), rebuilt the Docker container, and verified the fix.
+
+- Once `/history` was working, I questioned why the complex fallback logic was necessary instead of simply failing. The agent agreed that the silent public fallback masked bugs, created unpredictable message formats, and risked leaking private ephemeral responses into group chats. I instructed the agent to remove the silent fallback. The agent autonomously:
+  - Simplified `send_response` in `handlers/common.py` to fail fast and re-raise exceptions cleanly while pruning ephemeral cache tokens.
+  - Removed `fallback_reply_markup` and dead fallback branching from `send_response` and `history_command`.
+  - Updated `tests/test_ephemeral.py` to assert clean exception propagation and cache pruning (180 tests passing).
+  - Updated `AGENTS.md` to reflect the fail-fast policy, and rebuilt the Docker container.

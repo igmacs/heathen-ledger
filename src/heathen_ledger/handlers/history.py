@@ -10,7 +10,6 @@ from ..repositories import GroupRepository
 from ..services import HistoryService, MemberRegistrationService
 from ..services.exceptions import PermissionDeniedError, ValidationError
 from ..formatters import generate_history_summary, generate_history_rich_html
-from ..keyboards import HistoryKeyboardBuilder
 from ..telegram import TelegramRichClient
 from .common import send_response
 
@@ -140,7 +139,6 @@ async def history_command(
     txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
     reply_text = generate_history_summary(txs)
     rich_html = generate_history_rich_html(txs)
-    fallback_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
     await send_response(
         update,
         context,
@@ -148,5 +146,4 @@ async def history_command(
         rich_html=rich_html,
         parse_mode="Markdown",
         reply_markup=None,
-        fallback_reply_markup=fallback_markup,
     )
