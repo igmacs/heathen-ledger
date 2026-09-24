@@ -6,7 +6,6 @@ import logging
 
 from sqlalchemy.orm import Session
 from telegram import Update
-from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from ..database import with_db_session
@@ -16,7 +15,7 @@ from ..receipt import get_receipt_parser
 from ..repositories import GroupRepository, UserRepository
 from ..services import ReceiptService
 from ..telegram import TelegramRichClient
-from .common import send_response
+from .common import is_group_chat, require_group_chat, send_response
 from .voice import is_bot_mentioned
 
 logger = logging.getLogger(__name__)
@@ -105,6 +104,7 @@ async def process_receipt_media(
         )
 
 
+@require_group_chat
 async def ticket_command_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -145,28 +145,19 @@ async def ticket_command_handler(
 async def ticket_photo_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Handle incoming photos: auto-process in private DMs or if caption has command/mention."""
+    """Handle incoming photos: process in group chats if caption has command/mention."""
     if not update.message or not is_image_media(update.message):
         return
 
-    chat = update.effective_chat
-    is_private = chat is not None and chat.type == ChatType.PRIVATE
-
-    if is_private:
-        chat_id = chat.id if chat else None
-        return await process_receipt_media(
-            media_message=update.message,
-            update=update,
-            context=context,
-            chat_id=chat_id,
-        )
+    if not is_group_chat(update):
+        return
 
     caption = (update.message.caption or "").strip()
     has_command = caption.lower().startswith(("/ticket", "/receipt"))
     has_mention = await is_bot_mentioned(update, context)
 
     if has_command or has_mention:
-        chat_id = chat.id if chat else None
+        chat_id = update.effective_chat.id if update.effective_chat else None
         return await process_receipt_media(
             media_message=update.message,
             update=update,

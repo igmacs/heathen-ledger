@@ -8,7 +8,11 @@ from telegram.ext import (
 )
 
 from .close import close_command
-from .common import dismiss_callback_handler, persist_callback_handler
+from .common import (
+    dismiss_callback_handler,
+    is_group_chat,
+    persist_callback_handler,
+)
 from .expense import (
     pay_command,
     pay_toggle_callback_handler,
@@ -43,6 +47,8 @@ async def reply_mention_dispatcher(update, context):
     """Dispatch reply mentions to voice or receipt handlers depending on media type."""
     if not update.message or not update.message.reply_to_message:
         return
+    if not is_group_chat(update):
+        return
     reply_to = update.message.reply_to_message
     if reply_to.voice or reply_to.audio:
         await voice_mention_handler(update, context)
@@ -70,7 +76,7 @@ def register_handlers(application: Application) -> None:
         )
     )
 
-    # Receipt photo handler (direct photos in private chats, or captioned photos with command/mention)
+    # Receipt photo handler (captioned photos with command/mention in groups)
     application.add_handler(
         MessageHandler(
             filters.PHOTO | filters.Document.IMAGE,

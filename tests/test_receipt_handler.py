@@ -25,6 +25,12 @@ from tests.base import BaseDatabaseTestCase
 
 
 class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
+    def _create_update(self, is_group: bool = True, chat_id: int = 12345):
+        update = MagicMock()
+        update.effective_chat.type = ChatType.GROUP if is_group else ChatType.PRIVATE
+        update.effective_chat.id = chat_id
+        return update
+
     def test_is_image_media(self):
         msg_none = None
         self.assertFalse(is_image_media(msg_none))
@@ -42,7 +48,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
 
     @patch("heathen_ledger.handlers.receipt.send_response")
     async def test_ticket_command_no_photo(self, mock_send_response):
-        update = MagicMock()
+        update = self._create_update()
         context = MagicMock()
         update.message.photo = []
         update.message.document = None
@@ -60,7 +66,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         self, mock_send_response, mock_get_parser
     ):
         mock_get_parser.side_effect = ValueError("No API key provided")
-        update = MagicMock()
+        update = self._create_update()
         context = MagicMock()
         update.message.photo = [MagicMock()]
         update.message.document = None
@@ -82,11 +88,10 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         )
         mock_process_image.return_value = (mock_receipt, "1. Pizza — 12.00")
 
-        update = MagicMock()
+        update = self._create_update(chat_id=12345)
         context = MagicMock()
         update.message.photo = [MagicMock()]
         update.message.document = None
-        update.effective_chat.id = 12345
 
         await ticket_command_handler(update, context)
 
@@ -109,7 +114,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         )
         mock_process_image.return_value = (mock_receipt, "1. Burger — 15.00")
 
-        update = MagicMock()
+        update = self._create_update(chat_id=9999)
         context = MagicMock()
         update.message.photo = []
         update.message.document = None
@@ -118,7 +123,6 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         reply_to.photo = [MagicMock()]
         reply_to.document = None
         update.message.reply_to_message = reply_to
-        update.effective_chat.id = 9999
 
         await ticket_command_handler(update, context)
 
@@ -133,12 +137,9 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
 
     @patch("heathen_ledger.handlers.receipt.ReceiptService.process_receipt_image")
     @patch("heathen_ledger.handlers.receipt.send_response")
-    async def test_ticket_photo_handler_private_chat(
+    async def test_ticket_photo_handler_private_chat_ignored(
         self, mock_send_response, mock_process_image
     ):
-        mock_receipt = Receipt(items=[ReceiptItem(name="Coffee", price=2.0)], total=2.0)
-        mock_process_image.return_value = (mock_receipt, "1. Coffee — 2.00")
-
         update = MagicMock()
         context = MagicMock()
         update.message.photo = [MagicMock()]
@@ -149,10 +150,19 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
 
         await ticket_photo_handler(update, context)
 
-        mock_process_image.assert_awaited_once_with(
-            bot=context.bot, media_message=update.message, chat_id=555
-        )
+        mock_process_image.assert_not_called()
+        mock_send_response.assert_not_called()
+
+    @patch("heathen_ledger.handlers.common.send_response")
+    async def test_ticket_command_in_private_chat_blocked(self, mock_send_response):
+        update = self._create_update(is_group=False, chat_id=555)
+        context = MagicMock()
+
+        await ticket_command_handler(update, context)
+
         mock_send_response.assert_awaited_once()
+        warning = mock_send_response.call_args[0][2]
+        self.assertIn("can only be used in a group chat", warning)
 
     @patch("heathen_ledger.handlers.receipt.ReceiptService.process_receipt_image")
     @patch("heathen_ledger.handlers.receipt.send_response")
@@ -227,7 +237,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
     async def test_reply_mention_dispatcher(
         self, mock_ticket_mention, mock_voice_mention
     ):
-        update_voice = MagicMock()
+        update_voice = self._create_update()
         context = MagicMock()
         update_voice.message.reply_to_message.voice = MagicMock()
         update_voice.message.reply_to_message.audio = None
@@ -241,7 +251,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         mock_voice_mention.reset_mock()
         mock_ticket_mention.reset_mock()
 
-        update_photo = MagicMock()
+        update_photo = self._create_update()
         update_photo.message.reply_to_message.voice = None
         update_photo.message.reply_to_message.audio = None
         update_photo.message.reply_to_message.photo = [MagicMock()]
@@ -257,7 +267,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
         self, mock_send_response, mock_process_image
     ):
         mock_process_image.side_effect = RuntimeError("API timeout")
-        update = MagicMock()
+        update = self._create_update()
         context = MagicMock()
         update.message.photo = [MagicMock()]
         update.message.document = None
