@@ -581,3 +581,8 @@ when I had to correct or guide it
 - I pointed out that global callback auto-registration should allow removing the manual `ensure_member_in_group` calls from `/settle` and all other callback handlers. The agent agreed and autonomously:
   - Removed redundant `ensure_member_in_group` calls and unused `MemberRegistrationService` imports across `settle_callback_handler` (`handlers/settle.py`), `pay_toggle_callback_handler` and `undo_callback_handler` (`handlers/expense.py`), and `history_delete_callback_handler` (`handlers/history.py`), replacing them with direct `UserRepository(session).get_by_telegram_id` lookups.
   - Updated test pipeline calls and verified all 223 unit tests and pre-commit checks pass cleanly.
+
+- I asked if the remaining calls to `ensure_member_in_group` in the expense handler could be removed as well. The agent confirmed that because `auto_register` in `group=-1` runs before `group=0` for all message and callback updates, both the user and group are guaranteed to already exist and be linked in the database. The agent autonomously:
+  - Replaced `MemberRegistrationService.ensure_member_in_group` calls in `pay_command` and `payback_command` (`src/heathen_ledger/handlers/expense.py`) with direct `UserRepository` and `GroupRepository` lookups, removing `MemberRegistrationService` from the expense handler entirely.
+  - Configured `exclude = ["*/.#*"]` for `[tool.vulture]` in `pyproject.toml` to ignore temporary editor lock files during linting.
+  - Verified all 223 unit tests and pre-commit checks pass cleanly.
