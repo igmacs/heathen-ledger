@@ -77,6 +77,7 @@ class PendingTicketSession:
     created_at: float = field(default_factory=time.time)
     message_id: Optional[int] = None
     ephemeral_message_id: Optional[int] = None
+    external_participants: Dict[str, TicketParticipant] = field(default_factory=dict)
 
     @classmethod
     def create(
@@ -107,6 +108,34 @@ class PendingTicketSession:
             items=item_states,
         )
 
+    def register_external_participant(self, name: str) -> TicketParticipant:
+        """Register or retrieve an external participant by display name."""
+        clean_name = name.strip()
+        slug = clean_name.lower().replace(" ", "_")[:16]
+        key = f"ext:{slug}"
+        if key in self.external_participants:
+            return self.external_participants[key]
+        initials = extract_initials(clean_name)
+        p = TicketParticipant(
+            participant_key=key,
+            display_name=clean_name,
+            initials=initials,
+            user_id=None,
+            username=None,
+            is_external=True,
+        )
+        self.external_participants[key] = p
+        return p
+
+    def get_known_external_participants(self) -> List[TicketParticipant]:
+        """Return list of all external participants registered in this session."""
+        known = dict(self.external_participants)
+        for it in self.items:
+            for k, p in it.participants.items():
+                if p.is_external and k not in known:
+                    known[k] = p
+        return list(known.values())
+
     def toggle_participant(
         self,
         item_index: int,
@@ -124,7 +153,9 @@ class PendingTicketSession:
             key = f"tg:{user_id}"
             is_ext = False
         else:
-            key = f"ext:{display_name.lower().strip()}"
+            clean_name = display_name.strip()
+            slug = clean_name.lower().replace(" ", "_")[:16]
+            key = f"ext:{slug}"
             is_ext = True
 
         if key in item.participants:
@@ -132,7 +163,7 @@ class PendingTicketSession:
             return False
         else:
             initials = extract_initials(display_name, last_name, username)
-            item.participants[key] = TicketParticipant(
+            p = TicketParticipant(
                 participant_key=key,
                 display_name=display_name,
                 initials=initials,
@@ -140,7 +171,40 @@ class PendingTicketSession:
                 username=username,
                 is_external=is_ext,
             )
+            item.participants[key] = p
+            if is_ext:
+                self.external_participants[key] = p
             return True
+
+    def toggle_participant_by_key(
+        self,
+        item_index: int,
+        participant_key: str,
+        participant: Optional[TicketParticipant] = None,
+    ) -> bool:
+        """Toggle a participant on an item by key. Returns True if added, False if removed."""
+        if item_index < 0 or item_index >= len(self.items):
+            return False
+
+        item = self.items[item_index]
+        if participant_key in item.participants:
+            del item.participants[participant_key]
+            return False
+
+        if participant is None:
+            participant = self.external_participants.get(participant_key)
+            if not participant:
+                for it in self.items:
+                    if participant_key in it.participants:
+                        participant = it.participants[participant_key]
+                        break
+
+        if participant:
+            item.participants[participant_key] = participant
+            if participant.is_external:
+                self.external_participants[participant_key] = participant
+            return True
+        return False
 
     def toggle_completed(self, item_index: int) -> bool:
         """Toggle completion/lock status of an item."""
@@ -158,17 +222,8 @@ class PendingTicketSession:
         if item_index < 0 or item_index >= len(self.items):
             return False
         item = self.items[item_index]
-        clean_name = name.strip()
-        key = f"ext:{clean_name.lower()}"
-        initials = extract_initials(clean_name)
-        item.participants[key] = TicketParticipant(
-            participant_key=key,
-            display_name=clean_name,
-            initials=initials,
-            user_id=None,
-            username=None,
-            is_external=True,
-        )
+        p = self.register_external_participant(name)
+        item.participants[p.participant_key] = p
         return True
 
     def calculate_split(self) -> Dict[str, Dict[str, Any]]:

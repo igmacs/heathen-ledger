@@ -267,13 +267,13 @@ async def ticket_callback_handler(
     # tkt:asgn:<token>
     elif action == "asgn" and len(parts) >= 3:
         token = parts[2]
-        s = ReceiptService.get_session(token)
-        if not s:
+        rich_html, kb = ReceiptService.build_person_selector_message(
+            token=token, db_session=session
+        )
+        if not rich_html or not kb:
             await query.answer("⚠️ This ticket session has expired.", show_alert=True)
             return
 
-        kb = TicketKeyboardBuilder.build_item_selector_keyboard(s)
-        rich_html = "<p>🧾 <b>Assign Member to Item</b></p><p>Select an item to assign a participant to:</p>"
         await TelegramRichClient.edit_rich_message_or_ephemeral(
             query=query,
             bot=context.bot,
@@ -281,6 +281,89 @@ async def ticket_callback_handler(
             reply_markup=kb,
         )
         await query.answer()
+        return
+
+    # tkt:psel:<token>:<participant_key>
+    elif action == "psel" and len(parts) >= 4:
+        token = parts[2]
+        participant_key = ":".join(parts[3:])
+        rich_html, kb = ReceiptService.build_person_checklist_message(
+            token=token, participant_key=participant_key
+        )
+        if not rich_html or not kb:
+            await query.answer("⚠️ This ticket session has expired.", show_alert=True)
+            return
+
+        await TelegramRichClient.edit_rich_message_or_ephemeral(
+            query=query,
+            bot=context.bot,
+            rich_html=rich_html,
+            reply_markup=kb,
+        )
+        await query.answer()
+        return
+
+    # tkt:ptog:<token>:<participant_key>:<item_idx>
+    elif action == "ptog" and len(parts) >= 5:
+        token = parts[2]
+        try:
+            item_idx = int(parts[-1])
+        except ValueError:
+            return
+        participant_key = ":".join(parts[3:-1])
+
+        # If it's a tg user, resolve their display name from db
+        participant_obj = None
+        if participant_key.startswith("tg:"):
+            try:
+                tg_uid = int(participant_key.split(":")[1])
+                u = UserRepository(session).get_by_telegram_id(tg_uid)
+                if not u:
+                    u = session.query(User).filter(User.id == tg_uid).first()
+                if u:
+                    from ..receipt.pending_store import (
+                        extract_initials,
+                        TicketParticipant,
+                    )
+
+                    first_name = getattr(u, "first_name", "") or f"User {tg_uid}"
+                    last_name = getattr(u, "last_name", None)
+                    username = getattr(u, "username", None)
+                    participant_obj = TicketParticipant(
+                        participant_key=participant_key,
+                        display_name=first_name,
+                        initials=extract_initials(first_name, last_name, username),
+                        user_id=getattr(u, "telegram_id", tg_uid),
+                        username=username,
+                        is_external=False,
+                    )
+            except Exception as e:
+                logger.warning("Failed to resolve participant_obj: %s", e)
+
+        s, added = ReceiptService.toggle_participant_item(
+            token=token,
+            participant_key=participant_key,
+            item_idx=item_idx,
+            participant=participant_obj,
+        )
+        if not s:
+            await query.answer("⚠️ This ticket session has expired.", show_alert=True)
+            return
+
+        p_name = participant_obj.display_name if participant_obj else None
+        rich_html, kb = ReceiptService.build_person_checklist_message(
+            token=token,
+            participant_key=participant_key,
+            participant_name=p_name,
+        )
+        await TelegramRichClient.edit_rich_message_or_ephemeral(
+            query=query,
+            bot=context.bot,
+            rich_html=rich_html or "",
+            reply_markup=kb,
+        )
+        status_text = "Claimed" if added else "Unclaimed"
+        await query.answer(f"{status_text} item #{item_idx + 1}")
         return
 
     # tkt:asgn_itm:<token>:<item_idx>
@@ -363,13 +446,15 @@ async def ticket_callback_handler(
         await query.answer(f"Updated {display_name} on item #{item_idx + 1}")
         return
 
-    # tkt:asgn_new:<token>:<item_idx>
-    elif action == "asgn_new" and len(parts) >= 4:
+    # tkt:asgn_new:<token>[:<item_idx>]
+    elif action == "asgn_new" and len(parts) >= 3:
         token = parts[2]
-        try:
-            item_idx = int(parts[3])
-        except ValueError:
-            return
+        item_idx = None
+        if len(parts) >= 4:
+            try:
+                item_idx = int(parts[3])
+            except ValueError:
+                pass
 
         s = ReceiptService.get_session(token)
         if not s:
@@ -385,10 +470,12 @@ async def ticket_callback_handler(
             "chat_id": chat_id,
             "message_id": msg_id,
         }
-        it_name = s.items[item_idx].name if item_idx < len(s.items) else "Item"
+        prompt_suffix = ""
+        if item_idx is not None and item_idx < len(s.items):
+            prompt_suffix = f" for *{s.items[item_idx].name}*"
         if query.message:
             await query.message.reply_text(
-                f"Please send the name of the external participant for *{it_name}*:\n(or send `/cancel` to abort)",
+                f"Please send the name of the external guest{prompt_suffix}:\n(or send `/cancel` to abort)",
                 parse_mode="Markdown",
             )
         await query.answer()
@@ -500,19 +587,27 @@ async def ticket_external_reply_handler(
             return
 
     token = pending["token"]
-    item_idx = pending["item_idx"]
+    item_idx = pending.get("item_idx")
     chat_id = pending.get("chat_id")
     message_id = pending.get("message_id")
-    s = ReceiptService.assign_external_member(token, item_idx, name)
     context.user_data.pop("pending_ext_ticket", None)
 
-    if not s:
+    s, p = ReceiptService.register_external_participant(token, name)
+    if not s or not p:
         await update.message.reply_text("⚠️ This ticket session has expired.")
         return
 
-    # Update original ticket message if possible
+    # If an item index was specified (legacy item-first flow), also assign it
+    if item_idx is not None and 0 <= item_idx < len(s.items):
+        s.items[item_idx].participants[p.participant_key] = p
+
+    # Update original ticket message to show the checklist for this participant!
     if chat_id and message_id:
-        rich_html, kb = ReceiptService.build_ticket_rich_message(token)
+        rich_html, kb = ReceiptService.build_person_checklist_message(
+            token=token,
+            participant_key=p.participant_key,
+            participant_name=p.display_name,
+        )
         if rich_html and kb:
             try:
                 await TelegramRichClient.edit_rich_message_text(
@@ -529,6 +624,6 @@ async def ticket_external_reply_handler(
                 )
 
     await update.message.reply_text(
-        f"✅ Assigned external member *{name}* to item #{item_idx + 1}!",
+        f"✅ Registered guest *{name}*!\nTap the items above to select what they took part in, then tap *Done*.",
         parse_mode="Markdown",
     )

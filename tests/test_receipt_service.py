@@ -186,7 +186,40 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
 
         # Assign external
         s = ReceiptService.assign_external_member("tkt99", 1, "Carlos Guest")
-        self.assertIn("ext:carlos guest", s.items[1].participants)
+        self.assertIn("ext:carlos_guest", s.items[1].participants)
+
+        # Register external participant directly
+        s, p = ReceiptService.register_external_participant("tkt99", "David")
+        self.assertEqual(p.display_name, "David")
+        self.assertEqual(p.participant_key, "ext:david")
+
+        # Toggle participant item by key
+        s, added = ReceiptService.toggle_participant_item("tkt99", "ext:david", 0)
+        self.assertTrue(added)
+        self.assertIn("ext:david", s.items[0].participants)
+
+        # Build person selector message
+        db_mock = MagicMock()
+        with patch(
+            "heathen_ledger.services.receipt_service.GroupRepository"
+        ) as mock_grp_repo_cls:
+            mock_member = MagicMock(id=10, telegram_id=100, first_name="Bob")
+            mock_grp_repo_cls.return_value.get_by_telegram_id.return_value = MagicMock(
+                id=1, members=[mock_member]
+            )
+
+            psel_html, psel_kb = ReceiptService.build_person_selector_message(
+                "tkt99", db_mock
+            )
+            self.assertIn("Assign Items — Select Person", psel_html)
+            self.assertIsNotNone(psel_kb)
+
+        # Build person checklist message
+        chk_html, chk_kb = ReceiptService.build_person_checklist_message(
+            "tkt99", "ext:david"
+        )
+        self.assertIn("Assign Items for: David", chk_html)
+        self.assertIsNotNone(chk_kb)
 
         # Build rich message
         html, kb = ReceiptService.build_ticket_rich_message("tkt99")
@@ -199,7 +232,7 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("Bill Split Summary", md)
         self.assertIn("Bill Split Summary", rich_html)
-        self.assertEqual(len(shares), 2)
+        self.assertEqual(len(shares), 3)
 
     def test_record_ticket_expense_executes_command(self):
         ReceiptService.clear_sessions()

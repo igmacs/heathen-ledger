@@ -31,10 +31,106 @@ class TicketKeyboardBuilder:
         )
 
     @classmethod
+    def build_person_selector_keyboard(
+        cls, session: PendingTicketSession, members: List[Any]
+    ) -> InlineKeyboardMarkup:
+        """Show group members and registered external guests to pick who to assign items for."""
+        rows = []
+        current_row = []
+
+        # 1. Group members
+        for m in members:
+            name = getattr(m, "first_name", None) or f"User {getattr(m, 'id', '')}"
+            uid = getattr(m, "telegram_id", getattr(m, "id", None))
+            btn = InlineKeyboardButton(
+                text=f"👤 {name}",
+                callback_data=f"tkt:psel:{session.token}:tg:{uid}",
+            )
+            current_row.append(btn)
+            if len(current_row) == 2:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+            current_row = []
+
+        # 2. Known external participants
+        known_ext = session.get_known_external_participants()
+        for p in known_ext:
+            btn = InlineKeyboardButton(
+                text=f"👤 {p.display_name} (ext)",
+                callback_data=f"tkt:psel:{session.token}:{p.participant_key}",
+            )
+            current_row.append(btn)
+            if len(current_row) == 2:
+                rows.append(current_row)
+                current_row = []
+        if current_row:
+            rows.append(current_row)
+
+        # 3. Add new external guest
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="➕ New External Guest...",
+                    callback_data=f"tkt:asgn_new:{session.token}",
+                )
+            ]
+        )
+
+        # 4. Back to ticket
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Back to Ticket",
+                    callback_data=f"tkt:back:{session.token}",
+                )
+            ]
+        )
+        return InlineKeyboardMarkup(rows)
+
+    @classmethod
+    def build_person_checklist_keyboard(
+        cls, session: PendingTicketSession, participant_key: str
+    ) -> InlineKeyboardMarkup:
+        """Show full receipt items list as a checklist (◻️/☑️) for the selected participant."""
+        from ..receipt.formatter import format_price
+
+        rows = []
+        currency = session.receipt.currency
+        for it in session.items:
+            is_claimed = participant_key in it.participants
+            icon = "☑️" if is_claimed else "◻️"
+            price_str = format_price(it.price, currency)
+            btn_text = f"{icon} {it.item_index + 1}. {it.name[:14]} ({price_str})"
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=btn_text,
+                        callback_data=f"tkt:ptog:{session.token}:{participant_key}:{it.item_index}",
+                    )
+                ]
+            )
+
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="💾 Done / Save",
+                    callback_data=f"tkt:back:{session.token}",
+                ),
+                InlineKeyboardButton(
+                    text="⬅️ Change Person",
+                    callback_data=f"tkt:asgn:{session.token}",
+                ),
+            ]
+        )
+        return InlineKeyboardMarkup(rows)
+
+    @classmethod
     def build_item_selector_keyboard(
         cls, session: PendingTicketSession
     ) -> InlineKeyboardMarkup:
-        """Show items to pick which one to assign a member to."""
+        """Show items to pick which one to assign a member to (legacy compat)."""
         rows = []
         current_row = []
         for it in session.items:

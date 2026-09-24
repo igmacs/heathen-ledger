@@ -1,5 +1,6 @@
 """Service layer for receipt photo parsing, interactive claiming, and itemization."""
 
+import html
 import logging
 from typing import Optional, Tuple, Dict, Any
 from telegram import Bot, Message, InlineKeyboardMarkup
@@ -12,6 +13,7 @@ from ..receipt import (
     get_receipt_parser,
     PendingTicketSession,
     PendingTicketStore,
+    TicketParticipant,
 )
 from ..receipt.formatter import (
     format_price,
@@ -197,6 +199,97 @@ class ReceiptService:
             return None
         session.assign_external_participant(item_idx, name)
         return session
+
+    @classmethod
+    def register_external_participant(
+        cls,
+        token: str,
+        name: str,
+    ) -> Tuple[Optional[PendingTicketSession], Optional[TicketParticipant]]:
+        """Register or retrieve an external guest in the ticket session."""
+        session = cls.get_session(token)
+        if not session:
+            return None, None
+        p = session.register_external_participant(name)
+        return session, p
+
+    @classmethod
+    def toggle_participant_item(
+        cls,
+        token: str,
+        participant_key: str,
+        item_idx: int,
+        participant: Optional[TicketParticipant] = None,
+    ) -> Tuple[Optional[PendingTicketSession], bool]:
+        """Toggle participation of a user/guest on an item by key."""
+        session = cls.get_session(token)
+        if not session:
+            return None, False
+        added = session.toggle_participant_by_key(
+            item_index=item_idx,
+            participant_key=participant_key,
+            participant=participant,
+        )
+        return session, added
+
+    @classmethod
+    def build_person_selector_message(
+        cls,
+        token: str,
+        db_session: Session,
+    ) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+        """Build message and keyboard to select who to assign items for."""
+        session = cls.get_session(token)
+        if not session:
+            return None, None
+
+        grp_repo = GroupRepository(db_session)
+        group = grp_repo.get_by_telegram_id(session.chat_id)
+        members = group.members if group and group.members else []
+
+        rich_html = (
+            "<p>👥 <b>Assign Items — Select Person</b></p>\n"
+            "<p>Choose a group member or external guest to select their items:</p>"
+        )
+        keyboard = TicketKeyboardBuilder.build_person_selector_keyboard(
+            session=session, members=members
+        )
+        return rich_html, keyboard
+
+    @classmethod
+    def build_person_checklist_message(
+        cls,
+        token: str,
+        participant_key: str,
+        participant_name: Optional[str] = None,
+    ) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+        """Build message and checklist keyboard for a chosen participant."""
+        session = cls.get_session(token)
+        if not session:
+            return None, None
+
+        if not participant_name:
+            if participant_key in session.external_participants:
+                participant_name = session.external_participants[
+                    participant_key
+                ].display_name
+            else:
+                for it in session.items:
+                    if participant_key in it.participants:
+                        participant_name = it.participants[participant_key].display_name
+                        break
+        name = participant_name or participant_key
+        safe_name = html.escape(name)
+        ext_tag = " <i>(external)</i>" if participant_key.startswith("ext:") else ""
+
+        rich_html = (
+            f"<p>🧾 <b>Assign Items for: {safe_name}</b>{ext_tag}</p>\n"
+            f"<p><i>Tap items below to toggle participation:</i></p>"
+        )
+        keyboard = TicketKeyboardBuilder.build_person_checklist_keyboard(
+            session=session, participant_key=participant_key
+        )
+        return rich_html, keyboard
 
     @classmethod
     def build_ticket_rich_message(

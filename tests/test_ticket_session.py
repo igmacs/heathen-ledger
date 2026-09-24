@@ -132,11 +132,37 @@ class TestTicketSession(unittest.TestCase):
         )
         ok = session.assign_external_participant(0, "Carlos Guest")
         self.assertTrue(ok)
-        self.assertIn("ext:carlos guest", session.items[0].participants)
-        p = session.items[0].participants["ext:carlos guest"]
+        self.assertIn("ext:carlos_guest", session.items[0].participants)
+        p = session.items[0].participants["ext:carlos_guest"]
         self.assertEqual(p.display_name, "Carlos Guest")
         self.assertEqual(p.initials, "CG")
         self.assertTrue(p.is_external)
+        self.assertIn("ext:carlos_guest", session.external_participants)
+
+    def test_register_and_toggle_participant_by_key(self):
+        receipt = Receipt(
+            items=[
+                ReceiptItem(name="Item 1", price=5.0),
+                ReceiptItem(name="Item 2", price=7.0),
+            ]
+        )
+        session = PendingTicketSession.create(
+            chat_id=123, creator_id=456, creator_name="Ignacio", receipt=receipt
+        )
+        ext_p = session.register_external_participant("David")
+        self.assertEqual(ext_p.participant_key, "ext:david")
+        self.assertEqual(ext_p.display_name, "David")
+        self.assertEqual(len(session.get_known_external_participants()), 1)
+
+        # Toggle David on item 0 by key
+        added = session.toggle_participant_by_key(0, "ext:david")
+        self.assertTrue(added)
+        self.assertIn("ext:david", session.items[0].participants)
+
+        # Toggle David off item 0 by key
+        removed = session.toggle_participant_by_key(0, "ext:david")
+        self.assertFalse(removed)
+        self.assertNotIn("ext:david", session.items[0].participants)
 
     def test_calculate_split_equal_and_tax(self):
         # Total receipt 24.00 (items sum to 20.00, tax 4.00)

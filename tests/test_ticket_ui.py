@@ -118,6 +118,55 @@ class TestTicketUI(unittest.TestCase):
         kb_split = TicketKeyboardBuilder.build_split_confirmation_keyboard("t1")
         self.assertIn("tkt:record:t1", kb_split.inline_keyboard[0][0].callback_data)
 
+    def test_person_selector_and_checklist_keyboards(self):
+        receipt = Receipt(
+            items=[ReceiptItem("Pizza", 12.0), ReceiptItem("Beer", 4.0)],
+            currency="€",
+        )
+        session = PendingTicketSession.create(1, 2, "Test", receipt, token="tokA")
+        session.register_external_participant("David")
+        session.toggle_participant_by_key(0, "ext:david")
+
+        mock_member = MagicMock()
+        mock_member.id = 99
+        mock_member.telegram_id = 999
+        mock_member.first_name = "Alice"
+
+        # 1. Person selector keyboard
+        kb_persons = TicketKeyboardBuilder.build_person_selector_keyboard(
+            session, [mock_member]
+        )
+        cb_datas = [
+            btn.callback_data for row in kb_persons.inline_keyboard for btn in row
+        ]
+        self.assertIn("tkt:psel:tokA:tg:999", cb_datas)
+        self.assertIn("tkt:psel:tokA:ext:david", cb_datas)
+        self.assertIn("tkt:asgn_new:tokA", cb_datas)
+        self.assertIn("tkt:back:tokA", cb_datas)
+
+        # 2. Checklist keyboard for David
+        kb_check = TicketKeyboardBuilder.build_person_checklist_keyboard(
+            session, "ext:david"
+        )
+        self.assertEqual(len(kb_check.inline_keyboard), 3)  # 2 items + 1 action row
+        # Item 0 was claimed -> ☑️
+        self.assertIn("☑️", kb_check.inline_keyboard[0][0].text)
+        self.assertIn("Pizza", kb_check.inline_keyboard[0][0].text)
+        self.assertEqual(
+            kb_check.inline_keyboard[0][0].callback_data,
+            "tkt:ptog:tokA:ext:david:0",
+        )
+        # Item 1 was not claimed -> ◻️
+        self.assertIn("◻️", kb_check.inline_keyboard[1][0].text)
+        self.assertIn("Beer", kb_check.inline_keyboard[1][0].text)
+        self.assertEqual(
+            kb_check.inline_keyboard[1][0].callback_data,
+            "tkt:ptog:tokA:ext:david:1",
+        )
+        # Action row
+        self.assertEqual(kb_check.inline_keyboard[2][0].callback_data, "tkt:back:tokA")
+        self.assertEqual(kb_check.inline_keyboard[2][1].callback_data, "tkt:asgn:tokA")
+
 
 if __name__ == "__main__":
     unittest.main()

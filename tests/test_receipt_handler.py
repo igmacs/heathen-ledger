@@ -324,25 +324,42 @@ class TestReceiptTicketCallbacks(BaseDatabaseTestCase):
         asyncio.run(ticket_callback_handler(update, context))
         self.assertFalse(session.items[0].is_completed)
 
-    def test_callback_assign_item_menu_and_member_menu(self):
-        # Item selector menu
+    def test_callback_assign_person_selector_and_checklist_toggle(self):
+        # 1. Person selector menu
         update = self.create_mock_update(
             telegram_user_id=self.alice.telegram_id,
-            callback_data=f"tkt:asgn:{self.token}:0",
+            callback_data=f"tkt:asgn:{self.token}",
         )
         context = MagicMock()
         asyncio.run(ticket_callback_handler(update, context))
         update.callback_query.answer.assert_called()
 
-        # Member selector menu for item 0
-        update = self.create_mock_update(
+        # 2. Open checklist for Bob
+        update_psel = self.create_mock_update(
             telegram_user_id=self.alice.telegram_id,
-            callback_data=f"tkt:asgn_itm:{self.token}:0",
+            callback_data=f"tkt:psel:{self.token}:tg:{self.bob.telegram_id}",
         )
-        asyncio.run(ticket_callback_handler(update, context))
-        update.callback_query.answer.assert_called()
+        asyncio.run(ticket_callback_handler(update_psel, context))
+        update_psel.callback_query.answer.assert_called()
 
-    def test_callback_assign_group_user(self):
+        # 3. Toggle item 0 for Bob in checklist
+        update_ptog = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"tkt:ptog:{self.token}:tg:{self.bob.telegram_id}:0",
+        )
+        asyncio.run(ticket_callback_handler(update_ptog, context))
+        session = ReceiptService.get_session(self.token)
+        self.assertIn(f"tg:{self.bob.telegram_id}", session.items[0].participants)
+        self.assertEqual(
+            session.items[0].participants[f"tg:{self.bob.telegram_id}"].display_name,
+            "Bob",
+        )
+
+        # 4. Toggle item 0 off for Bob
+        asyncio.run(ticket_callback_handler(update_ptog, context))
+        self.assertNotIn(f"tg:{self.bob.telegram_id}", session.items[0].participants)
+
+    def test_callback_assign_group_user_legacy(self):
         update = self.create_mock_update(
             telegram_user_id=self.alice.telegram_id,
             callback_data=f"tkt:asgn_usr:{self.token}:0:{self.bob.telegram_id}",
@@ -354,10 +371,10 @@ class TestReceiptTicketCallbacks(BaseDatabaseTestCase):
         self.assertIn(f"tg:{self.bob.telegram_id}", session.items[0].participants)
 
     def test_callback_assign_new_external_and_reply(self):
-        # Step 1: Click add external user
+        # Step 1: Click add external user from Person Selector
         update_cb = self.create_mock_update(
             telegram_user_id=self.alice.telegram_id,
-            callback_data=f"tkt:asgn_new:{self.token}:1",
+            callback_data=f"tkt:asgn_new:{self.token}",
         )
         context = MagicMock()
         context.user_data = {}
@@ -365,7 +382,6 @@ class TestReceiptTicketCallbacks(BaseDatabaseTestCase):
 
         self.assertIn("pending_ext_ticket", context.user_data)
         self.assertEqual(context.user_data["pending_ext_ticket"]["token"], self.token)
-        self.assertEqual(context.user_data["pending_ext_ticket"]["item_idx"], 1)
 
         # Step 2: Send text with the external name
         update_msg = self.create_mock_message_update("Dave")
@@ -373,9 +389,18 @@ class TestReceiptTicketCallbacks(BaseDatabaseTestCase):
 
         self.assertNotIn("pending_ext_ticket", context.user_data)
         session = ReceiptService.get_session(self.token)
-        claimed_names = [p.display_name for p in session.items[1].participants.values()]
-        self.assertIn("Dave", claimed_names)
+        self.assertIn("ext:dave", session.external_participants)
+        self.assertEqual(session.external_participants["ext:dave"].display_name, "Dave")
         update_msg.message.reply_text.assert_called_once()
+        self.assertIn("Registered guest", update_msg.message.reply_text.call_args[0][0])
+
+        # Step 3: Now Dave is toggled on items via checklist
+        update_ptog = self.create_mock_update(
+            telegram_user_id=self.alice.telegram_id,
+            callback_data=f"tkt:ptog:{self.token}:ext:dave:1",
+        )
+        asyncio.run(ticket_callback_handler(update_ptog, context))
+        self.assertIn("ext:dave", session.items[1].participants)
 
     def test_callback_assign_external_reply_cancel(self):
         context = MagicMock()
