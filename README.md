@@ -68,8 +68,7 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 
 8. **Receipt & Ticket Scanning & Interactive Splitting**:
    - Send or forward a photo of a restaurant bill or store receipt to the chat.
-   - In group chats, send the photo with caption `/ticket` (or `/receipt`), reply to an existing receipt photo with `/ticket`, or tag the bot (`@HeathenLedgerBot`) to parse it.
-   - In private chats (DM with the bot), simply send the photo directly to scan it automatically.
+   - Send the photo with caption `/ticket` (or `/receipt`), reply to an existing receipt photo with `/ticket`, or tag the bot (`@HeathenLedgerBot`) to parse it.
    - The bot downloads the image in memory and uses Google Gemini vision with structured Pydantic schemas to extract all individual line items (names, quantities, prices), subtotal, tax, tip, and total.
    - **Repeated Items Expansion**: When an item has a quantity greater than 1 (e.g., 5 beers), it is expanded into individual numbered entries (`Beer #1`, `Beer #2`, ...) with penny-perfect price rounding so friends can claim individual items independently.
    - **Interactive Claiming & User Initials**: Each line item features an embedded `[👤 +Me]` button. Tapping it toggles your claim, displaying your initials (e.g., `(👤 AL)` or `(👥 IG, AL)`) for immediate visual feedback. Items can be marked complete with `[✅]`, striking them through.
@@ -556,3 +555,10 @@ when I had to correct or guide it
 - I noticed that `pyproject.toml` had Ruff's `target-version` set to `py310` and asked if that represented Python 3.10 and whether it should be updated to Python 3.12 to match our local runtime and Docker image. The agent confirmed, updated `requires-python = ">=3.12"` and `target-version = "py312"` in `pyproject.toml`, and applied the `datetime.UTC` alias (`UP017`) across `models.py`. All pre-commit checks and 212 unit tests passed cleanly.
 
 - I disagreed with the linter rule requiring an explicit `strict` parameter when using `zip(...)` (introduced via `flake8-bugbear`) and asked how to disable it. The agent identified the rule code as `B905`, explained how to disable rules globally, per-file, or inline via `# noqa`, and upon my approval added `"B905"` to `ignore` in `pyproject.toml` and removed the redundant `strict=False` parameters in `src/heathen_ledger/services/expense_service.py`. All pre-commit hooks and 212 unit tests passed cleanly.
+
+- I reviewed the code and noticed logic for handling private chats, suspecting it was unneeded since the bot is conceived for group chats. I asked the agent to review these occurrences, explain them, and determine which ones are actually needed. The agent audited the codebase, explained that private chats were inadvertently generating ghost 1-person groups and expenses in the database, and identified essential Telegram plumbing (ephemeral API fallback in `send_response` and greeting onboarding in `/start`/`/help`) versus unneeded logic. Upon my instruction to proceed with cleanup and enforce group-only execution, the agent autonomously:
+  - Created `is_group_chat` helper and `@require_group_chat` decorator in `handlers/common.py`.
+  - Restricted auto-registration in `handlers/registration.py` and `services/registration_service.py` to prevent ghost group records from being created on private chat interactions, and cleaned up `/register`.
+  - Removed private chat receipt photo auto-scanning from `handlers/receipt.py`, updated `/help` text and `README.md`, and guarded `reply_mention_dispatcher` in `handlers/__init__.py`.
+  - Enforced `@require_group_chat` across all ledger commands (`/pay`, `/payback`, `/balances`, `/settle`, `/history`, `/members`, `/close`, `/ticket`, `/voice`), returning an informative warning when invoked outside a group.
+  - Added unit tests for group enforcement across all handlers and verified that all 219 tests and pre-commit hooks pass.
