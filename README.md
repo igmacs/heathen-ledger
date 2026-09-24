@@ -552,3 +552,5 @@ when I had to correct or guide it
   - Created `.vulture_whitelist.py` covering legitimate SQLAlchemy ORM relationship attributes (`User.expense_contributions`, `User.payments_sent`, `User.payments_received`) and the manual `init_db` utility.
   - Configured `[tool.vulture]` in `pyproject.toml` with `min_confidence = 60` and the whitelist path, ignoring `B018` for the whitelist in `[tool.ruff.lint.per-file-ignores]`.
   - Verified that all pre-commit hooks, Vulture at 60% confidence, and all 212 unit tests passed cleanly.
+
+- I noticed that `pyproject.toml` had Ruff's `target-version` set to `py310` and asked if that represented Python 3.10 and whether it should be updated to Python 3.12 to match our local runtime and Docker image. The agent confirmed, updated `requires-python = ">=3.12"` and `target-version = "py312"` in `pyproject.toml`, and applied the `datetime.UTC` alias (`UP017`) across `models.py`. All pre-commit checks and 212 unit tests passed cleanly.
