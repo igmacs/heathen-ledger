@@ -128,12 +128,15 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
             currency="€",
         )
 
-        with patch(
-            "heathen_ledger.services.receipt_service.ReceiptImageDownloader.download",
-            AsyncMock(return_value=(b"img_bytes", "image/jpeg")),
-        ), patch(
-            "heathen_ledger.services.receipt_service.get_receipt_parser"
-        ) as mock_get_parser:
+        with (
+            patch(
+                "heathen_ledger.services.receipt_service.ReceiptImageDownloader.download",
+                AsyncMock(return_value=(b"img_bytes", "image/jpeg")),
+            ),
+            patch(
+                "heathen_ledger.services.receipt_service.get_receipt_parser"
+            ) as mock_get_parser,
+        ):
             mock_parser = MagicMock()
             mock_parser.parse = AsyncMock(return_value=mock_receipt)
             mock_get_parser.return_value = mock_parser
@@ -254,11 +257,14 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
         db_session = MagicMock()
         mock_group = MagicMock(id=10, members=[])
 
-        with patch(
-            "heathen_ledger.services.receipt_service.GroupRepository"
-        ) as mock_grp_repo_cls, patch(
-            "heathen_ledger.services.receipt_service.CommandDispatcher.execute"
-        ) as mock_exec:
+        with (
+            patch(
+                "heathen_ledger.services.receipt_service.GroupRepository"
+            ) as mock_grp_repo_cls,
+            patch(
+                "heathen_ledger.services.receipt_service.CommandDispatcher.execute"
+            ) as mock_exec,
+        ):
             mock_grp_repo = MagicMock()
             mock_grp_repo.get_by_telegram_id.return_value = mock_group
             mock_grp_repo_cls.return_value = mock_grp_repo
