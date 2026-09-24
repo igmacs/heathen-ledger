@@ -806,6 +806,59 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
 
         self.assertIsNone(GroupRepository(self.db_session).get_by_telegram_id(777))
 
+    def test_auto_register_callback_query_group_chat(self):
+        update = self.create_mock_update(
+            telegram_user_id=8888,
+            callback_data="pay_toggle:1:2:3",
+            chat_id=12345,
+            username="zoe",
+            first_name="Zoe",
+        )
+        context = MagicMock()
+        asyncio.run(auto_register(update, context))
+
+        user = crud.get_user_by_telegram_id(self.db_session, 8888)
+        self.assertIsNotNone(user)
+        self.assertEqual(user.first_name, "Zoe")
+        self.assertEqual(user.username, "zoe")
+        self.assertIn(user, self.group.members)
+
+    def test_auto_register_callback_query_register_join_ignored(self):
+        update = self.create_mock_update(
+            telegram_user_id=8889,
+            callback_data="register:join",
+            chat_id=12345,
+            username="newbie",
+            first_name="Newbie",
+        )
+        context = MagicMock()
+        asyncio.run(auto_register(update, context))
+
+        # Should not be pre-registered so register_callback_handler can handle new join announcement
+        user = crud.get_user_by_telegram_id(self.db_session, 8889)
+        self.assertIsNone(user)
+
+    def test_auto_register_callback_query_links_pending_external_user(self):
+        dave = crud.create_external_user(self.db_session, self.group, "Dave", "dave")
+        self.db_session.commit()
+        self.assertTrue(dave.is_external)
+        self.assertIsNone(dave.telegram_id)
+
+        update = self.create_mock_update(
+            telegram_user_id=7777,
+            callback_data="settle:1:2:100",
+            chat_id=12345,
+            username="dave",
+            first_name="Dave Real",
+        )
+        context = MagicMock()
+        asyncio.run(auto_register(update, context))
+
+        dave_linked = crud.get_user_by_telegram_id(self.db_session, 7777)
+        self.assertIsNotNone(dave_linked)
+        self.assertEqual(dave_linked.id, dave.id)
+        self.assertFalse(dave_linked.is_external)
+
     def test_register_in_private_chat_blocked(self):
         update = self.create_mock_message_update("/register", chat_id=777)
         update.effective_chat.type = ChatType.PRIVATE

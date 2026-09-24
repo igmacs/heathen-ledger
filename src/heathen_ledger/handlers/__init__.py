@@ -61,8 +61,9 @@ async def reply_mention_dispatcher(update, context):
 
 def register_handlers(application: Application) -> None:
     """Register all command and callback handlers to the application."""
-    # Add auto-registration handler in a separate group (-1) so it runs before command handlers (group 0)
+    # Add auto-registration handlers in a separate group (-1) so they run before command/callback handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
+    application.add_handler(CallbackQueryHandler(auto_register), group=-1)
 
     # Voice / Audio and Receipt reply mention handler
     application.add_handler(

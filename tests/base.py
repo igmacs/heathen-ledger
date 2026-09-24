@@ -77,6 +77,7 @@ class BaseDatabaseTestCase(unittest.TestCase):
 
         chat = MagicMock()
         chat.id = chat_id
+        chat.title = "Test Group"
         chat.type = ChatType.GROUP
         message.chat = chat
         message.reply_to_message = None

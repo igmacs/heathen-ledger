@@ -29,11 +29,20 @@ async def auto_register(
     if not is_group_chat(update):
         return
 
+    # Skip self-registration callback so register_callback_handler can handle new join announcements
+    if update.callback_query and (update.callback_query.data or "").startswith(
+        "register:"
+    ):
+        return
+
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     username = update.effective_user.username
     first_name = update.effective_user.first_name or ""
-    title = update.effective_chat.title or f"Chat ({chat_id})"
+    raw_title = getattr(update.effective_chat, "title", None)
+    title = (
+        raw_title if isinstance(raw_title, str) and raw_title else f"Chat ({chat_id})"
+    )
 
     MemberRegistrationService.auto_register_user_and_group(
         session=session,
