@@ -12,6 +12,7 @@ from ..parser import (
     parse_pay_message,
     parse_payback_message,
 )
+from ..repositories import UserRepository
 from ..services import ExpenseService, MemberRegistrationService
 from ..services.exceptions import (
     PermissionDeniedError,
@@ -119,16 +120,10 @@ async def pay_toggle_callback_handler(
     target_user_id = int(user_id_str)
     creator_id = int(creator_id_str)
 
-    # Resolve clicking user
-    clicker, _ = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=query.message.chat.id
-        if query.message and query.message.chat
-        else query.from_user.id,
-        user_id=query.from_user.id,
-        username=query.from_user.username,
-        first_name=query.from_user.first_name or "",
-    )
+    # Resolve clicking user (guaranteed registered by group=-1 auto_register)
+    clicker = UserRepository(session).get_by_telegram_id(query.from_user.id)
+    if not clicker:
+        return
 
     try:
         expense = ExpenseService.toggle_split_participant(
@@ -257,16 +252,10 @@ async def undo_callback_handler(
     tx_id = int(tx_id_str)
     creator_id = int(creator_id_str)
 
-    # Resolve clicking user
-    clicker, _ = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=query.message.chat.id
-        if query.message and query.message.chat
-        else query.from_user.id,
-        user_id=query.from_user.id,
-        username=query.from_user.username,
-        first_name=query.from_user.first_name or "",
-    )
+    # Resolve clicking user (guaranteed registered by group=-1 auto_register)
+    clicker = UserRepository(session).get_by_telegram_id(query.from_user.id)
+    if not clicker:
+        return
 
     try:
         audit_desc = ExpenseService.undo_transaction(

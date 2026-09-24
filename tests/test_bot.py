@@ -142,6 +142,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
             callback_data=f"settle:{dave.id}:{self.alice.id}:1000",
         )
         context = MagicMock()
+        asyncio.run(auto_register(update, context))
         asyncio.run(settle_callback_handler(update, context))
 
         # Payment should be successfully recorded

@@ -8,8 +8,8 @@ from telegram.ext import ContextTypes
 
 from ..database import with_db_session
 from ..formatters import generate_history_rich_html
-from ..repositories import GroupRepository
-from ..services import HistoryService, MemberRegistrationService
+from ..repositories import GroupRepository, UserRepository
+from ..services import HistoryService
 from ..services.exceptions import PermissionDeniedError, ValidationError
 from ..telegram import TelegramRichClient
 from .common import require_group_chat, send_response
@@ -87,13 +87,10 @@ async def history_delete_callback_handler(
     if not query.message or not query.message.chat:
         return
 
-    clicker, _ = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=query.message.chat.id,
-        user_id=query.from_user.id,
-        username=query.from_user.username,
-        first_name=query.from_user.first_name,
-    )
+    # Resolve clicking user (guaranteed registered by group=-1 auto_register)
+    clicker = UserRepository(session).get_by_telegram_id(query.from_user.id)
+    if not clicker:
+        return
 
     try:
         msg = HistoryService.delete_transaction(

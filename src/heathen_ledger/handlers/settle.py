@@ -15,8 +15,8 @@ from ..formatters import (
 )
 from ..keyboards import SettlementKeyboardBuilder
 from ..models import User
-from ..repositories import GroupRepository
-from ..services import MemberRegistrationService, SettlementService
+from ..repositories import GroupRepository, UserRepository
+from ..services import SettlementService
 from ..services.exceptions import PermissionDeniedError
 from .common import require_group_chat, send_response
 
@@ -116,14 +116,10 @@ async def settle_callback_handler(
         await query.answer(text="⚠️ Group not found in database.", show_alert=True)
         return
 
-    # Resolve clicking user and ensure they are linked to the group
-    clicking_user, _ = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=query.message.chat.id,
-        user_id=query.from_user.id,
-        username=query.from_user.username,
-        first_name=query.from_user.first_name or "",
-    )
+    # Resolve clicking user (guaranteed registered by group=-1 auto_register)
+    clicking_user = UserRepository(session).get_by_telegram_id(query.from_user.id)
+    if not clicking_user:
+        return
 
     try:
         SettlementService.record_settlement_payment(
