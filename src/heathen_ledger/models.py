@@ -63,7 +63,7 @@ class Group(Base):
     title = Column(String, nullable=True)
     created_at = Column(
         DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=True,
     )
 
@@ -89,7 +89,7 @@ class Expense(Base):
     expense_date = Column(Date, nullable=True)
     created_at = Column(
         DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=False,
     )
 
@@ -173,7 +173,7 @@ class Payment(Base):
     amount = Column(Integer, nullable=False)  # Stored in cents
     created_at = Column(
         DateTime,
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        default=lambda: datetime.datetime.now(datetime.UTC),
         nullable=False,
     )
 
