@@ -248,7 +248,7 @@ class MemberRegistrationService:
         db_user = user_repo.get_or_create(
             telegram_id=user_id, username=username, first_name=first_name
         )
-        title = chat_title or f"Private Chat ({user_id})"
+        title = chat_title or f"Chat ({chat_id})"
         db_group = group_repo.get_or_create(telegram_chat_id=chat_id, title=title)
         user_repo.add_to_group(user=db_user, group=db_group)
         session.commit()

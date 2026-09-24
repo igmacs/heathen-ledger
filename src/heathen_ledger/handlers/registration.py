@@ -3,12 +3,12 @@ import re
 
 from sqlalchemy.orm import Session
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import ChatType, MessageEntityType
+from telegram.constants import MessageEntityType
 from telegram.ext import ContextTypes
 
 from ..database import with_db_session
 from ..services import MemberRegistrationService
-from .common import send_response
+from .common import is_group_chat, require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,15 @@ async def auto_register(
     if update.effective_user.is_bot:
         return
 
+    # Only register in group/supergroup chats
+    if not is_group_chat(update):
+        return
+
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
     username = update.effective_user.username
     first_name = update.effective_user.first_name or ""
-    title = update.effective_chat.title or f"Private Chat ({user_id})"
+    title = update.effective_chat.title or f"Chat ({chat_id})"
 
     MemberRegistrationService.auto_register_user_and_group(
         session=session,
@@ -41,6 +45,7 @@ async def auto_register(
     )
 
 
+@require_group_chat
 @with_db_session
 async def register_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -104,15 +109,6 @@ async def register_command(
 
     # 3. No parameters: show inline button to let members register themselves
     if not args_text:
-        if chat.type == ChatType.PRIVATE:
-            await send_response(
-                update,
-                context,
-                "ℹ️ In private chat, you are already registered with the bot! Add me to a group chat and use `/register` to register group members.",
-                parse_mode="Markdown",
-            )
-            return
-
         keyboard = [
             [InlineKeyboardButton("📝 Register me", callback_data="register:join")]
         ]

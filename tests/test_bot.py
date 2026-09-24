@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../s
 from heathen_ledger import crud
 from heathen_ledger.commands.dispatcher import CommandDispatcher
 from heathen_ledger.handlers.base import (
+    auto_register,
     members_command,
     register_callback_handler,
     register_command,
@@ -29,7 +30,8 @@ from heathen_ledger.handlers.expense import (
 from heathen_ledger.handlers.history import history_delete_callback_handler
 from heathen_ledger.handlers.settle import settle_callback_handler
 from heathen_ledger.keyboards import ExpenseKeyboardBuilder
-from telegram.constants import MessageEntityType
+from heathen_ledger.repositories import GroupRepository
+from telegram.constants import ChatType, MessageEntityType
 
 from tests.base import BaseDatabaseTestCase
 
@@ -764,6 +766,26 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         karen = crud.get_user_in_group(self.db_session, self.group.id, "karen")
         self.assertIsNotNone(jack)
         self.assertIsNotNone(karen)
+
+    def test_auto_register_in_private_chat_ignored(self):
+        update = self.create_mock_message_update("Hello bot", chat_id=777)
+        update.effective_chat.type = ChatType.PRIVATE
+        context = MagicMock()
+
+        asyncio.run(auto_register(update, context))
+
+        self.assertIsNone(GroupRepository(self.db_session).get_by_telegram_id(777))
+
+    def test_register_in_private_chat_blocked(self):
+        update = self.create_mock_message_update("/register", chat_id=777)
+        update.effective_chat.type = ChatType.PRIVATE
+        context = MagicMock()
+
+        asyncio.run(register_command(update, context))
+
+        update.message.reply_text.assert_called_once()
+        reply = update.message.reply_text.call_args.args[0]
+        self.assertIn("can only be used in a group chat", reply)
 
 
 if __name__ == "__main__":
