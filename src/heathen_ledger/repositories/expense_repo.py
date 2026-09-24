@@ -1,6 +1,5 @@
 import datetime
 import logging
-from typing import Optional, Dict, List
 from sqlalchemy.orm import Session
 from ..models import Expense, ExpenseSplit, ExpensePayer
 
@@ -16,12 +15,12 @@ class ExpenseRepository:
     def create(
         self,
         group_id: int,
-        payer_id: Optional[int] = None,
+        payer_id: int | None = None,
         amount: int = 0,
-        description: Optional[str] = None,
-        splits: Optional[Dict[int, int]] = None,
-        payers: Optional[Dict[int, int]] = None,
-        expense_date: Optional[datetime.date] = None,
+        description: str | None = None,
+        splits: dict[int, int] | None = None,
+        payers: dict[int, int] | None = None,
+        expense_date: datetime.date | None = None,
     ) -> Expense:
         """Log a new expense in a group chat."""
         if payers:
@@ -59,11 +58,11 @@ class ExpenseRepository:
         )
         return expense
 
-    def get_for_group(self, group_id: int) -> List[Expense]:
+    def get_for_group(self, group_id: int) -> list[Expense]:
         """Retrieve all expenses logged in a specific group."""
         return self.session.query(Expense).filter(Expense.group_id == group_id).all()
 
-    def get_by_id(self, expense_id: int) -> Optional[Expense]:
+    def get_by_id(self, expense_id: int) -> Expense | None:
         """Retrieve an expense by ID."""
         return self.session.query(Expense).filter(Expense.id == expense_id).first()
 

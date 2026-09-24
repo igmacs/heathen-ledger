@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 import os
-from typing import Optional, List
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -16,7 +15,7 @@ class InterpretationResponseSchema(BaseModel):
     transcription: str = Field(
         description="The exact spoken text transcribed from the audio in the original language."
     )
-    command: Optional[str] = Field(
+    command: str | None = Field(
         None,
         description="The mapped Telegram bot command starting with / (e.g. '/pay @Alice 25 for dinner') if a command intent was detected, or null if no command was intended.",
     )
@@ -27,8 +26,8 @@ class GeminiVoiceInterpreter(VoiceInterpreter):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model_name: Optional[str] = None,
+        api_key: str | None = None,
+        model_name: str | None = None,
     ) -> None:
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:
@@ -56,7 +55,7 @@ class GeminiVoiceInterpreter(VoiceInterpreter):
     async def interpret(
         self,
         audio_data: bytes,
-        group_members: Optional[List[str]] = None,
+        group_members: list[str] | None = None,
         mime_type: str = "audio/ogg",
     ) -> VoiceInterpretation:
         """Transcribe and interpret audio bytes to bot command using Gemini."""

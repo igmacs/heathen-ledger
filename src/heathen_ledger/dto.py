@@ -2,7 +2,7 @@
 
 import datetime
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 
 class CommandParseError(Exception):
@@ -41,9 +41,9 @@ class SplitSpec:
     """Split configuration describing how an expense should be divided among participants."""
 
     mode: str = "all"  # 'all', 'subset', 'except', 'custom'
-    participants: List[str] = field(default_factory=list)
-    shares: Dict[str, Optional[int]] = field(default_factory=dict)
-    excluded: List[str] = field(default_factory=list)
+    participants: list[str] = field(default_factory=list)
+    shares: dict[str, int | None] = field(default_factory=dict)
+    excluded: list[str] = field(default_factory=list)
 
     def __getitem__(self, item: str) -> Any:
         if hasattr(self, item):
@@ -62,12 +62,12 @@ class ParsedPayCommand:
     """Structured data extracted from a /pay command."""
 
     amount: int
-    payers: Dict[str, int]
-    description: Optional[str] = None
+    payers: dict[str, int]
+    description: str | None = None
     split_spec: SplitSpec = field(default_factory=SplitSpec)
-    expense_date: Optional[datetime.date] = None
-    payer_username: Optional[str] = None
-    participants: List[str] = field(default_factory=list)
+    expense_date: datetime.date | None = None
+    payer_username: str | None = None
+    participants: list[str] = field(default_factory=list)
 
     def __getitem__(self, item: str) -> Any:
         if hasattr(self, item):
@@ -89,7 +89,7 @@ class ParsedPaybackCommand:
 
     payee_username: str
     amount: int
-    payer_username: Optional[str] = None
+    payer_username: str | None = None
 
     def __getitem__(self, item: str) -> Any:
         if hasattr(self, item):

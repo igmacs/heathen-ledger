@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +7,7 @@ class ReceiptImageDownloader:
     """Downloads image bytes from Telegram photo or image document."""
 
     @classmethod
-    async def download(cls, bot, media_message) -> Tuple[bytes, str]:
+    async def download(cls, bot, media_message) -> tuple[bytes, str]:
         """Downloads image file bytes and returns (image_bytes, mime_type)."""
         file_id = None
         mime_type = "image/jpeg"

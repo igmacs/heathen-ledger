@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from typing import Optional, List
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -20,25 +19,25 @@ class ReceiptItemSchema(BaseModel):
 
 
 class ReceiptSchema(BaseModel):
-    merchant: Optional[str] = Field(
+    merchant: str | None = Field(
         None, description="Merchant or restaurant name if detected"
     )
-    date: Optional[str] = Field(
+    date: str | None = Field(
         None, description="Receipt date in YYYY-MM-DD format if detected"
     )
-    currency: Optional[str] = Field(
+    currency: str | None = Field(
         None,
         description="Currency symbol or 3-letter code (e.g. €, $, EUR, USD) if detected",
     )
-    items: List[ReceiptItemSchema] = Field(
+    items: list[ReceiptItemSchema] = Field(
         description="List of itemized goods or services on the receipt"
     )
-    subtotal: Optional[float] = Field(
+    subtotal: float | None = Field(
         None, description="Subtotal amount before tax or tip if listed"
     )
-    tax: Optional[float] = Field(None, description="Tax or VAT amount if listed")
-    tip: Optional[float] = Field(None, description="Tip or service charge if listed")
-    total: Optional[float] = Field(
+    tax: float | None = Field(None, description="Tax or VAT amount if listed")
+    tip: float | None = Field(None, description="Tip or service charge if listed")
+    total: float | None = Field(
         None, description="Final total amount paid on the receipt"
     )
 
@@ -48,8 +47,8 @@ class GeminiReceiptParser(ReceiptParser):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model_name: Optional[str] = None,
+        api_key: str | None = None,
+        model_name: str | None = None,
     ) -> None:
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
         if not self.api_key:

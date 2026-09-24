@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List
 
 
 @dataclass
@@ -8,8 +7,8 @@ class VoiceInterpretation:
     """Represents the interpreted result of a voice message."""
 
     transcription: str
-    command: Optional[str] = None
-    raw_response: Optional[str] = None
+    command: str | None = None
+    raw_response: str | None = None
 
 
 class VoiceInterpreter(ABC):
@@ -32,7 +31,7 @@ class VoiceInterpreter(ABC):
     async def interpret(
         self,
         audio_data: bytes,
-        group_members: Optional[List[str]] = None,
+        group_members: list[str] | None = None,
         mime_type: str = "audio/ogg",
     ) -> VoiceInterpretation:
         """Transcribe and interpret audio bytes into an intent/bot command.

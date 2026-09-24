@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import re
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any
 from sqlalchemy.orm import Session
 from telegram import User as TgUser
 
@@ -17,7 +17,7 @@ class MemberRegistrationService:
     @classmethod
     async def resolve_admin_by_username(
         cls, context: Any, chat_id: int, username: str
-    ) -> Optional[TgUser]:
+    ) -> TgUser | None:
         """Check if a username matches a chat administrator."""
         clean_username = username.lower().lstrip("@")
         if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
@@ -37,7 +37,7 @@ class MemberRegistrationService:
     @classmethod
     async def get_admins_by_username(
         cls, context: Any, chat_id: int
-    ) -> Dict[str, TgUser]:
+    ) -> dict[str, TgUser]:
         """Fetch all chat administrators indexed by lowercase username."""
         admins_by_username = {}
         if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
@@ -56,7 +56,7 @@ class MemberRegistrationService:
     @classmethod
     def register_reply_user(
         cls, session: Session, group: Group, target_user: TgUser
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Register the author of a replied-to message."""
         if target_user.is_bot:
             return False, "⚠️ Cannot register a bot."
@@ -85,8 +85,8 @@ class MemberRegistrationService:
 
     @classmethod
     def register_text_mentions(
-        cls, session: Session, group: Group, text_mentions: List[Any]
-    ) -> Tuple[List[str], List[str]]:
+        cls, session: Session, group: Group, text_mentions: list[Any]
+    ) -> tuple[list[str], list[str]]:
         """Register users extracted from TEXT_MENTION message entities."""
         registered_names = []
         already_registered_names = []
@@ -113,9 +113,9 @@ class MemberRegistrationService:
         cls,
         session: Session,
         group: Group,
-        mentions: List[str],
-        admins_by_username: Dict[str, TgUser],
-    ) -> Tuple[List[str], List[str]]:
+        mentions: list[str],
+        admins_by_username: dict[str, TgUser],
+    ) -> tuple[list[str], list[str]]:
         """Register multiple @mentions provided as arguments."""
         registered = []
         already_registered = []
@@ -152,7 +152,7 @@ class MemberRegistrationService:
         group: Group,
         handle: str,
         first_name: str,
-        admin_u: Optional[TgUser],
+        admin_u: TgUser | None,
     ) -> str:
         """Register a single @handle (as admin, global user, or external user)."""
         user_repo = UserRepository(session)
@@ -191,7 +191,7 @@ class MemberRegistrationService:
     @classmethod
     def register_name(
         cls, session: Session, group: Group, name_text: str
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Register an external member by name without @handle."""
         parts = name_text.split()
         if len(parts) == 1:
@@ -233,10 +233,10 @@ class MemberRegistrationService:
         session: Session,
         user_id: int,
         chat_id: int,
-        username: Optional[str] = None,
+        username: str | None = None,
         first_name: str = "",
-        chat_title: Optional[str] = None,
-    ) -> Tuple[User, Group]:
+        chat_title: str | None = None,
+    ) -> tuple[User, Group]:
         """Automatically register user and group chat if not already existing, and link them."""
         user_repo = UserRepository(session)
         group_repo = GroupRepository(session)
@@ -256,8 +256,8 @@ class MemberRegistrationService:
         session: Session,
         chat_id: int,
         user: TgUser,
-        chat_title: Optional[str] = None,
-    ) -> Tuple[bool, User, Group]:
+        chat_title: str | None = None,
+    ) -> tuple[bool, User, Group]:
         """Handle inline button click for self-registration.
 
         Returns:
@@ -286,7 +286,7 @@ class MemberRegistrationService:
         return False, db_user, group
 
     @classmethod
-    def get_group_members(cls, session: Session, chat_id: int) -> Optional[List[User]]:
+    def get_group_members(cls, session: Session, chat_id: int) -> list[User] | None:
         """Retrieve the list of members for a group chat, or None if group doesn't exist."""
         group = GroupRepository(session).get_by_telegram_id(chat_id)
         if not group or not group.members:
@@ -299,10 +299,10 @@ class MemberRegistrationService:
         session: Session,
         chat_id: int,
         user_id: int,
-        username: Optional[str] = None,
+        username: str | None = None,
         first_name: str = "",
-        chat_title: Optional[str] = None,
-    ) -> Tuple[User, Group]:
+        chat_title: str | None = None,
+    ) -> tuple[User, Group]:
         """Ensure both group and user exist and the user is linked to the group."""
         group_repo = GroupRepository(session)
         user_repo = UserRepository(session)

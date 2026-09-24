@@ -1,6 +1,6 @@
 """Service layer for querying and managing transaction history and deletions."""
 
-from typing import List, Dict, Any
+from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models import User
@@ -14,7 +14,7 @@ class HistoryService:
     @classmethod
     def get_recent_transactions(
         cls, session: Session, group_id: int, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve recent transactions (both expenses and payments) sorted descending by created_at."""
         payment_repo = PaymentRepository(session)
         return payment_repo.get_recent_transactions(group_id=group_id, limit=limit)

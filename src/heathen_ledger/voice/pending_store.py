@@ -1,7 +1,6 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Set, Dict
 
 
 @dataclass
@@ -10,10 +9,10 @@ class PendingVoiceCommand:
 
     token: str
     command: str
-    creator_id: Optional[int]
-    creator_username: Optional[str]
-    creator_first_name: Optional[str]
-    authorized_user_ids: Set[int]
+    creator_id: int | None
+    creator_username: str | None
+    creator_first_name: str | None
+    authorized_user_ids: set[int]
     chat_id: int
     transcription: str
     created_at: float = field(default_factory=time.time)
@@ -24,7 +23,7 @@ class PendingVoiceCommandStore:
 
     def __init__(self, ttl_seconds: int = 3600) -> None:
         self.ttl_seconds = ttl_seconds
-        self._commands: Dict[str, PendingVoiceCommand] = {}
+        self._commands: dict[str, PendingVoiceCommand] = {}
 
     def prune_expired(self) -> None:
         """Remove commands older than ttl_seconds."""
@@ -40,10 +39,10 @@ class PendingVoiceCommandStore:
     def store(
         self,
         command: str,
-        creator_id: Optional[int],
-        creator_username: Optional[str],
-        creator_first_name: Optional[str],
-        authorized_user_ids: Set[int],
+        creator_id: int | None,
+        creator_username: str | None,
+        creator_first_name: str | None,
+        authorized_user_ids: set[int],
         chat_id: int,
         transcription: str,
     ) -> str:
@@ -63,11 +62,11 @@ class PendingVoiceCommandStore:
         )
         return token
 
-    def get(self, token: str) -> Optional[PendingVoiceCommand]:
+    def get(self, token: str) -> PendingVoiceCommand | None:
         """Retrieve a pending voice command by token."""
         return self._commands.get(token)
 
-    def pop(self, token: str) -> Optional[PendingVoiceCommand]:
+    def pop(self, token: str) -> PendingVoiceCommand | None:
         """Atomically pop a pending voice command by token."""
         return self._commands.pop(token, None)
 

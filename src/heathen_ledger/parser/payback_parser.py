@@ -1,5 +1,5 @@
 import re
-from typing import Union, List, Dict, Any
+from typing import Any
 
 from ..dto import ParsedPaybackCommand, ParseErrorResult
 from .amount import AmountParser
@@ -9,7 +9,7 @@ class PaybackCommandParser:
     """Parses /payback command messages into ParsedPaybackCommand."""
 
     @classmethod
-    def parse(cls, text: str) -> Union[ParsedPaybackCommand, ParseErrorResult]:
+    def parse(cls, text: str) -> ParsedPaybackCommand | ParseErrorResult:
         """Parses a /payback command to extract direct payment details."""
         cleaned_text = re.sub(
             r"^/payback(?:_persistent)?(?:@\w+)?(?:\s+|$)",
@@ -18,7 +18,7 @@ class PaybackCommandParser:
             flags=re.IGNORECASE,
         ).strip()
 
-        mentions: List[Dict[str, Any]] = []
+        mentions: list[dict[str, Any]] = []
         for match in re.finditer(r"@(\w+)", cleaned_text):
             mentions.append(
                 {

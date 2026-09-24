@@ -1,5 +1,4 @@
 import re
-from typing import Dict, Union
 
 from ..dto import ParsedPayCommand, ParseErrorResult, SplitSpec
 from ..domain.calculations import split_amount_equally
@@ -17,7 +16,7 @@ class PayCommandParser:
     )
 
     @classmethod
-    def parse(cls, text: str) -> Union[ParsedPayCommand, ParseErrorResult]:
+    def parse(cls, text: str) -> ParsedPayCommand | ParseErrorResult:
         """Parses a /pay command message to extract expense details."""
         # 1. Strip the /pay or /pay_persistent command prefix
         cleaned_text = re.sub(
@@ -27,7 +26,7 @@ class PayCommandParser:
             return ParseErrorResult("No valid amount found in the message.")
 
         # 2. Extract quoted descriptions to avoid keyword collision inside strings
-        placeholders: Dict[str, str] = {}
+        placeholders: dict[str, str] = {}
 
         def replace_quoted(m: re.Match) -> str:
             key = f"__QUOTED_DESC_{len(placeholders)}__"
@@ -40,7 +39,7 @@ class PayCommandParser:
 
         # 3. Identify keyword clause boundaries
         matches = list(cls.KW_REGEX.finditer(cleaned_text))
-        clauses: Dict[str, str] = {}
+        clauses: dict[str, str] = {}
         if matches:
             prefix_text = cleaned_text[: matches[0].start()].strip()
             for i, m in enumerate(matches):

@@ -26,10 +26,12 @@ line-length = 88
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "UP",  # pyupgrade
 ]
 ignore = [
-    "E501",  # line length handled by ruff-format
+    "E501",   # line length handled by ruff-format
+    "UP038",  # isinstance with union instead of tuple (deprecated in Ruff, tuple is faster)
 ]

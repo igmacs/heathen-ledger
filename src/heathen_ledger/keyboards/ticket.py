@@ -1,6 +1,6 @@
 """Keyboards for interactive ticket claiming and splitting."""
 
-from typing import List, Any
+from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..receipt.pending_store import PendingTicketSession
@@ -32,7 +32,7 @@ class TicketKeyboardBuilder:
 
     @classmethod
     def build_person_selector_keyboard(
-        cls, session: PendingTicketSession, members: List[Any]
+        cls, session: PendingTicketSession, members: list[Any]
     ) -> InlineKeyboardMarkup:
         """Show group members and registered external guests to pick who to assign items for."""
         rows = []
@@ -157,7 +157,7 @@ class TicketKeyboardBuilder:
 
     @classmethod
     def build_member_selector_keyboard(
-        cls, token: str, item_idx: int, members: List[Any], item_name: str
+        cls, token: str, item_idx: int, members: list[Any], item_name: str
     ) -> InlineKeyboardMarkup:
         """Show members to assign to a chosen item."""
         rows = []

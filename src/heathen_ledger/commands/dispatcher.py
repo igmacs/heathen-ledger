@@ -1,5 +1,4 @@
 import logging
-from typing import Optional, Tuple
 from telegram import InlineKeyboardMarkup
 from sqlalchemy.orm import Session
 
@@ -36,11 +35,11 @@ class CommandDispatcher:
         command_str: str,
         chat_id: int,
         creator_id: int,
-        creator_username: Optional[str],
-        creator_first_name: Optional[str],
+        creator_username: str | None,
+        creator_first_name: str | None,
         session: Session,
-        chat_title: Optional[str] = None,
-    ) -> Tuple[str, Optional[InlineKeyboardMarkup]]:
+        chat_title: str | None = None,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Execute a parsed or raw bot command string and return (reply_text, reply_markup)."""
         cmd_clean = command_str.strip()
         if not cmd_clean.startswith("/"):

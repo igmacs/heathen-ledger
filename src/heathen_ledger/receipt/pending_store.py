@@ -3,15 +3,15 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from .base import Receipt
 
 
 def extract_initials(
     first_name: str,
-    last_name: Optional[str] = None,
-    username: Optional[str] = None,
+    last_name: str | None = None,
+    username: str | None = None,
 ) -> str:
     """Derive clean 2-letter uppercase initials for visual feedback."""
     if first_name and last_name:
@@ -36,8 +36,8 @@ class TicketParticipant:
     participant_key: str  # "tg:<user_id>" or "ext:<name_slug>"
     display_name: str
     initials: str
-    user_id: Optional[int] = None
-    username: Optional[str] = None
+    user_id: int | None = None
+    username: str | None = None
     is_external: bool = False
 
 
@@ -48,11 +48,11 @@ class TicketItemState:
     item_index: int
     name: str
     price: float
-    participants: Dict[str, TicketParticipant] = field(default_factory=dict)
+    participants: dict[str, TicketParticipant] = field(default_factory=dict)
     is_completed: bool = False
 
     @property
-    def initials_list(self) -> List[str]:
+    def initials_list(self) -> list[str]:
         return [p.initials for p in self.participants.values()]
 
     @property
@@ -70,23 +70,23 @@ class PendingTicketSession:
 
     token: str
     chat_id: int
-    creator_id: Optional[int]
-    creator_name: Optional[str]
+    creator_id: int | None
+    creator_name: str | None
     receipt: Receipt
-    items: List[TicketItemState] = field(default_factory=list)
+    items: list[TicketItemState] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
-    message_id: Optional[int] = None
-    ephemeral_message_id: Optional[int] = None
-    external_participants: Dict[str, TicketParticipant] = field(default_factory=dict)
+    message_id: int | None = None
+    ephemeral_message_id: int | None = None
+    external_participants: dict[str, TicketParticipant] = field(default_factory=dict)
 
     @classmethod
     def create(
         cls,
         chat_id: int,
-        creator_id: Optional[int],
-        creator_name: Optional[str],
+        creator_id: int | None,
+        creator_name: str | None,
         receipt: Receipt,
-        token: Optional[str] = None,
+        token: str | None = None,
     ) -> "PendingTicketSession":
         """Create a new ticket session with repeated items expanded into individual lines."""
         token = token or uuid.uuid4().hex[:8]
@@ -127,7 +127,7 @@ class PendingTicketSession:
         self.external_participants[key] = p
         return p
 
-    def get_known_external_participants(self) -> List[TicketParticipant]:
+    def get_known_external_participants(self) -> list[TicketParticipant]:
         """Return list of all external participants registered in this session."""
         known = dict(self.external_participants)
         for it in self.items:
@@ -139,10 +139,10 @@ class PendingTicketSession:
     def toggle_participant(
         self,
         item_index: int,
-        user_id: Optional[int],
+        user_id: int | None,
         display_name: str,
-        username: Optional[str] = None,
-        last_name: Optional[str] = None,
+        username: str | None = None,
+        last_name: str | None = None,
     ) -> bool:
         """Toggle user participation in an item. Returns True if added, False if removed."""
         if item_index < 0 or item_index >= len(self.items):
@@ -180,7 +180,7 @@ class PendingTicketSession:
         self,
         item_index: int,
         participant_key: str,
-        participant: Optional[TicketParticipant] = None,
+        participant: TicketParticipant | None = None,
     ) -> bool:
         """Toggle a participant on an item by key. Returns True if added, False if removed."""
         if item_index < 0 or item_index >= len(self.items):
@@ -226,12 +226,12 @@ class PendingTicketSession:
         item.participants[p.participant_key] = p
         return True
 
-    def calculate_split(self) -> Dict[str, Dict[str, Any]]:
+    def calculate_split(self) -> dict[str, dict[str, Any]]:
         """Calculate each participant's share of item costs plus proportional tax/tip/rounding.
 
         Returns a dictionary keyed by participant_key.
         """
-        shares: Dict[str, Dict[str, Any]] = {}
+        shares: dict[str, dict[str, Any]] = {}
         items_allocated_total = 0.0
 
         for it in self.items:
@@ -292,7 +292,7 @@ class PendingTicketStore:
 
     def __init__(self, ttl_seconds: int = 86400) -> None:
         self.ttl_seconds = ttl_seconds
-        self._sessions: Dict[str, PendingTicketSession] = {}
+        self._sessions: dict[str, PendingTicketSession] = {}
 
     def prune_expired(self) -> None:
         """Remove expired sessions."""
@@ -311,11 +311,11 @@ class PendingTicketStore:
         self._sessions[session.token] = session
         return session.token
 
-    def get(self, token: str) -> Optional[PendingTicketSession]:
+    def get(self, token: str) -> PendingTicketSession | None:
         """Retrieve a session by token."""
         return self._sessions.get(token)
 
-    def pop(self, token: str) -> Optional[PendingTicketSession]:
+    def pop(self, token: str) -> PendingTicketSession | None:
         """Remove and return a session by token."""
         return self._sessions.pop(token, None)
 

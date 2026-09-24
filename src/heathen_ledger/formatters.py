@@ -1,7 +1,7 @@
 """Presentation layer: formatting monetary amounts, balances, settlements, history, and expenses."""
 
 import html
-from typing import Dict, List, Any
+from typing import Any
 
 
 def format_cents(cents: int, currency: str = "$") -> str:
@@ -12,7 +12,7 @@ def format_cents(cents: int, currency: str = "$") -> str:
 
 
 def generate_balances_summary(
-    balances: Dict[int, int], users_by_id: Dict[int, Any]
+    balances: dict[int, int], users_by_id: dict[int, Any]
 ) -> str:
     """Formats the net balances of group members into a human-readable Markdown string."""
     if not balances:
@@ -40,7 +40,7 @@ def generate_balances_summary(
 
 
 def generate_settlements_summary(
-    transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
+    transactions: list[dict[str, Any]], users_by_id: dict[int, Any]
 ) -> str:
     """Formats the list of suggested payments into a human-readable Markdown string."""
     if not transactions:
@@ -77,7 +77,7 @@ def generate_settlements_summary(
     )
 
 
-def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
+def generate_history_summary(transactions: list[dict[str, Any]]) -> str:
     """Formats recent transactions (expenses and payments) into a Markdown string."""
     if not transactions:
         return "ℹ️ No recent transactions found in this group."
@@ -128,7 +128,7 @@ def generate_history_summary(transactions: List[Dict[str, Any]]) -> str:
     return "📜 **Recent Group History:**\n" + "\n".join(lines)
 
 
-def generate_history_rich_html(transactions: List[Dict[str, Any]]) -> str:
+def generate_history_rich_html(transactions: list[dict[str, Any]]) -> str:
     """Formats recent transactions into Telegram Rich HTML with embedded delete buttons beside each entry."""
     if not transactions:
         return "<p>ℹ️ No recent transactions found in this group.</p>"

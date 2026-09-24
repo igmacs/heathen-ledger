@@ -1,9 +1,9 @@
 """Financial calculations: equal splits, remainder distribution, and debt simplification."""
 
-from typing import List, Dict, Any
+from typing import Any
 
 
-def split_amount_equally(amount: int, num_people: int) -> List[int]:
+def split_amount_equally(amount: int, num_people: int) -> list[int]:
     """
     Splits an integer amount of cents as equally as possible among a number of people.
     Distributes any rounding remainders (modulus) to the first few people to prevent losing pennies.
@@ -27,7 +27,7 @@ def split_amount_equally(amount: int, num_people: int) -> List[int]:
     return shares
 
 
-def simplify_debts(balances: Dict[int, int]) -> List[Dict[str, Any]]:
+def simplify_debts(balances: dict[int, int]) -> list[dict[str, Any]]:
     """
     Computes the minimum number of transactions needed to settle all debts using a greedy algorithm.
 

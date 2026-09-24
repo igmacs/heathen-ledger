@@ -1,5 +1,4 @@
 import logging
-from typing import Optional, Set
 from telegram import Update, InlineKeyboardMarkup
 from telegram.constants import ChatAction, MessageEntityType
 from telegram.error import BadRequest
@@ -151,7 +150,7 @@ async def process_voice_audio(
         creator_username = getattr(speaker, "username", None)
         creator_first_name = getattr(speaker, "first_name", None)
 
-        authorized_user_ids: Set[int] = set()
+        authorized_user_ids: set[int] = set()
         if creator_id is not None:
             authorized_user_ids.add(creator_id)
         if requester and getattr(requester, "id", None) is not None:
@@ -266,11 +265,11 @@ def execute_voice_command(
     command_str: str,
     chat_id: int,
     creator_id: int,
-    creator_username: Optional[str],
-    creator_first_name: Optional[str],
+    creator_username: str | None,
+    creator_first_name: str | None,
     session: Session,
-    chat_title: Optional[str] = None,
-) -> tuple[str, Optional[InlineKeyboardMarkup]]:
+    chat_title: str | None = None,
+) -> tuple[str, InlineKeyboardMarkup | None]:
     """Execute an interpreted bot command and return (reply_text, reply_markup).
 
     Delegates to CommandDispatcher.

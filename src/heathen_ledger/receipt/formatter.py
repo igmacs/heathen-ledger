@@ -1,12 +1,12 @@
 """Rich HTML and Markdown formatters for interactive ticket splitting."""
 
 import html
-from typing import Dict, Any, Optional
+from typing import Any
 
 from .pending_store import PendingTicketSession
 
 
-def format_price(amount: float, currency: Optional[str] = None) -> str:
+def format_price(amount: float, currency: str | None = None) -> str:
     """Format an amount with currency symbol or code."""
     if not currency:
         return f"{amount:.2f}"
@@ -86,7 +86,7 @@ def format_ticket_rich_html(session: PendingTicketSession) -> str:
 
 def format_ticket_split_summary(
     session: PendingTicketSession,
-    shares: Dict[str, Dict[str, Any]],
+    shares: dict[str, dict[str, Any]],
 ) -> str:
     """Format the calculated ticket split summary in Markdown."""
     currency = session.receipt.currency
@@ -130,7 +130,7 @@ def format_ticket_split_summary(
 
 def format_ticket_split_rich_html(
     session: PendingTicketSession,
-    shares: Dict[str, Dict[str, Any]],
+    shares: dict[str, dict[str, Any]],
 ) -> str:
     """Format the calculated ticket split summary in Telegram Rich HTML."""
     currency = session.receipt.currency

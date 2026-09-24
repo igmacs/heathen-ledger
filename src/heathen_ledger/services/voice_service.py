@@ -1,7 +1,6 @@
 """Service layer for voice transcription, interpretation, and pending command lifecycle."""
 
 import logging
-from typing import Optional, Set, List, Tuple
 from sqlalchemy.orm import Session
 from telegram import Bot, Message, InlineKeyboardMarkup
 from telegram.constants import ChatAction
@@ -34,10 +33,10 @@ class VoiceService:
     def store_pending_command(
         cls,
         command: str,
-        creator_id: Optional[int],
-        creator_username: Optional[str],
-        creator_first_name: Optional[str],
-        authorized_user_ids: Set[int],
+        creator_id: int | None,
+        creator_username: str | None,
+        creator_first_name: str | None,
+        authorized_user_ids: set[int],
         chat_id: int,
         transcription: str,
     ) -> str:
@@ -53,12 +52,12 @@ class VoiceService:
         )
 
     @classmethod
-    def get_pending_command(cls, token: str) -> Optional[PendingVoiceCommand]:
+    def get_pending_command(cls, token: str) -> PendingVoiceCommand | None:
         """Retrieve a pending voice command by token."""
         return cls._store.get(token)
 
     @classmethod
-    def pop_pending_command(cls, token: str) -> Optional[PendingVoiceCommand]:
+    def pop_pending_command(cls, token: str) -> PendingVoiceCommand | None:
         """Atomically pop a pending voice command by token."""
         return cls._store.pop(token)
 
@@ -68,9 +67,7 @@ class VoiceService:
         cls._store.clear()
 
     @classmethod
-    def get_group_member_names(
-        cls, session: Session, chat_id: Optional[int]
-    ) -> List[str]:
+    def get_group_member_names(cls, session: Session, chat_id: int | None) -> list[str]:
         """Gather group member handles/names for Gemini prompting context."""
         group_members = []
         if chat_id is not None:
@@ -89,9 +86,9 @@ class VoiceService:
         bot: Bot,
         media_message: Message,
         session: Session,
-        chat_id: Optional[int] = None,
-        requester_user_id: Optional[int] = None,
-    ) -> Tuple[VoiceInterpretation, Optional[str]]:
+        chat_id: int | None = None,
+        requester_user_id: int | None = None,
+    ) -> tuple[VoiceInterpretation, str | None]:
         """Download, transcribe, interpret, and store pending command for audio message.
 
         Returns:
@@ -123,7 +120,7 @@ class VoiceService:
             creator_username = getattr(speaker, "username", None)
             creator_first_name = getattr(speaker, "first_name", None)
 
-            authorized_user_ids: Set[int] = set()
+            authorized_user_ids: set[int] = set()
             if creator_id is not None:
                 authorized_user_ids.add(creator_id)
             if requester_user_id is not None:
@@ -148,11 +145,11 @@ class VoiceService:
         command_str: str,
         chat_id: int,
         creator_id: int,
-        creator_username: Optional[str],
-        creator_first_name: Optional[str],
+        creator_username: str | None,
+        creator_first_name: str | None,
         session: Session,
-        chat_title: Optional[str] = None,
-    ) -> Tuple[str, Optional[InlineKeyboardMarkup]]:
+        chat_title: str | None = None,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Execute an interpreted bot command and return (reply_text, reply_markup)."""
         return CommandDispatcher.execute(
             command_str=command_str,

@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from sqlalchemy.orm import Session
 from ..models import User, Group
 
@@ -12,14 +11,14 @@ class UserRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
-    def get_by_telegram_id(self, telegram_id: int) -> Optional[User]:
+    def get_by_telegram_id(self, telegram_id: int) -> User | None:
         """Retrieve a user by their unique Telegram user ID."""
         return self.session.query(User).filter(User.telegram_id == telegram_id).first()
 
     def get_or_create(
         self,
         telegram_id: int,
-        username: Optional[str] = None,
+        username: str | None = None,
         first_name: str = "",
     ) -> User:
         """Get an existing user or create a new user registry if they do not exist."""
@@ -68,7 +67,7 @@ class UserRepository:
         self,
         group: Group,
         first_name: str,
-        username: Optional[str] = None,
+        username: str | None = None,
     ) -> User:
         """Register an external user (without a Telegram account) and add them to the group."""
         clean_username = username.lower().lstrip("@") if username else None
@@ -90,7 +89,7 @@ class UserRepository:
         self,
         group_id: int,
         username: str,
-    ) -> Optional[User]:
+    ) -> User | None:
         """Find a user in a specific group by username or first name.
 
         Falls back to globally registered Telegram users if not yet in group.

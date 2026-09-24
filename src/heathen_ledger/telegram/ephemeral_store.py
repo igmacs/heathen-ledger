@@ -1,14 +1,14 @@
 import time
 import uuid
-from typing import Dict, Any, Optional
+from typing import Any
 from telegram import InlineKeyboardMarkup
 
 
 class EphemeralPayloadStore:
     """In-memory cache for storing ephemeral messages that can be persisted to groups."""
 
-    def __init__(self, payloads: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
-        self.payloads: Dict[str, Dict[str, Any]] = (
+    def __init__(self, payloads: dict[str, dict[str, Any]] | None = None) -> None:
+        self.payloads: dict[str, dict[str, Any]] = (
             payloads if payloads is not None else {}
         )
 
@@ -35,9 +35,9 @@ class EphemeralPayloadStore:
         chat_id: int,
         user_id: int,
         text: str,
-        parse_mode: Optional[str],
-        reply_markup: Optional[InlineKeyboardMarkup],
-        rich_html: Optional[str] = None,
+        parse_mode: str | None,
+        reply_markup: InlineKeyboardMarkup | None,
+        rich_html: str | None = None,
     ) -> str:
         """Store a new persist payload and return a unique token."""
         self.prune_expired()
@@ -53,14 +53,14 @@ class EphemeralPayloadStore:
         }
         return token
 
-    def get(self, token: str) -> Optional[Dict[str, Any]]:
+    def get(self, token: str) -> dict[str, Any] | None:
         """Retrieve payload by token without removing."""
         return self.payloads.get(token)
 
-    def pop(self, token: str) -> Optional[Dict[str, Any]]:
+    def pop(self, token: str) -> dict[str, Any] | None:
         """Atomically pop payload by token."""
         return self.payloads.pop(token, None)
 
-    def restore(self, token: str, payload: Dict[str, Any]) -> None:
+    def restore(self, token: str, payload: dict[str, Any]) -> None:
         """Put back a payload."""
         self.payloads[token] = payload

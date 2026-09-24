@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -7,8 +7,8 @@ class HistoryKeyboardBuilder:
 
     @classmethod
     def build_history_keyboard(
-        cls, transactions: List[Dict[str, Any]]
-    ) -> Optional[InlineKeyboardMarkup]:
+        cls, transactions: list[dict[str, Any]]
+    ) -> InlineKeyboardMarkup | None:
         """Builds deletion buttons for recent transactions."""
         if not transactions:
             return None

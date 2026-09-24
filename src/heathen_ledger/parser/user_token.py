@@ -1,5 +1,4 @@
 import re
-from typing import Optional, Tuple
 from .amount import AmountParser
 
 
@@ -9,7 +8,7 @@ class UserTokenParser:
     TOKEN_REGEX = re.compile(r"(?:@(\w+)|(me))(?::(\d+(?:\.\d{1,2})?))?", re.IGNORECASE)
 
     @classmethod
-    def parse_token(cls, token: str) -> Optional[Tuple[str, Optional[int]]]:
+    def parse_token(cls, token: str) -> tuple[str, int | None] | None:
         """Parses a user token.
 
         Returns (username_or_me, amount_in_cents_or_none), or None if invalid.

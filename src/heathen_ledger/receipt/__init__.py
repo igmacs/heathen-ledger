@@ -1,6 +1,5 @@
 """Receipt photo parsing and processing package."""
 
-from typing import Optional
 from .base import ReceiptParser, Receipt, ReceiptItem, expand_receipt_items
 from .gemini import GeminiReceiptParser
 from .image_downloader import ReceiptImageDownloader
@@ -15,7 +14,7 @@ from .pending_store import (
 
 def get_receipt_parser(
     provider: str = "gemini",
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> ReceiptParser:
     """Factory function to get a ReceiptParser instance for the configured provider."""
     if provider.lower() == "gemini":

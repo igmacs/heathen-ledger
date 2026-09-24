@@ -1,4 +1,3 @@
-from typing import List, Tuple, Optional, Dict
 from ..dto import ParseErrorResult
 from ..domain.calculations import split_amount_equally
 from .user_token import UserTokenParser
@@ -10,7 +9,7 @@ class PayerClauseParser:
     @classmethod
     def parse_raw_payers(
         cls, clause_text: str
-    ) -> Tuple[Optional[List[Tuple[str, Optional[int]]]], Optional[ParseErrorResult]]:
+    ) -> tuple[list[tuple[str, int | None]] | None, ParseErrorResult | None]:
         """Parses raw payer tokens from a 'by' clause."""
         tokens = clause_text.split()
         raw_payers = []
@@ -26,9 +25,9 @@ class PayerClauseParser:
     @classmethod
     def finalize_payers(
         cls,
-        raw_payers: List[Tuple[str, Optional[int]]],
+        raw_payers: list[tuple[str, int | None]],
         amount_cents: int,
-    ) -> Tuple[Optional[Dict[str, int]], Optional[str], Optional[ParseErrorResult]]:
+    ) -> tuple[dict[str, int] | None, str | None, ParseErrorResult | None]:
         """Validates and distributes payer amounts.
 
         Returns (payers_dict, single_payer_username_or_none, error_or_none).
@@ -39,7 +38,7 @@ class PayerClauseParser:
         specified_sum = sum(a for _, a in raw_payers if a is not None)
         unspecified = [u for u, a in raw_payers if a is None]
 
-        payers: Dict[str, int] = {}
+        payers: dict[str, int] = {}
         if not unspecified:
             if specified_sum != amount_cents:
                 return (

@@ -1,5 +1,4 @@
 import re
-from typing import Optional
 
 
 class AmountParser:
@@ -8,7 +7,7 @@ class AmountParser:
     AMOUNT_REGEX = re.compile(r"(\d+(?:\.\d{1,2})?)")
 
     @classmethod
-    def parse_cents(cls, amount_str: str) -> Optional[int]:
+    def parse_cents(cls, amount_str: str) -> int | None:
         """Parse a numeric string (integer or up to 2 decimals) into integer cents.
 
         Returns None if the string does not match valid currency format.

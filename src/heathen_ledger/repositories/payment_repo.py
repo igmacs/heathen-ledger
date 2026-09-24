@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Any
 from sqlalchemy.orm import Session
 from ..models import Payment, Expense
 
@@ -26,11 +26,11 @@ class PaymentRepository:
         )
         return payment
 
-    def get_for_group(self, group_id: int) -> List[Payment]:
+    def get_for_group(self, group_id: int) -> list[Payment]:
         """Retrieve all logged payments in a specific group."""
         return self.session.query(Payment).filter(Payment.group_id == group_id).all()
 
-    def get_by_id(self, payment_id: int) -> Optional[Payment]:
+    def get_by_id(self, payment_id: int) -> Payment | None:
         """Retrieve a payment by ID."""
         return self.session.query(Payment).filter(Payment.id == payment_id).first()
 
@@ -46,7 +46,7 @@ class PaymentRepository:
 
     def get_recent_transactions(
         self, group_id: int, limit: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve recent transactions (expenses and payments) sorted descending by created_at."""
         expenses = (
             self.session.query(Expense)

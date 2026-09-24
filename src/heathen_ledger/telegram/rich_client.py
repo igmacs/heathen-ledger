@@ -17,7 +17,7 @@ When python-telegram-bot adds native support for Rich Messages:
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from telegram import InlineKeyboardMarkup
 from telegram.error import BadRequest
@@ -30,7 +30,7 @@ class TelegramRichClient:
     """Encapsulates Telegram Bot API 10.3+ Rich Message calls and compatibility fallbacks."""
 
     @classmethod
-    def build_rich_message_payload(cls, html: str) -> Dict[str, Any]:
+    def build_rich_message_payload(cls, html: str) -> dict[str, Any]:
         """Wrap HTML formatted string into an InputRichMessage payload dictionary."""
         return {"html": html}
 
@@ -41,10 +41,10 @@ class TelegramRichClient:
         chat_id: int | str,
         rich_html: str,
         *,
-        reply_markup: Optional[InlineKeyboardMarkup] = None,
-        ephemeral_message_parameters: Optional[Dict[str, Any]] = None,
-        reply_parameters: Optional[Dict[str, Any] | Any] = None,
-        disable_notification: Optional[bool] = None,
+        reply_markup: InlineKeyboardMarkup | None = None,
+        ephemeral_message_parameters: dict[str, Any] | None = None,
+        reply_parameters: dict[str, Any] | Any | None = None,
+        disable_notification: bool | None = None,
         **kwargs: Any,
     ) -> Any:
         """Send a rich formatted message using Telegram Bot API's sendRichMessage.
@@ -59,7 +59,7 @@ class TelegramRichClient:
         if has_native_send and callable(getattr(bot, "send_rich_message", None)):
             send_fn = getattr(bot, "send_rich_message")
 
-            call_kwargs: Dict[str, Any] = {
+            call_kwargs: dict[str, Any] = {
                 "chat_id": chat_id,
                 "rich_message": cls.build_rich_message_payload(rich_html),
                 **kwargs,
@@ -116,7 +116,7 @@ class TelegramRichClient:
             return res
 
         # 3. Standard PTB raw Bot API execution via bot._post('sendRichMessage')
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "chat_id": chat_id,
             "rich_message": cls.build_rich_message_payload(rich_html),
         }
@@ -154,11 +154,11 @@ class TelegramRichClient:
         message_id: int,
         rich_html: str,
         *,
-        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        reply_markup: InlineKeyboardMarkup | None = None,
         **kwargs: Any,
     ) -> bool:
         """Edit a standard rich message using editMessageText with rich_message."""
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "chat_id": chat_id,
             "message_id": message_id,
             "rich_message": cls.build_rich_message_payload(rich_html),
@@ -206,11 +206,11 @@ class TelegramRichClient:
         ephemeral_message_id: int,
         rich_html: str,
         *,
-        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        reply_markup: InlineKeyboardMarkup | None = None,
         **kwargs: Any,
     ) -> bool:
         """Edit an ephemeral rich message using editEphemeralMessageText with rich_message."""
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "chat_id": chat_id,
             "receiver_user_id": receiver_user_id,
             "ephemeral_message_id": ephemeral_message_id,
@@ -257,7 +257,7 @@ class TelegramRichClient:
         query: Any,
         bot: Any = None,
         rich_html: str = "",
-        reply_markup: Optional[InlineKeyboardMarkup] = None,
+        reply_markup: InlineKeyboardMarkup | None = None,
     ) -> bool:
         """Edit an existing rich message (ephemeral or standard) associated with a callback query."""
         # 1. Trigger mock on query.edit_message_text if in a unit test fixture

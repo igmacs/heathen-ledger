@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +7,7 @@ class VoiceAudioDownloader:
     """Downloads audio bytes from Telegram and detects mime types."""
 
     @classmethod
-    async def download(cls, bot, media_message) -> Tuple[bytes, str]:
+    async def download(cls, bot, media_message) -> tuple[bytes, str]:
         """Downloads voice or audio file bytes and returns (audio_bytes, mime_type)."""
         media = media_message.voice or media_message.audio
         if not media:

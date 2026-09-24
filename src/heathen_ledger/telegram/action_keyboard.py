@@ -1,4 +1,3 @@
-from typing import Optional
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -6,7 +5,7 @@ class EphemeralActionKeyboardDecorator:
     """Decorates responses with 'Share to group' and 'Dismiss' action buttons."""
 
     @classmethod
-    def has_dismiss_button(cls, reply_markup: Optional[InlineKeyboardMarkup]) -> bool:
+    def has_dismiss_button(cls, reply_markup: InlineKeyboardMarkup | None) -> bool:
         """Check if reply_markup already contains a button with dismiss callback_data."""
         if not reply_markup or not getattr(reply_markup, "inline_keyboard", None):
             return False
@@ -20,11 +19,11 @@ class EphemeralActionKeyboardDecorator:
     @classmethod
     def attach_action_buttons(
         cls,
-        reply_markup: Optional[InlineKeyboardMarkup],
-        token: Optional[str],
+        reply_markup: InlineKeyboardMarkup | None,
+        token: str | None,
         can_share: bool,
         dismissible: bool,
-    ) -> Optional[InlineKeyboardMarkup]:
+    ) -> InlineKeyboardMarkup | None:
         """Attach 'Share to group' and 'Dismiss' buttons to an existing keyboard."""
         action_buttons = []
         if can_share and token:

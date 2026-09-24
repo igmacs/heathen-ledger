@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass
@@ -12,12 +11,12 @@ class ReceiptItem:
     quantity: int = 1
 
 
-def expand_receipt_items(items: List[ReceiptItem]) -> List[ReceiptItem]:
+def expand_receipt_items(items: list[ReceiptItem]) -> list[ReceiptItem]:
     """Expand repeated items (quantity > 1) into individual single-quantity line items.
 
     Allocates prices penny-perfectly so that sum(expanded_prices) == original_price.
     """
-    expanded: List[ReceiptItem] = []
+    expanded: list[ReceiptItem] = []
     for item in items:
         if item.quantity <= 1:
             expanded.append(ReceiptItem(name=item.name, price=item.price, quantity=1))
@@ -42,17 +41,17 @@ def expand_receipt_items(items: List[ReceiptItem]) -> List[ReceiptItem]:
 class Receipt:
     """Represents a parsed receipt with line items and totals."""
 
-    items: List[ReceiptItem] = field(default_factory=list)
-    merchant: Optional[str] = None
-    date: Optional[str] = None
-    currency: Optional[str] = None
-    subtotal: Optional[float] = None
-    tax: Optional[float] = None
-    tip: Optional[float] = None
-    total: Optional[float] = None
-    raw_response: Optional[str] = None
+    items: list[ReceiptItem] = field(default_factory=list)
+    merchant: str | None = None
+    date: str | None = None
+    currency: str | None = None
+    subtotal: float | None = None
+    tax: float | None = None
+    tip: float | None = None
+    total: float | None = None
+    raw_response: str | None = None
 
-    def expand_items(self) -> List[ReceiptItem]:
+    def expand_items(self) -> list[ReceiptItem]:
         """Return items with any repeated items (quantity > 1) expanded to single units."""
         return expand_receipt_items(self.items)
 

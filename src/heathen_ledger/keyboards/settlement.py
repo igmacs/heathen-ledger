@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from ..formatters import format_cents
 
@@ -8,8 +8,8 @@ class SettlementKeyboardBuilder:
 
     @classmethod
     def build_settle_keyboard(
-        cls, transactions: List[Dict[str, Any]], users_by_id: Dict[int, Any]
-    ) -> Optional[InlineKeyboardMarkup]:
+        cls, transactions: list[dict[str, Any]], users_by_id: dict[int, Any]
+    ) -> InlineKeyboardMarkup | None:
         """Build inline confirmation buttons for suggested payback transactions."""
         if not transactions:
             return None

@@ -2,7 +2,7 @@
 
 import html
 import logging
-from typing import Optional, Tuple, Dict, Any
+from typing import Any
 from telegram import Bot, Message, InlineKeyboardMarkup
 from telegram.constants import ChatAction
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ class ReceiptService:
         return cls._store
 
     @classmethod
-    def format_price(cls, amount: float, currency: Optional[str] = None) -> str:
+    def format_price(cls, amount: float, currency: str | None = None) -> str:
         """Format an amount with currency symbol or code."""
         return format_price(amount, currency)
 
@@ -98,10 +98,10 @@ class ReceiptService:
     def create_ticket_session(
         cls,
         chat_id: int,
-        creator_id: Optional[int],
-        creator_name: Optional[str],
+        creator_id: int | None,
+        creator_name: str | None,
         receipt: Receipt,
-        token: Optional[str] = None,
+        token: str | None = None,
     ) -> PendingTicketSession:
         """Create a new interactive ticket session and save it in store."""
         session = PendingTicketSession.create(
@@ -115,12 +115,12 @@ class ReceiptService:
         return session
 
     @classmethod
-    def get_session(cls, token: str) -> Optional[PendingTicketSession]:
+    def get_session(cls, token: str) -> PendingTicketSession | None:
         """Retrieve an active ticket session by token."""
         return cls._store.get(token)
 
     @classmethod
-    def pop_session(cls, token: str) -> Optional[PendingTicketSession]:
+    def pop_session(cls, token: str) -> PendingTicketSession | None:
         """Pop an active ticket session by token."""
         return cls._store.pop(token)
 
@@ -136,9 +136,9 @@ class ReceiptService:
         item_idx: int,
         user_id: int,
         display_name: str,
-        username: Optional[str] = None,
-        last_name: Optional[str] = None,
-    ) -> Tuple[Optional[PendingTicketSession], bool]:
+        username: str | None = None,
+        last_name: str | None = None,
+    ) -> tuple[PendingTicketSession | None, bool]:
         """Toggle current user's claim on an item."""
         session = cls.get_session(token)
         if not session:
@@ -157,7 +157,7 @@ class ReceiptService:
         cls,
         token: str,
         item_idx: int,
-    ) -> Tuple[Optional[PendingTicketSession], bool]:
+    ) -> tuple[PendingTicketSession | None, bool]:
         """Toggle an item's completed/locked status."""
         session = cls.get_session(token)
         if not session:
@@ -172,8 +172,8 @@ class ReceiptService:
         item_idx: int,
         user_id: int,
         display_name: str,
-        username: Optional[str] = None,
-    ) -> Optional[PendingTicketSession]:
+        username: str | None = None,
+    ) -> PendingTicketSession | None:
         """Assign a known group member to an item."""
         session = cls.get_session(token)
         if not session:
@@ -192,7 +192,7 @@ class ReceiptService:
         token: str,
         item_idx: int,
         name: str,
-    ) -> Optional[PendingTicketSession]:
+    ) -> PendingTicketSession | None:
         """Assign an external non-group participant to an item."""
         session = cls.get_session(token)
         if not session:
@@ -205,7 +205,7 @@ class ReceiptService:
         cls,
         token: str,
         name: str,
-    ) -> Tuple[Optional[PendingTicketSession], Optional[TicketParticipant]]:
+    ) -> tuple[PendingTicketSession | None, TicketParticipant | None]:
         """Register or retrieve an external guest in the ticket session."""
         session = cls.get_session(token)
         if not session:
@@ -219,8 +219,8 @@ class ReceiptService:
         token: str,
         participant_key: str,
         item_idx: int,
-        participant: Optional[TicketParticipant] = None,
-    ) -> Tuple[Optional[PendingTicketSession], bool]:
+        participant: TicketParticipant | None = None,
+    ) -> tuple[PendingTicketSession | None, bool]:
         """Toggle participation of a user/guest on an item by key."""
         session = cls.get_session(token)
         if not session:
@@ -237,7 +237,7 @@ class ReceiptService:
         cls,
         token: str,
         db_session: Session,
-    ) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+    ) -> tuple[str | None, InlineKeyboardMarkup | None]:
         """Build message and keyboard to select who to assign items for."""
         session = cls.get_session(token)
         if not session:
@@ -261,8 +261,8 @@ class ReceiptService:
         cls,
         token: str,
         participant_key: str,
-        participant_name: Optional[str] = None,
-    ) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+        participant_name: str | None = None,
+    ) -> tuple[str | None, InlineKeyboardMarkup | None]:
         """Build message and checklist keyboard for a chosen participant."""
         session = cls.get_session(token)
         if not session:
@@ -294,7 +294,7 @@ class ReceiptService:
     @classmethod
     def build_ticket_rich_message(
         cls, token: str
-    ) -> Tuple[Optional[str], Optional[InlineKeyboardMarkup]]:
+    ) -> tuple[str | None, InlineKeyboardMarkup | None]:
         """Generate the rich HTML content and main action keyboard for a ticket session."""
         session = cls.get_session(token)
         if not session:
@@ -306,11 +306,11 @@ class ReceiptService:
     @classmethod
     def build_split_summary_message(
         cls, token: str
-    ) -> Tuple[
-        Optional[str],
-        Optional[InlineKeyboardMarkup],
-        Optional[Dict[str, Dict[str, Any]]],
-        Optional[str],
+    ) -> tuple[
+        str | None,
+        InlineKeyboardMarkup | None,
+        dict[str, dict[str, Any]] | None,
+        str | None,
     ]:
         """Calculate and format the split summary for a ticket session."""
         session = cls.get_session(token)
@@ -327,8 +327,8 @@ class ReceiptService:
         cls,
         bot: Bot,
         media_message: Message,
-        chat_id: Optional[int] = None,
-    ) -> Tuple[Receipt, str]:
+        chat_id: int | None = None,
+    ) -> tuple[Receipt, str]:
         """Download, parse via Gemini, and return (Receipt, formatted_markdown)."""
         has_media = bool(
             getattr(media_message, "photo", None)
@@ -357,11 +357,11 @@ class ReceiptService:
         token: str,
         db_session: Session,
         payer_id: int,
-        payer_username: Optional[str],
-        payer_first_name: Optional[str],
+        payer_username: str | None,
+        payer_first_name: str | None,
         chat_id: int,
-        chat_title: Optional[str] = None,
-    ) -> Tuple[str, Optional[InlineKeyboardMarkup]]:
+        chat_title: str | None = None,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Calculate shares from ticket session and execute /pay command via CommandDispatcher."""
         session = cls.get_session(token)
         if not session:

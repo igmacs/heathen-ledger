@@ -1,5 +1,4 @@
 import re
-from typing import Tuple, Optional
 from ..dto import SplitSpec, ParseErrorResult
 from .user_token import UserTokenParser
 
@@ -12,7 +11,7 @@ class SplitClauseParser:
     @classmethod
     def parse_clause(
         cls, clause_text: str
-    ) -> Tuple[Optional[SplitSpec], Optional[ParseErrorResult]]:
+    ) -> tuple[SplitSpec | None, ParseErrorResult | None]:
         """Parses split clause content.
 
         Returns (SplitSpec, None) on success, or (None, ParseErrorResult) on error.

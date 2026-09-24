@@ -1,6 +1,6 @@
 """Service layer for balance inspection, debt simplification, and settlement payments."""
 
-from typing import Dict, List, Tuple, Any
+from typing import Any
 from sqlalchemy.orm import Session
 
 from ..models import User, Group, Payment
@@ -15,7 +15,7 @@ class SettlementService:
     @classmethod
     def get_group_balances_and_settlements(
         cls, session: Session, group_id: int
-    ) -> Tuple[Dict[int, int], List[Dict[str, Any]], Dict[int, User]]:
+    ) -> tuple[dict[int, int], list[dict[str, Any]], dict[int, User]]:
         """Compute current member balances, simplified payback transactions, and user mappings for a group."""
         group = session.query(Group).filter(Group.id == group_id).first()
         if not group or not group.members:
@@ -65,7 +65,7 @@ class SettlementService:
     @classmethod
     def is_group_settled(
         cls, session: Session, group_id: int
-    ) -> Tuple[bool, List[Dict[str, Any]], Dict[int, User]]:
+    ) -> tuple[bool, list[dict[str, Any]], dict[int, User]]:
         """Check whether all debts in a group are fully settled (no remaining payback transactions)."""
         _, transactions, users_by_id = cls.get_group_balances_and_settlements(
             session, group_id

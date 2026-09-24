@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional, Tuple
 from ..dto import ParseErrorResult
 
 
@@ -9,7 +8,7 @@ class DateClauseParser:
     @classmethod
     def parse_clause(
         cls, clause_text: str
-    ) -> Tuple[Optional[datetime.date], Optional[ParseErrorResult]]:
+    ) -> tuple[datetime.date | None, ParseErrorResult | None]:
         """Parses an 'on' clause into a datetime.date object.
 
         Returns (date, None) on success, or (None, ParseErrorResult) on error.

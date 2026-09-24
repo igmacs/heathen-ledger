@@ -2,7 +2,7 @@ import os
 import logging
 from contextlib import contextmanager
 from functools import wraps
-from typing import Generator
+from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 

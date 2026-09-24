@@ -1,6 +1,6 @@
 """Command parsing package: clause parsers, pay command parser, and payback parser."""
 
-from typing import Dict, Any
+from typing import Any
 
 from ..domain.calculations import split_amount_equally, simplify_debts
 from ..formatters import (
@@ -26,7 +26,7 @@ from .pay_parser import PayCommandParser
 from .payback_parser import PaybackCommandParser
 
 
-def parse_pay_message(text: str) -> Dict[str, Any]:
+def parse_pay_message(text: str) -> dict[str, Any]:
     """Parses a /pay command message to extract expense details.
 
     Delegates to PayCommandParser.
@@ -34,7 +34,7 @@ def parse_pay_message(text: str) -> Dict[str, Any]:
     return PayCommandParser.parse(text)
 
 
-def parse_payback_message(text: str) -> Dict[str, Any]:
+def parse_payback_message(text: str) -> dict[str, Any]:
     """Parses a /payback command to extract direct payment details.
 
     Delegates to PaybackCommandParser.

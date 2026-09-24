@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Mapping
 from unittest.mock import AsyncMock, MagicMock
 from telegram import Message
@@ -14,7 +14,7 @@ class TelegramEphemeralClient:
     """Encapsulates Telegram Bot API ephemeral messaging calls and fallback mechanisms."""
 
     @classmethod
-    def extract_ephemeral_message_id(cls, message: Any) -> Optional[int]:
+    def extract_ephemeral_message_id(cls, message: Any) -> int | None:
         """Extract ephemeral_message_id from message or callback query if present."""
         if not message:
             return None
@@ -149,9 +149,9 @@ class TelegramEphemeralClient:
         context: ContextTypes.DEFAULT_TYPE,
         chat_id: int | str,
         *,
-        user_id: Optional[int] = None,
-        ephemeral_message_id: Optional[int] = None,
-        message: Optional[Message] = None,
+        user_id: int | None = None,
+        ephemeral_message_id: int | None = None,
+        message: Message | None = None,
     ) -> bool:
         """Delete a message, using deleteEphemeralMessage if it's ephemeral, or deleteMessage if standard."""
         bot = getattr(context, "bot", None)

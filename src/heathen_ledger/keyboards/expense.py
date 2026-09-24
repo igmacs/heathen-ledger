@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import Any
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from ..models import Expense
 
@@ -24,7 +24,7 @@ class ExpenseKeyboardBuilder:
 
     @classmethod
     def build_split_toggle_keyboard(
-        cls, expense: Expense, group_members: List[Any], creator_id: int
+        cls, expense: Expense, group_members: list[Any], creator_id: int
     ) -> InlineKeyboardMarkup:
         """Build the inline keyboard with toggle buttons for each group member and an Undo button."""
         participant_ids = {s.user_id for s in expense.splits}

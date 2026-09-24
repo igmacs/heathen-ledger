@@ -1,6 +1,5 @@
 """Voice transcription and interpretation package."""
 
-from typing import Optional
 from .base import VoiceInterpreter, VoiceInterpretation
 from .gemini import GeminiVoiceInterpreter
 from .pending_store import PendingVoiceCommand, PendingVoiceCommandStore
@@ -9,7 +8,7 @@ from .audio_downloader import VoiceAudioDownloader
 
 def get_voice_interpreter(
     provider: str = "gemini",
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
 ) -> VoiceInterpreter:
     """Factory function to get a VoiceInterpreter instance for the configured provider."""
     if provider.lower() == "gemini":

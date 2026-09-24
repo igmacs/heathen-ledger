@@ -1,6 +1,6 @@
 """Domain service for calculating net balances across members."""
 
-from typing import Dict, List, Any
+from typing import Any
 
 
 class BalanceCalculator:
@@ -9,10 +9,10 @@ class BalanceCalculator:
     @classmethod
     def calculate_net_balances(
         cls,
-        members: List[Any],
-        expenses: List[Any],
-        payments: List[Any],
-    ) -> Dict[int, int]:
+        members: list[Any],
+        expenses: list[Any],
+        payments: list[Any],
+    ) -> dict[int, int]:
         """Calculate the net balance for each member.
 
         Net Balance = (Paid in Expenses) - (Owed in Splits) + (Received in Payments) - (Sent in Payments)
@@ -26,7 +26,7 @@ class BalanceCalculator:
         :param payments: List of Payment model instances.
         :return: A dict mapping internal user IDs to their net balance in cents.
         """
-        balances: Dict[int, int] = {}
+        balances: dict[int, int] = {}
 
         # Initialize all members with a 0 balance
         for member in members:
