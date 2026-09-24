@@ -44,7 +44,10 @@ def generate_settlements_summary(
 ) -> str:
     """Formats the list of suggested payments into a human-readable Markdown string."""
     if not transactions:
-        return "✅ **Everyone is fully settled up! No transactions needed.**"
+        return (
+            "✅ **Everyone is fully settled up! No transactions needed.**\n\n"
+            "💡 Run `/close` to close this ledger and leave the group."
+        )
 
     lines = []
     for tx in transactions:

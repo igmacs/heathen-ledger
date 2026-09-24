@@ -17,6 +17,7 @@ from .settlement_service import (
     SettlementService,
     get_group_balances_and_settlements,
     record_settlement_payment,
+    is_group_settled,
 )
 from .registration_service import (
     MemberRegistrationService,
@@ -50,6 +51,7 @@ __all__ = [
     "SettlementService",
     "get_group_balances_and_settlements",
     "record_settlement_payment",
+    "is_group_settled",
     "MemberRegistrationService",
     "MemberService",
     "RegistrationService",

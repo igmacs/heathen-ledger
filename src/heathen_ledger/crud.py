@@ -79,6 +79,11 @@ def get_or_create_group(
     )
 
 
+def delete_group(session: Session, group: Group) -> None:
+    """Delete a group and its associated external members from the database."""
+    GroupRepository(session).delete(group)
+
+
 # --- Expense & Split Helpers ---
 
 

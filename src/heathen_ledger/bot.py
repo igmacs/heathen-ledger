@@ -28,6 +28,7 @@ async def post_init(application: Application) -> None:
         BotCommand("members", "List group members"),
         BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
         BotCommand("ticket", "Scan a receipt photo to itemize expenses"),
+        BotCommand("close", "Close ledger and leave group (when settled)"),
         BotCommand("help", "Display help message"),
     ]
     await application.bot.set_my_commands(commands)

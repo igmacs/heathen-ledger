@@ -13,6 +13,7 @@ from .registration import (
     register_callback_handler,
 )
 from .members import members_command
+from .close import close_command
 from .start import start
 from .help import help_command
 from .common import dismiss_callback_handler, persist_callback_handler
@@ -98,6 +99,7 @@ def register_handlers(application: Application) -> None:
     )
     application.add_handler(CommandHandler("register", register_command))
     application.add_handler(CommandHandler("members", members_command))
+    application.add_handler(CommandHandler(["close", "close_ledger"], close_command))
     application.add_handler(CommandHandler("help", help_command))
 
     # Callback Query Handlers

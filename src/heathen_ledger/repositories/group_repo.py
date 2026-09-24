@@ -40,3 +40,13 @@ class GroupRepository:
             if title is not None and group.title != title:
                 group.title = title
         return group
+
+    def delete(self, group: Group) -> None:
+        """Delete a group and its associated external members from the database."""
+        # Clean up external users who belong only to this group
+        for member in list(group.members):
+            if member.is_external and len(member.groups) <= 1:
+                self.session.delete(member)
+        self.session.delete(group)
+        self.session.flush()
+        logger.info(f"Deleted group ID {group.id} (Chat ID: {group.telegram_chat_id})")

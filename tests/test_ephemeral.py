@@ -749,6 +749,7 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
             "members",
             "voice",
             "ticket",
+            "close",
             "help",
         ]
         self.assertEqual(cmd_names, expected_commands)

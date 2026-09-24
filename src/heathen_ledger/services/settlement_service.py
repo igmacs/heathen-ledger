@@ -62,9 +62,20 @@ class SettlementService:
             amount=amount,
         )
 
+    @classmethod
+    def is_group_settled(
+        cls, session: Session, group_id: int
+    ) -> Tuple[bool, List[Dict[str, Any]], Dict[int, User]]:
+        """Check whether all debts in a group are fully settled (no remaining payback transactions)."""
+        _, transactions, users_by_id = cls.get_group_balances_and_settlements(
+            session, group_id
+        )
+        return len(transactions) == 0, transactions, users_by_id
+
 
 # Module-level aliases for backwards compatibility
 get_group_balances_and_settlements = (
     SettlementService.get_group_balances_and_settlements
 )
 record_settlement_payment = SettlementService.record_settlement_payment
+is_group_settled = SettlementService.is_group_settled
