@@ -562,3 +562,8 @@ when I had to correct or guide it
   - Removed private chat receipt photo auto-scanning from `handlers/receipt.py`, updated `/help` text and `README.md`, and guarded `reply_mention_dispatcher` in `handlers/__init__.py`.
   - Enforced `@require_group_chat` across all ledger commands (`/pay`, `/payback`, `/balances`, `/settle`, `/history`, `/members`, `/close`, `/ticket`, `/voice`), returning an informative warning when invoked outside a group.
   - Added unit tests for group enforcement across all handlers and verified that all 219 tests and pre-commit hooks pass.
+
+- I noticed that `bot.py` was still setting all ledger commands as autocomplete commands in private chats and asked the agent to fix it. The agent:
+  - Scoped command registrations in `post_init` (`src/heathen_ledger/bot.py`), registering only `/start` and `/help` for default and `BotCommandScopeAllPrivateChats` scopes, while registering the full suite of 11 ephemeral ledger commands specifically for `BotCommandScopeAllGroupChats`.
+  - Updated `TestCommandRegistration` in `tests/test_ephemeral.py` to verify command scoping across default, private, and group scopes.
+  - Verified that all 219 unit tests and pre-commit checks passed cleanly.
