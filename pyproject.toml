@@ -31,6 +31,7 @@ select = [
     "F",    # pyflakes
     "UP",   # pyupgrade
     "ERA",  # eradicate (commented-out code)
+    "B",    # flake8-bugbear
 ]
 ignore = [
     "E501",   # line length handled by ruff-format

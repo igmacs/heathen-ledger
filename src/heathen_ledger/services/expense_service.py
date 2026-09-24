@@ -45,7 +45,7 @@ class ExpenseService:
                     "No participants found to split the expense with."
                 )
             shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
+            for u, s in zip(participants, shares, strict=False):
                 splits_dict[u.id] = s
 
         elif split_mode == "except":
@@ -58,7 +58,7 @@ class ExpenseService:
                     "No participants left to split the expense with after exclusions."
                 )
             shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
+            for u, s in zip(participants, shares, strict=False):
                 splits_dict[u.id] = s
 
         elif split_mode == "subset":
@@ -78,7 +78,7 @@ class ExpenseService:
                     "No participants found to split the expense with."
                 )
             shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
+            for u, s in zip(participants, shares, strict=False):
                 splits_dict[u.id] = s
 
         elif split_mode == "custom":
@@ -144,7 +144,7 @@ class ExpenseService:
         num_people = len(current_splits)
         shares = split_amount_equally(expense.amount, num_people)
         sorted_remaining_ids = sorted(current_splits.keys())
-        for user_id, share in zip(sorted_remaining_ids, shares):
+        for user_id, share in zip(sorted_remaining_ids, shares, strict=False):
             current_splits[user_id].amount = share
 
         session.commit()
