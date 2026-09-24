@@ -50,7 +50,14 @@ class BaseDatabaseTestCase(unittest.TestCase):
         self.db_session.close()
         Base.metadata.drop_all(bind=self.engine)
 
-    def create_mock_update(self, telegram_user_id, callback_data, chat_id=12345):
+    def create_mock_update(
+        self,
+        telegram_user_id,
+        callback_data,
+        chat_id=12345,
+        username="user",
+        first_name=None,
+    ):
         """Create a mock Telegram Update with CallbackQuery."""
         update = MagicMock()
         query = AsyncMock()
@@ -58,8 +65,8 @@ class BaseDatabaseTestCase(unittest.TestCase):
 
         from_user = MagicMock()
         from_user.id = telegram_user_id
-        from_user.username = "user"
-        from_user.first_name = f"User{telegram_user_id}"
+        from_user.username = username
+        from_user.first_name = first_name or f"User{telegram_user_id}"
         from_user.is_bot = False
         query.from_user = from_user
 

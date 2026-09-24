@@ -126,6 +126,37 @@ class TestSettleCallback(BaseDatabaseTestCase):
         self.assertEqual(len(matching), 1)
         self.assertEqual(matching[0].amount, 1000)
 
+    def test_settle_callback_external_user_autolink(self):
+        # Register user dave as external with handle dave
+        dave = crud.create_external_user(self.db_session, self.group, "Dave", "dave")
+        self.db_session.commit()
+        self.assertTrue(dave.is_external)
+        self.assertIsNone(dave.telegram_id)
+
+        # Dave is debtor to Alice: settle:dave.id:alice.id:1000
+        # Dave taps the button with his Telegram ID 99999 and username dave
+        update = self.create_mock_update(
+            telegram_user_id=99999,
+            username="dave",
+            first_name="Dave Real",
+            callback_data=f"settle:{dave.id}:{self.alice.id}:1000",
+        )
+        context = MagicMock()
+        asyncio.run(settle_callback_handler(update, context))
+
+        # Payment should be successfully recorded
+        payments = crud.get_group_payments(self.db_session, self.group.id)
+        matching = [
+            p for p in payments if p.payer_id == dave.id and p.payee_id == self.alice.id
+        ]
+        self.assertEqual(len(matching), 1)
+
+        # Dave should now be linked and no longer external
+        dave_refreshed = crud.get_user_by_telegram_id(self.db_session, 99999)
+        self.assertIsNotNone(dave_refreshed)
+        self.assertEqual(dave_refreshed.id, dave.id)
+        self.assertFalse(dave_refreshed.is_external)
+
 
 class TestUndoCallback(BaseDatabaseTestCase):
     def setUp(self):
