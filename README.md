@@ -554,3 +554,5 @@ when I had to correct or guide it
   - Verified that all pre-commit hooks, Vulture at 60% confidence, and all 212 unit tests passed cleanly.
 
 - I noticed that `pyproject.toml` had Ruff's `target-version` set to `py310` and asked if that represented Python 3.10 and whether it should be updated to Python 3.12 to match our local runtime and Docker image. The agent confirmed, updated `requires-python = ">=3.12"` and `target-version = "py312"` in `pyproject.toml`, and applied the `datetime.UTC` alias (`UP017`) across `models.py`. All pre-commit checks and 212 unit tests passed cleanly.
+
+- I disagreed with the linter rule requiring an explicit `strict` parameter when using `zip(...)` (introduced via `flake8-bugbear`) and asked how to disable it. The agent identified the rule code as `B905`, explained how to disable rules globally, per-file, or inline via `# noqa`, and upon my approval added `"B905"` to `ignore` in `pyproject.toml` and removed the redundant `strict=False` parameters in `src/heathen_ledger/services/expense_service.py`. All pre-commit hooks and 212 unit tests passed cleanly.
