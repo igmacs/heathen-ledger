@@ -48,3 +48,4 @@ ignore = [
 [tool.vulture]
 min_confidence = 60
 paths = ["src", "tests", ".vulture_whitelist.py"]
+exclude = ["*/.#*"]
