@@ -391,7 +391,3 @@ async def voice_callback_handler(
                 parse_mode="Markdown",
                 reply_markup=reply_markup,
             )
-
-
-# Normalized alias
-voice_command = voice_command_handler

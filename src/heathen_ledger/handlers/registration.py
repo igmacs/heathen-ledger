@@ -13,15 +13,6 @@ from .common import send_response
 logger = logging.getLogger(__name__)
 
 
-async def _resolve_admin_by_username(
-    context: ContextTypes.DEFAULT_TYPE, chat_id: int, username: str
-):
-    """Helper to check if a username matches a chat administrator."""
-    return await MemberRegistrationService.resolve_admin_by_username(
-        context, chat_id, username
-    )
-
-
 @with_db_session
 async def auto_register(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session

@@ -24,7 +24,6 @@ from .voice import process_voice_audio
 logger = logging.getLogger(__name__)
 
 # Backward-compatible aliases for existing callers/tests
-build_expense_keyboard = ExpenseKeyboardBuilder.build_split_toggle_keyboard
 build_expense_undo_keyboard = ExpenseKeyboardBuilder.build_expense_undo_keyboard
 
 
