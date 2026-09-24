@@ -780,20 +780,38 @@ class TestCommandsEphemeralAndPersistent(BaseDatabaseTestCase):
 class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
     async def test_post_init_sets_only_single_commands(self):
         from heathen_ledger.bot import post_init
-        from telegram import BotCommandScopeAllGroupChats
+        from telegram import (
+            BotCommandScopeAllGroupChats,
+            BotCommandScopeAllPrivateChats,
+        )
 
         app_mock = MagicMock()
         app_mock.bot.set_my_commands = AsyncMock()
 
         await post_init(app_mock)
 
-        # At least two calls: default scope and group scope
-        self.assertGreaterEqual(app_mock.bot.set_my_commands.await_count, 2)
+        # Three calls: default scope, private scope, and group scope
+        self.assertGreaterEqual(app_mock.bot.set_my_commands.await_count, 3)
 
-        # 1. Default commands should only contain single commands (no _persistent duplicates)
+        # 1. Default & private commands should only contain private chat commands
+        expected_private_commands = ["start", "help"]
         default_commands = app_mock.bot.set_my_commands.call_args_list[0].args[0]
-        cmd_names = [c.command for c in default_commands]
-        expected_commands = [
+        self.assertEqual(
+            [c.command for c in default_commands], expected_private_commands
+        )
+
+        private_call = next(
+            call
+            for call in app_mock.bot.set_my_commands.call_args_list
+            if isinstance(call.kwargs.get("scope"), BotCommandScopeAllPrivateChats)
+        )
+        private_commands = private_call.args[0]
+        self.assertEqual(
+            [c.command for c in private_commands], expected_private_commands
+        )
+
+        # 2. Group scope commands should contain ledger commands with is_ephemeral=True
+        expected_group_commands = [
             "pay",
             "balances",
             "settle",
@@ -806,14 +824,6 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
             "close",
             "help",
         ]
-        self.assertEqual(cmd_names, expected_commands)
-        for cmd in cmd_names:
-            self.assertFalse(
-                cmd.endswith("_persistent"),
-                f"Command '{cmd}' should not have _persistent variant in autocomplete list",
-            )
-
-        # 2. Group scope commands should be the exact same single commands with is_ephemeral=True
         group_call = next(
             call
             for call in app_mock.bot.set_my_commands.call_args_list
@@ -821,7 +831,7 @@ class TestCommandRegistration(unittest.IsolatedAsyncioTestCase):
         )
         group_commands = group_call.args[0]
         group_cmd_names = [c.command for c in group_commands]
-        self.assertEqual(group_cmd_names, expected_commands)
+        self.assertEqual(group_cmd_names, expected_group_commands)
         for cmd in group_commands:
             self.assertTrue(
                 cmd.api_kwargs.get("is_ephemeral"),

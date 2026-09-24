@@ -2,7 +2,11 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from telegram import BotCommand
+from telegram import (
+    BotCommand,
+    BotCommandScopeAllGroupChats,
+    BotCommandScopeAllPrivateChats,
+)
 from telegram.ext import Application, ApplicationBuilder
 
 from .handlers import register_handlers
@@ -19,33 +23,81 @@ logging.basicConfig(
 
 async def post_init(application: Application) -> None:
     """Set the bot commands for autocompletion."""
-    commands = [
-        BotCommand("pay", "Log an expense split among members"),
-        BotCommand("balances", "View current group balances"),
-        BotCommand("settle", "Calculate payback settlements"),
-        BotCommand("payback", "Record a direct payment"),
-        BotCommand("history", "View last 10 transactions"),
-        BotCommand("register", "Register a member"),
-        BotCommand("members", "List group members"),
-        BotCommand("voice", "Transcribe and interpret a replied-to voice note"),
-        BotCommand("ticket", "Scan a receipt photo to itemize expenses"),
-        BotCommand("close", "Close ledger and leave group (when settled)"),
+    private_commands = [
+        BotCommand("start", "Start the bot and get introduced"),
         BotCommand("help", "Display help message"),
     ]
-    await application.bot.set_my_commands(commands)
-    try:
-        from telegram import BotCommandScopeAllGroupChats
+    group_commands = [
+        BotCommand(
+            "pay",
+            "Log an expense split among members",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "balances",
+            "View current group balances",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "settle",
+            "Calculate payback settlements",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "payback",
+            "Record a direct payment",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "history",
+            "View last 10 transactions",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "register",
+            "Register a member",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "members",
+            "List group members",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "voice",
+            "Transcribe and interpret a replied-to voice note",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "ticket",
+            "Scan a receipt photo to itemize expenses",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "close",
+            "Close ledger and leave group (when settled)",
+            api_kwargs={"is_ephemeral": True},
+        ),
+        BotCommand(
+            "help",
+            "Display help message",
+            api_kwargs={"is_ephemeral": True},
+        ),
+    ]
 
-        # In group chats, ALL commands are registered as ephemeral commands
-        # so the user's invocation is hidden from the group.
-        group_commands = [
-            BotCommand(
-                cmd.command,
-                cmd.description,
-                api_kwargs={"is_ephemeral": True},
-            )
-            for cmd in commands
-        ]
+    # Set commands for private chats / default scope
+    await application.bot.set_my_commands(private_commands)
+    try:
+        await application.bot.set_my_commands(
+            private_commands, scope=BotCommandScopeAllPrivateChats()
+        )
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "Failed to set commands for private chats: %s", e
+        )
+
+    # In group chats, register group ledger commands as ephemeral
+    try:
         await application.bot.set_my_commands(
             group_commands, scope=BotCommandScopeAllGroupChats()
         )
