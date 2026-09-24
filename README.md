@@ -522,3 +522,5 @@ when I had to correct or guide it
   - Added `register_external_participant`, `toggle_participant_item`, `build_person_selector_message`, and `build_person_checklist_message` in `src/heathen_ledger/services/receipt_service.py`.
   - Updated `src/heathen_ledger/handlers/receipt.py` to route `tkt:asgn` to the Person Selector, handle `tkt:psel` (open checklist) and `tkt:ptog` (toggle checklist items), and transition `ticket_external_reply_handler` directly into the checklist view upon entering a guest name.
   - Added unit tests in `tests/test_ticket_session.py`, `tests/test_ticket_ui.py`, `tests/test_receipt_service.py`, and `tests/test_receipt_handler.py` (207 total tests passing) and verified all pre-commit hooks pass.
+
+- I asked to update the Docker image to a later Python version matching my local version (Python 3.12.6) and inquired why Python 3.11 was originally chosen. The agent explained that 3.11 had originally been chosen as a conservative, battle-tested baseline during early setup, updated the Dockerfile base image to `python:3.12-slim`, verified that the Docker container builds cleanly, and confirmed all 207 unit tests pass.
