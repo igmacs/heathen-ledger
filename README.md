@@ -545,3 +545,10 @@ when I had to correct or guide it
   - Added `I` (isort) to sort imports cleanly across the codebase, identifying and decoupling a lurking circular dependency between `services` and `commands` via proxy dispatchers.
   - Integrated `vulture` (min-confidence 80) into `pyproject.toml` and `.pre-commit-config.yaml` to detect project-wide dead code, removing unused method parameters and mock arguments across the suite.
   - Verified that all pre-commit hooks and all 212 unit tests passed cleanly across each atomic commit.
+
+- I asked why Vulture had not detected `_resolve_admin_by_username`, an unused function I had noticed myself. The agent investigated and diagnosed two factors: (1) `handlers/base.py` was importing and re-exporting `_resolve_admin_by_username` in its `__all__` public API declaration (which Vulture treats as intentional exports), and (2) Vulture assigns a 60% confidence score to all unused function definitions (due to dynamic dispatch in Python), which had been filtered out by `min_confidence = 80`. I approved lowering the threshold to 60% and cleaning up dead code. The agent autonomously:
+  - Removed `_resolve_admin_by_username` from `handlers/registration.py` and `handlers/base.py`.
+  - Removed unused `delete_group` in `crud.py`, along with unused aliases `build_expense_keyboard` in `handlers/expense.py` and `voice_command` in `handlers/voice.py`.
+  - Created `.vulture_whitelist.py` covering legitimate SQLAlchemy ORM relationship attributes (`User.expense_contributions`, `User.payments_sent`, `User.payments_received`) and the manual `init_db` utility.
+  - Configured `[tool.vulture]` in `pyproject.toml` with `min_confidence = 60` and the whitelist path, ignoring `B018` for the whitelist in `[tool.ruff.lint.per-file-ignores]`.
+  - Verified that all pre-commit hooks, Vulture at 60% confidence, and all 212 unit tests passed cleanly.
