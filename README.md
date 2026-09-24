@@ -55,14 +55,18 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
 5. **Audit History**:
    - `/history` (Displays the last 10 logged transactions—expenses and payments—in chronological order using Telegram Rich Messages with embedded delete buttons beside each entry).
 
+6. **Close Ledger & Reset Group**:
+   - `/close` (or `/close_ledger`): Once all debts are settled, closes the ledger, wipes the group's records and external guest profiles from the database, and causes the bot to leave the Telegram chat.
+   - If open debts remain when `/close` is called, the bot prevents closure, displays the outstanding balances, and directs members to `/settle`.
+   - To start a new ledger later, simply add the bot back to the group chat.
 
-6. **Voice Messages**:
+7. **Voice Messages**:
    - Send or forward a voice note to the chat (e.g., saying *"I paid 25 for dinner"* or *"Alice paid 50 for groceries"*).
    - Reply to the voice note with `/voice`, `/pay`, or tag the bot (`@HeathenLedgerBot`) to tell the bot that the audio is intended for it. Casual voice messages sent to the chat without a reply or mention are ignored.
    - The bot transcribes the audio using Google Gemini and displays the interpreted ledger command with interactive confirmation buttons:
       - `[ ❌ Reject ]`: Cancels the command without recording any changes to the ledger.
 
-7. **Receipt & Ticket Scanning & Interactive Splitting**:
+8. **Receipt & Ticket Scanning & Interactive Splitting**:
    - Send or forward a photo of a restaurant bill or store receipt to the chat.
    - In group chats, send the photo with caption `/ticket` (or `/receipt`), reply to an existing receipt photo with `/ticket`, or tag the bot (`@HeathenLedgerBot`) to parse it.
    - In private chats (DM with the bot), simply send the photo directly to scan it automatically.
@@ -72,13 +76,13 @@ Whether you're organizing a trip, sharing an apartment, or just splitting a dinn
    - **Person-First Assignment & Multi-Item Checklist**: Instead of tedious per-item selection, tapping `[👥 Assign Other...]` opens a Person Selector listing group members, previously added external guests, and a button to register new guests. Entering an external guest's name once immediately opens an interactive checklist (`◻️`/`☑️`) showing all receipt items, where tapping items toggles that person's participation instantly. Guests remain remembered in the session so their items can be adjusted at any time without re-typing their names.
    - **Proportional Split & Ledger Recording**: Tapping `[🧾 Finish & Split]` calculates each person's exact share, allocating taxes, tips, discounts, and extra fees proportionally to their claimed items. Tapping `[💾 Record to Ledger]` logs the final expense directly into group balances via the standard ledger command engine.
 
-8. **Members & Directory**:
+9. **Members & Directory**:
    - `/members` (Lists all members in the current group ledger, tagging external non-Telegram members).
    - `/register` (Generates an interactive button for members to tap and register themselves).
    - `/register @handle [Display Name]` or `/register <name>` to register group members or external users. Once registered, they participate in all ledger flows (equal splits, custom shares, balances, paybacks, and debt settlements).
 
-9. **Ephemeral Responses with Share & Dismiss Actions**:
-   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/voice`, `/ticket`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you), keeping busy group chats clean and uncluttered.
+10. **Ephemeral Responses with Share & Dismiss Actions**:
+   - **Ephemeral by Default**: All bot commands (`/pay`, `/balances`, `/settle`, `/history`, `/payback`, `/register`, `/members`, `/voice`, `/ticket`, `/close`, `/help`) are registered as ephemeral commands (`is_ephemeral=True` for `BotCommandScopeAllGroupChats`). When invoked from Telegram's `/` menu, both the command invocation and the bot's response are **ephemeral** (visible only to you), keeping busy group chats clean and uncluttered.
    - **Share to Group (`📢 Share to group`)**: Every ephemeral response includes an inline button to publish the message to the group. Tapping this button deletes the ephemeral preview and broadcasts the message publicly with all original operational buttons (such as settlement payback buttons, expense participant toggles, or registration buttons).
    - **Dismiss (`✕ Dismiss`)**: Every ephemeral response also includes an inline button allowing you to immediately delete the ephemeral message from your view when you are done reviewing it.
 
@@ -524,3 +528,10 @@ when I had to correct or guide it
   - Added unit tests in `tests/test_ticket_session.py`, `tests/test_ticket_ui.py`, `tests/test_receipt_service.py`, and `tests/test_receipt_handler.py` (207 total tests passing) and verified all pre-commit hooks pass.
 
 - I asked to update the Docker image to a later Python version matching my local version (Python 3.12.6) and inquired why Python 3.11 was originally chosen. The agent explained that 3.11 had originally been chosen as a conservative, battle-tested baseline during early setup, updated the Dockerfile base image to `python:3.12-slim`, verified that the Docker container builds cleanly, and confirmed all 207 unit tests pass.
+
+- I asked how to implement having a single active ledger per group that can be closed once settled and restarted later. The agent initially proposed an elaborate database schema with a separate `Ledger` table and archives. I corrected this approach as too complex for a first iteration, specifying that old ledgers don't need to be kept and we can simply delete the group from the database and have the bot leave the group upon running a close command. When asked about confirmation preferences, I chose immediate execution upon `/close` (provided debts are settled). The agent autonomously:
+  - Added `delete` to `GroupRepository` and `delete_group` to `crud.py`, ensuring external members belonging exclusively to the closed group are also cleaned up.
+  - Added `is_group_settled` to `SettlementService` to verify that net member balances and suggested payback transactions are zero.
+  - Implemented `close_command` in `src/heathen_ledger/handlers/close.py` supporting `/close` and `/close_ledger`: validates group context, blocks closure and details outstanding debts if unsettled, and when settled sends a public farewell message, wipes the group from the database, and leaves the chat via `leave_chat`.
+  - Updated `generate_settlements_summary` to suggest `/close` when all debts reach zero, documented `/close` in `help.py` and `bot.py` autocompletion, and updated user-facing documentation in `README.md`.
+  - Added unit test suite `tests/test_close.py` and updated `tests/test_ephemeral.py` (all 212 unit tests passing).
