@@ -1,15 +1,15 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger.receipt import (
-    ReceiptParser,
+    GeminiReceiptParser,
     Receipt,
     ReceiptItem,
-    GeminiReceiptParser,
+    ReceiptParser,
     get_receipt_parser,
 )
 

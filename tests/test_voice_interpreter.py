@@ -1,15 +1,15 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger.voice import (
-    VoiceInterpreter,
-    VoiceInterpretation,
     GeminiVoiceInterpreter,
+    VoiceInterpretation,
+    VoiceInterpreter,
     get_voice_interpreter,
 )
 

@@ -2,12 +2,12 @@
 
 from sqlalchemy.orm import Session
 
-from ..models import User, Group, Expense, Payment, ExpenseSplit
 from .. import crud
 from ..domain.calculations import split_amount_equally
+from ..dto import ParsedPaybackCommand, ParsedPayCommand
 from ..formatters import format_cents
-from ..dto import ParsedPayCommand, ParsedPaybackCommand
-from .exceptions import UserNotFoundError, ValidationError, PermissionDeniedError
+from ..models import Expense, ExpenseSplit, Group, Payment, User
+from .exceptions import PermissionDeniedError, UserNotFoundError, ValidationError
 
 
 class ExpenseService:

@@ -7,23 +7,23 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger.parser import (
-    parse_pay_message,
-    split_amount_equally,
-    generate_balances_summary,
-    simplify_debts,
-    generate_settlements_summary,
-    parse_payback_message,
-    generate_history_summary,
-    generate_history_rich_html,
-    ParsedPayCommand,
-    ParsedPaybackCommand,
-    SplitSpec,
-    ParseErrorResult,
     AmountParser,
-    UserTokenParser,
     DateClauseParser,
-    SplitClauseParser,
+    ParsedPaybackCommand,
+    ParsedPayCommand,
+    ParseErrorResult,
     PayerClauseParser,
+    SplitClauseParser,
+    SplitSpec,
+    UserTokenParser,
+    generate_balances_summary,
+    generate_history_rich_html,
+    generate_history_summary,
+    generate_settlements_summary,
+    parse_pay_message,
+    parse_payback_message,
+    simplify_debts,
+    split_amount_equally,
 )
 
 

@@ -1,20 +1,20 @@
 import contextlib
 import logging
-from telegram import Update, InlineKeyboardMarkup
+
+from sqlalchemy.orm import Session
+from telegram import InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction, MessageEntityType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
-from ..database import with_db_session
 from .. import crud
-from ..voice import (
-    get_voice_interpreter,
-    VoiceAudioDownloader,
-)
+from ..database import with_db_session
 from ..keyboards import VoiceKeyboardBuilder
-
 from ..services import VoiceService
+from ..voice import (
+    VoiceAudioDownloader,
+    get_voice_interpreter,
+)
 
 logger = logging.getLogger(__name__)
 

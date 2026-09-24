@@ -1,22 +1,23 @@
 """Handlers for balance inquiries, debt settlements, and interactive payback confirmations."""
 
 import logging
+
+from sqlalchemy.orm import Session
 from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
-from ..models import User
-from ..repositories import GroupRepository, UserRepository
 from ..formatters import (
+    format_cents,
     generate_balances_summary,
     generate_settlements_summary,
-    format_cents,
 )
+from ..keyboards import SettlementKeyboardBuilder
+from ..models import User
+from ..repositories import GroupRepository, UserRepository
 from ..services import SettlementService
 from ..services.exceptions import PermissionDeniedError
-from ..keyboards import SettlementKeyboardBuilder
 from .common import send_response
 
 logger = logging.getLogger(__name__)

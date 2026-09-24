@@ -2,17 +2,17 @@
 
 import datetime
 from typing import Any
+
 from sqlalchemy.orm import Session
 
-from .models import User, Group, Expense, Payment
-from .repositories import (
-    UserRepository,
-    GroupRepository,
-    ExpenseRepository,
-    PaymentRepository,
-)
 from .domain import BalanceCalculator
-
+from .models import Expense, Group, Payment, User
+from .repositories import (
+    ExpenseRepository,
+    GroupRepository,
+    PaymentRepository,
+    UserRepository,
+)
 
 # --- User Helpers ---
 

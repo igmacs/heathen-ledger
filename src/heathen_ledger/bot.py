@@ -1,8 +1,9 @@
-import os
 import logging
+import os
+
 from dotenv import load_dotenv
 from telegram import BotCommand
-from telegram.ext import ApplicationBuilder, Application
+from telegram.ext import Application, ApplicationBuilder
 
 from .handlers import register_handlers
 

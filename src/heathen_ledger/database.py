@@ -1,10 +1,11 @@
-import os
 import logging
+import os
+from collections.abc import Generator
 from contextlib import contextmanager
 from functools import wraps
-from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,8 @@
 import logging
+
 from sqlalchemy.orm import Session
-from ..models import User, Group
+
+from ..models import Group, User
 
 logger = logging.getLogger(__name__)
 

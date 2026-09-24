@@ -1,9 +1,10 @@
 import logging
 import re
+
+from sqlalchemy.orm import Session
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatType, MessageEntityType
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
 from ..services import MemberRegistrationService

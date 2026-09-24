@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
 from telegram import Message
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes

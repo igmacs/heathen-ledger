@@ -1,41 +1,41 @@
 from telegram.constants import MessageEntityType
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     filters,
 )
 
-from .registration import (
-    auto_register,
-    register_command,
-    register_callback_handler,
-)
-from .members import members_command
 from .close import close_command
-from .start import start
-from .help import help_command
 from .common import dismiss_callback_handler, persist_callback_handler
 from .expense import (
     pay_command,
+    pay_toggle_callback_handler,
     payback_command,
     undo_callback_handler,
-    pay_toggle_callback_handler,
 )
-from .settle import balances_command, settle_command, settle_callback_handler
+from .help import help_command
 from .history import history_command, history_delete_callback_handler
+from .members import members_command
+from .receipt import (
+    ticket_callback_handler,
+    ticket_command_handler,
+    ticket_external_reply_handler,
+    ticket_mention_handler,
+    ticket_photo_handler,
+)
+from .registration import (
+    auto_register,
+    register_callback_handler,
+    register_command,
+)
+from .settle import balances_command, settle_callback_handler, settle_command
+from .start import start
 from .voice import (
+    voice_callback_handler,
     voice_command_handler,
     voice_mention_handler,
-    voice_callback_handler,
-)
-from .receipt import (
-    ticket_command_handler,
-    ticket_photo_handler,
-    ticket_mention_handler,
-    ticket_callback_handler,
-    ticket_external_reply_handler,
 )
 
 

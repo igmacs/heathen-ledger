@@ -2,11 +2,12 @@ import asyncio
 import logging
 import re
 from typing import Any
+
 from sqlalchemy.orm import Session
 from telegram import User as TgUser
 
-from ..models import User, Group
-from ..repositories import UserRepository, GroupRepository
+from ..models import Group, User
+from ..repositories import GroupRepository, UserRepository
 
 logger = logging.getLogger(__name__)
 

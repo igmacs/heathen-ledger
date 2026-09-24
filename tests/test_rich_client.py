@@ -4,9 +4,9 @@ import asyncio
 import unittest
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from heathen_ledger.telegram.rich_client import TelegramRichClient
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 class TestTelegramRichClient(unittest.TestCase):

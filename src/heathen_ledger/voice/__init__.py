@@ -1,9 +1,9 @@
 """Voice transcription and interpretation package."""
 
-from .base import VoiceInterpreter, VoiceInterpretation
+from .audio_downloader import VoiceAudioDownloader
+from .base import VoiceInterpretation, VoiceInterpreter
 from .gemini import GeminiVoiceInterpreter
 from .pending_store import PendingVoiceCommand, PendingVoiceCommandStore
-from .audio_downloader import VoiceAudioDownloader
 
 
 def get_voice_interpreter(

@@ -19,8 +19,10 @@ import asyncio
 import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
+
 from telegram import InlineKeyboardMarkup
 from telegram.error import BadRequest
+
 from .ephemeral_client import TelegramEphemeralClient
 
 logger = logging.getLogger(__name__)

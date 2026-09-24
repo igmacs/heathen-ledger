@@ -1,6 +1,7 @@
 """Keyboards for interactive ticket claiming and splitting."""
 
 from typing import Any
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..receipt.pending_store import PendingTicketSession

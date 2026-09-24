@@ -1,6 +1,6 @@
 """Receipt photo parsing and processing package."""
 
-from .base import ReceiptParser, Receipt, ReceiptItem, expand_receipt_items
+from .base import Receipt, ReceiptItem, ReceiptParser, expand_receipt_items
 from .gemini import GeminiReceiptParser
 from .image_downloader import ReceiptImageDownloader
 from .pending_store import (

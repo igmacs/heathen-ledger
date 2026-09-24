@@ -2,22 +2,32 @@
 
 import contextlib
 import logging
+
 from sqlalchemy.orm import Session
-from telegram import Bot, Message, InlineKeyboardMarkup
+from telegram import Bot, InlineKeyboardMarkup, Message
 from telegram.constants import ChatAction
 
+from ..repositories import GroupRepository
 from ..voice import (
-    get_voice_interpreter,
     PendingVoiceCommand,
     PendingVoiceCommandStore,
     VoiceAudioDownloader,
     VoiceInterpretation,
+    get_voice_interpreter,
 )
-from ..commands import CommandDispatcher
-from ..repositories import GroupRepository
 from .exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+class CommandDispatcher:
+    """Proxy to prevent circular import between commands and services."""
+
+    @staticmethod
+    def execute(*args, **kwargs):
+        from ..commands.dispatcher import CommandDispatcher as _CD
+
+        return _CD.execute(*args, **kwargs)
 
 
 class VoiceService:

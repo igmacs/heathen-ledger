@@ -5,12 +5,12 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger.receipt import (
+    PendingTicketSession,
+    PendingTicketStore,
     Receipt,
     ReceiptItem,
     expand_receipt_items,
     extract_initials,
-    PendingTicketSession,
-    PendingTicketStore,
 )
 
 

@@ -1,15 +1,16 @@
 """Handlers for viewing recent transaction history and interactive deletion."""
 
 import logging
+
+from sqlalchemy.orm import Session
 from telegram import InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
+from ..formatters import generate_history_rich_html
 from ..repositories import GroupRepository
 from ..services import HistoryService, MemberRegistrationService
 from ..services.exceptions import PermissionDeniedError, ValidationError
-from ..formatters import generate_history_rich_html
 from ..telegram import TelegramRichClient
 from .common import send_response
 

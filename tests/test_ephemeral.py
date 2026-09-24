@@ -3,26 +3,27 @@
 import unittest
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
-from telegram.constants import ChatType
-from telegram.error import BadRequest
 
+from heathen_ledger.handlers.base import (
+    help_command,
+    members_command,
+    register_command,
+)
 from heathen_ledger.handlers.common import (
     _get_ephemeral_message_id,
     is_persistent_command,
     send_response,
 )
-from heathen_ledger.telegram import (
-    EphemeralPayloadStore,
-    EphemeralActionKeyboardDecorator,
-)
-from heathen_ledger.handlers.settle import balances_command, settle_command
-from heathen_ledger.handlers.history import history_command
 from heathen_ledger.handlers.expense import pay_command, payback_command
-from heathen_ledger.handlers.base import (
-    register_command,
-    members_command,
-    help_command,
+from heathen_ledger.handlers.history import history_command
+from heathen_ledger.handlers.settle import balances_command, settle_command
+from heathen_ledger.telegram import (
+    EphemeralActionKeyboardDecorator,
+    EphemeralPayloadStore,
 )
+from telegram.constants import ChatType
+from telegram.error import BadRequest
+
 from tests.base import BaseDatabaseTestCase
 
 
@@ -246,6 +247,7 @@ class TestSendResponse(unittest.IsolatedAsyncioTestCase):
 
     async def test_send_response_rich_html_raises_on_bad_request(self):
         from unittest.mock import patch
+
         from heathen_ledger.handlers.common import _EPHEMERAL_STORE
 
         update = MagicMock()
@@ -286,7 +288,7 @@ class TestPersistCallbackHandler(unittest.IsolatedAsyncioTestCase):
             _PERSIST_PAYLOADS,
             persist_callback_handler,
         )
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         orig_keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("Pay $10", callback_data="settle:1:2:10")]]
@@ -469,6 +471,7 @@ class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
 
     async def test_dismiss_deletes_ephemeral_from_query_message(self):
         from types import MappingProxyType
+
         from heathen_ledger.handlers.common import dismiss_callback_handler
 
         update = MagicMock()
@@ -497,6 +500,7 @@ class TestDismissCallbackHandler(unittest.IsolatedAsyncioTestCase):
 
     async def test_dismiss_no_edit_fallback_on_delete_failure(self):
         from types import MappingProxyType
+
         from heathen_ledger.handlers.common import dismiss_callback_handler
 
         update = MagicMock()

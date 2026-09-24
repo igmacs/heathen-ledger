@@ -1,11 +1,11 @@
 import re
 
-from ..dto import ParsedPayCommand, ParseErrorResult, SplitSpec
 from ..domain.calculations import split_amount_equally
+from ..dto import ParsedPayCommand, ParseErrorResult, SplitSpec
 from .amount import AmountParser
 from .date_clause import DateClauseParser
-from .split_clause import SplitClauseParser
 from .payer_clause import PayerClauseParser
+from .split_clause import SplitClauseParser
 
 
 class PayCommandParser:

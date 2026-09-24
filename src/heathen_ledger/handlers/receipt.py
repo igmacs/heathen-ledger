@@ -3,20 +3,21 @@
 import contextlib
 import html
 import logging
+
+from sqlalchemy.orm import Session
 from telegram import Update
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
-from ..repositories import GroupRepository, UserRepository
-from ..telegram import TelegramRichClient
 from ..keyboards.ticket import TicketKeyboardBuilder
 from ..models import User
+from ..receipt import get_receipt_parser
+from ..repositories import GroupRepository, UserRepository
+from ..services import ReceiptService
+from ..telegram import TelegramRichClient
 from .common import send_response
 from .voice import is_bot_mentioned
-from ..receipt import get_receipt_parser
-from ..services import ReceiptService
 
 logger = logging.getLogger(__name__)
 
@@ -323,8 +324,8 @@ async def ticket_callback_handler(
                     u = session.query(User).filter(User.id == tg_uid).first()
                 if u:
                     from ..receipt.pending_store import (
-                        extract_initials,
                         TicketParticipant,
+                        extract_initials,
                     )
 
                     first_name = getattr(u, "first_name", "") or f"User {tg_uid}"

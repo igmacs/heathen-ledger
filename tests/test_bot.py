@@ -1,35 +1,37 @@
 """Integration tests for Telegram bot command and callback handlers."""
 
-import sys
-import os
-import unittest
 import asyncio
 import datetime
+import os
+import sys
+import unittest
 from unittest.mock import AsyncMock, MagicMock
+
 from telegram.error import BadRequest
 
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from tests.base import BaseDatabaseTestCase
-from telegram.constants import MessageEntityType
 from heathen_ledger import crud
+from heathen_ledger.commands.dispatcher import CommandDispatcher
 from heathen_ledger.handlers.base import (
-    register_command,
     members_command,
     register_callback_handler,
+    register_command,
 )
-from heathen_ledger.handlers.settle import settle_callback_handler
+from heathen_ledger.handlers.common import dismiss_callback_handler
 from heathen_ledger.handlers.expense import (
-    undo_callback_handler,
-    pay_toggle_callback_handler,
     pay_command,
+    pay_toggle_callback_handler,
     payback_command,
+    undo_callback_handler,
 )
 from heathen_ledger.handlers.history import history_delete_callback_handler
-from heathen_ledger.handlers.common import dismiss_callback_handler
+from heathen_ledger.handlers.settle import settle_callback_handler
 from heathen_ledger.keyboards import ExpenseKeyboardBuilder
-from heathen_ledger.commands.dispatcher import CommandDispatcher
+from telegram.constants import MessageEntityType
+
+from tests.base import BaseDatabaseTestCase
 
 
 class TestSettleCallback(BaseDatabaseTestCase):

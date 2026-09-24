@@ -1,11 +1,12 @@
 """Service layer for balance inspection, debt simplification, and settlement payments."""
 
 from typing import Any
+
 from sqlalchemy.orm import Session
 
-from ..models import User, Group, Payment
 from .. import crud
 from ..domain.calculations import simplify_debts
+from ..models import Group, Payment, User
 from .exceptions import PermissionDeniedError
 
 

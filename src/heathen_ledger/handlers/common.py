@@ -2,18 +2,18 @@ import asyncio
 import contextlib
 import logging
 from unittest.mock import AsyncMock, MagicMock
+
 from telegram import InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from ..telegram import (
+    EphemeralActionKeyboardDecorator,
     EphemeralPayloadStore,
     TelegramEphemeralClient,
-    EphemeralActionKeyboardDecorator,
     TelegramRichClient,
 )
-
 
 logger = logging.getLogger(__name__)
 

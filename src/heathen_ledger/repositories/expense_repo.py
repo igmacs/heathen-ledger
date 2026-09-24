@@ -1,7 +1,9 @@
 import datetime
 import logging
+
 from sqlalchemy.orm import Session
-from ..models import Expense, ExpenseSplit, ExpensePayer
+
+from ..models import Expense, ExpensePayer, ExpenseSplit
 
 logger = logging.getLogger(__name__)
 

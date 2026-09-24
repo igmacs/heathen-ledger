@@ -1,5 +1,6 @@
 import re
-from ..dto import SplitSpec, ParseErrorResult
+
+from ..dto import ParseErrorResult, SplitSpec
 from .user_token import UserTokenParser
 
 

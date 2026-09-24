@@ -5,17 +5,17 @@ from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
+from heathen_ledger.keyboards import TicketKeyboardBuilder
 from heathen_ledger.receipt import (
+    PendingTicketSession,
     Receipt,
     ReceiptItem,
-    PendingTicketSession,
 )
 from heathen_ledger.receipt.formatter import (
     format_price,
     format_ticket_rich_html,
     format_ticket_split_summary,
 )
-from heathen_ledger.keyboards import TicketKeyboardBuilder
 
 
 class TestTicketUI(unittest.TestCase):

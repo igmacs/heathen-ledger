@@ -2,13 +2,14 @@
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+from heathen_ledger import crud
+from heathen_ledger.handlers.close import close_command
+from heathen_ledger.models import User
+from heathen_ledger.repositories import GroupRepository, UserRepository
 from telegram.constants import ChatType
 
 from tests.base import BaseDatabaseTestCase
-from heathen_ledger import crud
-from heathen_ledger.models import User
-from heathen_ledger.handlers.close import close_command
-from heathen_ledger.repositories import GroupRepository, UserRepository
 
 
 class TestCloseCommand(BaseDatabaseTestCase):

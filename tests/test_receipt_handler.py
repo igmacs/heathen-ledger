@@ -1,24 +1,26 @@
+import asyncio
 import os
 import sys
 import unittest
-import asyncio
 from unittest.mock import MagicMock, patch
+
 from telegram.constants import ChatType
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger.handlers.receipt import (
-    ticket_command_handler,
-    ticket_photo_handler,
-    ticket_mention_handler,
-    ticket_callback_handler,
-    ticket_external_reply_handler,
-    is_image_media,
-)
+from heathen_ledger import crud
 from heathen_ledger.handlers import reply_mention_dispatcher
+from heathen_ledger.handlers.receipt import (
+    is_image_media,
+    ticket_callback_handler,
+    ticket_command_handler,
+    ticket_external_reply_handler,
+    ticket_mention_handler,
+    ticket_photo_handler,
+)
 from heathen_ledger.receipt import Receipt, ReceiptItem
 from heathen_ledger.services import ReceiptService
-from heathen_ledger import crud
+
 from tests.base import BaseDatabaseTestCase
 
 

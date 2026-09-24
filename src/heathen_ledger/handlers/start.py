@@ -1,7 +1,8 @@
 import logging
+
+from sqlalchemy.orm import Session
 from telegram import Update
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
 from .common import send_response

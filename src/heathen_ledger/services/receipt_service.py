@@ -4,17 +4,20 @@ import contextlib
 import html
 import logging
 from typing import Any
-from telegram import Bot, Message, InlineKeyboardMarkup
-from telegram.constants import ChatAction
-from sqlalchemy.orm import Session
 
+from sqlalchemy.orm import Session
+from telegram import Bot, InlineKeyboardMarkup, Message
+from telegram.constants import ChatAction
+
+from .. import crud
+from ..keyboards.ticket import TicketKeyboardBuilder
 from ..receipt import (
-    Receipt,
-    ReceiptImageDownloader,
-    get_receipt_parser,
     PendingTicketSession,
     PendingTicketStore,
+    Receipt,
+    ReceiptImageDownloader,
     TicketParticipant,
+    get_receipt_parser,
 )
 from ..receipt.formatter import (
     format_price,
@@ -22,13 +25,20 @@ from ..receipt.formatter import (
     format_ticket_split_rich_html,
     format_ticket_split_summary,
 )
-from ..keyboards.ticket import TicketKeyboardBuilder
 from ..repositories import GroupRepository, UserRepository
-from ..commands import CommandDispatcher
-from .. import crud
 from .exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+class CommandDispatcher:
+    """Proxy to prevent circular import between commands and services."""
+
+    @staticmethod
+    def execute(*args, **kwargs):
+        from ..commands.dispatcher import CommandDispatcher as _CD
+
+        return _CD.execute(*args, **kwargs)
 
 
 class ReceiptService:

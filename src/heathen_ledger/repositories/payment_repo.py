@@ -1,7 +1,9 @@
 import logging
 from typing import Any
+
 from sqlalchemy.orm import Session
-from ..models import Payment, Expense
+
+from ..models import Expense, Payment
 
 logger = logging.getLogger(__name__)
 

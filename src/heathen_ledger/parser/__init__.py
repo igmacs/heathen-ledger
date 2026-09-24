@@ -2,28 +2,27 @@
 
 from typing import Any
 
-from ..domain.calculations import split_amount_equally, simplify_debts
-from ..formatters import (
-    generate_balances_summary,
-    generate_settlements_summary,
-    generate_history_summary,
-    generate_history_rich_html,
-)
-
+from ..domain.calculations import simplify_debts, split_amount_equally
 from ..dto import (
     CommandParseError,
+    ParsedPaybackCommand,
+    ParsedPayCommand,
     ParseErrorResult,
     SplitSpec,
-    ParsedPayCommand,
-    ParsedPaybackCommand,
+)
+from ..formatters import (
+    generate_balances_summary,
+    generate_history_rich_html,
+    generate_history_summary,
+    generate_settlements_summary,
 )
 from .amount import AmountParser
-from .user_token import UserTokenParser
 from .date_clause import DateClauseParser
-from .split_clause import SplitClauseParser
-from .payer_clause import PayerClauseParser
 from .pay_parser import PayCommandParser
 from .payback_parser import PaybackCommandParser
+from .payer_clause import PayerClauseParser
+from .split_clause import SplitClauseParser
+from .user_token import UserTokenParser
 
 
 def parse_pay_message(text: str) -> dict[str, Any]:

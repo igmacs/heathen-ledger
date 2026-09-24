@@ -1,23 +1,22 @@
-import sys
 import os
-
+import sys
 import unittest
 
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
+from heathen_ledger import crud
+from heathen_ledger.database import Base
+from heathen_ledger.domain import BalanceCalculator
+from heathen_ledger.models import ExpensePayer, ExpenseSplit
+from heathen_ledger.repositories import (
+    ExpenseRepository,
+    GroupRepository,
+    PaymentRepository,
+    UserRepository,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from heathen_ledger.database import Base
-from heathen_ledger import crud
-from heathen_ledger.models import ExpensePayer, ExpenseSplit
-from heathen_ledger.domain import BalanceCalculator
-from heathen_ledger.repositories import (
-    UserRepository,
-    GroupRepository,
-    ExpenseRepository,
-    PaymentRepository,
-)
 
 
 class TestCRUD(unittest.TestCase):

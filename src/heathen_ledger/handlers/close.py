@@ -1,15 +1,16 @@
 """Handler for closing a settled ledger, wiping group records, and leaving the chat."""
 
 import logging
+
+from sqlalchemy.orm import Session
 from telegram import Update
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
-from sqlalchemy.orm import Session
 
 from ..database import with_db_session
+from ..formatters import generate_settlements_summary
 from ..repositories import GroupRepository
 from ..services import SettlementService
-from ..formatters import generate_settlements_summary
 from .common import send_response
 
 logger = logging.getLogger(__name__)

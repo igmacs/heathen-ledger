@@ -1,9 +1,9 @@
 """Repositories for database entities."""
 
-from .user_repo import UserRepository
-from .group_repo import GroupRepository
 from .expense_repo import ExpenseRepository
+from .group_repo import GroupRepository
 from .payment_repo import PaymentRepository
+from .user_repo import UserRepository
 
 __all__ = [
     "UserRepository",

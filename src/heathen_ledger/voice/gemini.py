@@ -2,11 +2,12 @@ import datetime
 import json
 import logging
 import os
+
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from .base import VoiceInterpreter, VoiceInterpretation
+from .base import VoiceInterpretation, VoiceInterpreter
 
 logger = logging.getLogger(__name__)
 

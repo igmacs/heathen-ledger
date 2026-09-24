@@ -1,11 +1,12 @@
 import json
 import logging
 import os
+
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from .base import ReceiptParser, Receipt, ReceiptItem
+from .base import Receipt, ReceiptItem, ReceiptParser
 
 logger = logging.getLogger(__name__)
 

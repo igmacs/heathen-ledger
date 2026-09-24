@@ -33,6 +33,7 @@ select = [
     "ERA",  # eradicate (commented-out code)
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
+    "I",    # isort (import sorting)
 ]
 ignore = [
     "E501",   # line length handled by ruff-format

@@ -1,5 +1,5 @@
-from ..dto import ParseErrorResult
 from ..domain.calculations import split_amount_equally
+from ..dto import ParseErrorResult
 from .user_token import UserTokenParser
 
 
