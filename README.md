@@ -577,3 +577,7 @@ when I had to correct or guide it
   - Added `CallbackQueryHandler(auto_register)` in `group=-1` (`src/heathen_ledger/handlers/__init__.py`), ensuring all inline button clicks in group chats auto-register the clicking user and link pending external profiles before specific `group=0` callback handlers execute.
   - Added a guard in `auto_register` (`handlers/registration.py`) to skip `register:` callbacks so `register_callback_handler` can continue properly announcing newly registered members.
   - Safely extracted group titles in `auto_register` and updated test fixtures and test suite with comprehensive unit tests for callback query auto-registration (all 223 unit tests and pre-commit checks passing cleanly).
+
+- I pointed out that global callback auto-registration should allow removing the manual `ensure_member_in_group` calls from `/settle` and all other callback handlers. The agent agreed and autonomously:
+  - Removed redundant `ensure_member_in_group` calls and unused `MemberRegistrationService` imports across `settle_callback_handler` (`handlers/settle.py`), `pay_toggle_callback_handler` and `undo_callback_handler` (`handlers/expense.py`), and `history_delete_callback_handler` (`handlers/history.py`), replacing them with direct `UserRepository(session).get_by_telegram_id` lookups.
+  - Updated test pipeline calls and verified all 223 unit tests and pre-commit checks pass cleanly.
