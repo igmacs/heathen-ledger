@@ -4,31 +4,25 @@ import logging
 
 from sqlalchemy.orm import Session
 from telegram import Update
-from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 from ..database import with_db_session
 from ..formatters import generate_settlements_summary
 from ..repositories import GroupRepository
 from ..services import SettlementService
-from .common import send_response
+from .common import require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
 
 
+@require_group_chat
 @with_db_session
 async def close_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle the /close command to close the ledger, wipe group records, and leave the chat."""
     chat = update.effective_chat
-    if not chat or chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
-        await send_response(
-            update,
-            context,
-            "⚠️ The `/close` command can only be used in a group chat.",
-            parse_mode="Markdown",
-        )
+    if not chat:
         return
 
     group = GroupRepository(session).get_by_telegram_id(chat.id)

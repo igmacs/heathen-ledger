@@ -12,7 +12,7 @@ from ..repositories import GroupRepository
 from ..services import HistoryService, MemberRegistrationService
 from ..services.exceptions import PermissionDeniedError, ValidationError
 from ..telegram import TelegramRichClient
-from .common import send_response
+from .common import require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +115,7 @@ async def history_delete_callback_handler(
     await refresh_history_message(query, session, context)
 
 
+@require_group_chat
 @with_db_session
 async def history_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session

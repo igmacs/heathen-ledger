@@ -15,6 +15,7 @@ from ..voice import (
     VoiceAudioDownloader,
     get_voice_interpreter,
 )
+from .common import require_group_chat
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,7 @@ async def process_voice_audio(
     )
 
 
+@require_group_chat
 @with_db_session
 async def voice_command_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session

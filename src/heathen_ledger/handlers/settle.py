@@ -18,7 +18,7 @@ from ..models import User
 from ..repositories import GroupRepository, UserRepository
 from ..services import SettlementService
 from ..services.exceptions import PermissionDeniedError
-from .common import send_response
+from .common import require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 build_settle_keyboard = SettlementKeyboardBuilder.build_settle_keyboard
 
 
+@require_group_chat
 @with_db_session
 async def balances_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -50,6 +51,7 @@ async def balances_command(
     await send_response(update, context, reply_text, parse_mode="Markdown")
 
 
+@require_group_chat
 @with_db_session
 async def settle_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session

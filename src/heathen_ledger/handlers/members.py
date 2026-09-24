@@ -6,11 +6,12 @@ from telegram.ext import ContextTypes
 
 from ..database import with_db_session
 from ..services import MemberRegistrationService
-from .common import send_response
+from .common import require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
 
 
+@require_group_chat
 @with_db_session
 async def members_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session

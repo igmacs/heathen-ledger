@@ -27,8 +27,15 @@ from heathen_ledger.handlers.expense import (
     payback_command,
     undo_callback_handler,
 )
-from heathen_ledger.handlers.history import history_delete_callback_handler
-from heathen_ledger.handlers.settle import settle_callback_handler
+from heathen_ledger.handlers.history import (
+    history_command,
+    history_delete_callback_handler,
+)
+from heathen_ledger.handlers.settle import (
+    balances_command,
+    settle_callback_handler,
+    settle_command,
+)
 from heathen_ledger.keyboards import ExpenseKeyboardBuilder
 from heathen_ledger.repositories import GroupRepository
 from telegram.constants import ChatType, MessageEntityType
@@ -786,6 +793,27 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         update.message.reply_text.assert_called_once()
         reply = update.message.reply_text.call_args.args[0]
         self.assertIn("can only be used in a group chat", reply)
+
+    def test_ledger_commands_in_private_chat_blocked(self):
+        commands_to_test = [
+            (pay_command, "/pay 10 for Coffee"),
+            (payback_command, "/payback @alice 10"),
+            (balances_command, "/balances"),
+            (settle_command, "/settle"),
+            (history_command, "/history"),
+            (members_command, "/members"),
+        ]
+        for handler, cmd_text in commands_to_test:
+            with self.subTest(command=cmd_text):
+                update = self.create_mock_message_update(cmd_text, chat_id=777)
+                update.effective_chat.type = ChatType.PRIVATE
+                context = MagicMock()
+
+                asyncio.run(handler(update, context))
+
+                update.message.reply_text.assert_called_once()
+                reply = update.message.reply_text.call_args.args[0]
+                self.assertIn("can only be used in a group chat", reply)
 
 
 if __name__ == "__main__":

@@ -19,11 +19,18 @@ from heathen_ledger.handlers.voice import (
 )
 from heathen_ledger.models import Expense, Payment
 from heathen_ledger.voice import VoiceInterpretation
+from telegram.constants import ChatType
 
 from tests.base import BaseDatabaseTestCase
 
 
 class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
+    def _create_update(self, is_group: bool = True, chat_id: int = -10012345):
+        update = MagicMock()
+        update.effective_chat.type = ChatType.GROUP if is_group else ChatType.PRIVATE
+        update.effective_chat.id = chat_id
+        return update
+
     async def test_no_message_or_audio(self):
         context = MagicMock()
 
@@ -188,7 +195,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Failed to transcribe or interpret audio", reply)
 
     async def test_voice_command_no_reply(self):
-        update = MagicMock()
+        update = self._create_update()
         context = MagicMock()
         update.message.reply_to_message = None
         update.message.reply_text = AsyncMock()
@@ -200,7 +207,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         self.assertIn("reply to an audio or voice message", reply)
 
     async def test_voice_command_reply_to_non_audio(self):
-        update = MagicMock()
+        update = self._create_update()
         context = MagicMock()
         reply_to = MagicMock()
         reply_to.voice = None
@@ -213,6 +220,17 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         update.message.reply_text.assert_awaited_once()
         reply = update.message.reply_text.call_args[0][0]
         self.assertIn("does not contain a voice note", reply)
+
+    @patch("heathen_ledger.handlers.common.send_response")
+    async def test_voice_command_in_private_chat_blocked(self, mock_send_response):
+        update = self._create_update(is_group=False)
+        context = MagicMock()
+
+        await voice_command_handler(update, context)
+
+        mock_send_response.assert_awaited_once()
+        warning = mock_send_response.call_args[0][2]
+        self.assertIn("can only be used in a group chat", warning)
 
     @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
@@ -229,9 +247,8 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         mock_get_interpreter.return_value = mock_interpreter
         mock_get_group.return_value = None
 
-        update = MagicMock()
+        update = self._create_update(chat_id=-10012345)
         context = MagicMock()
-        update.effective_chat.id = -10012345
         reply_to = MagicMock()
         reply_to.voice = MagicMock(file_id="voice_rep", mime_type="audio/ogg")
         reply_to.audio = None
@@ -328,10 +345,9 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         "heathen_ledger.handlers.expense.process_voice_audio", new_callable=AsyncMock
     )
     async def test_pay_command_reply_to_voice_delegated(self, mock_process_voice):
-        update = MagicMock()
+        update = self._create_update(chat_id=-10012345)
         context = MagicMock()
         context.bot.username = "HeathenLedgerBot"
-        update.effective_chat.id = -10012345
         update.message.text = "/pay"
 
         reply_to = MagicMock()
@@ -352,10 +368,9 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
     async def test_pay_command_reply_to_voice_with_explicit_args_not_delegated(
         self, mock_process_voice
     ):
-        update = MagicMock()
+        update = self._create_update(chat_id=-10012345)
         context = MagicMock()
         context.bot.username = "HeathenLedgerBot"
-        update.effective_chat.id = -10012345
         update.message.text = "/pay 20 for dinner"
 
         reply_to = MagicMock()

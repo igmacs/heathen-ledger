@@ -18,7 +18,7 @@ from ..services.exceptions import (
     UserNotFoundError,
     ValidationError,
 )
-from .common import send_response
+from .common import require_group_chat, send_response
 from .voice import process_voice_audio
 
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 build_expense_undo_keyboard = ExpenseKeyboardBuilder.build_expense_undo_keyboard
 
 
+@require_group_chat
 @with_db_session
 async def pay_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -175,6 +176,7 @@ async def pay_toggle_callback_handler(
     await query.answer()
 
 
+@require_group_chat
 @with_db_session
 async def payback_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
