@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 from typing import Any
@@ -14,48 +13,6 @@ logger = logging.getLogger(__name__)
 
 class MemberRegistrationService:
     """Service handling multi-strategy group member registrations."""
-
-    @classmethod
-    async def resolve_admin_by_username(
-        cls, context: Any, chat_id: int, username: str
-    ) -> TgUser | None:
-        """Check if a username matches a chat administrator."""
-        clean_username = username.lower().lstrip("@")
-        if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
-            try:
-                res = context.bot.get_chat_administrators(chat_id)
-                admins = await res if asyncio.iscoroutine(res) else res
-                if isinstance(admins, (list, tuple)):
-                    for adm in admins:
-                        adm_u = getattr(adm, "user", None)
-                        if (
-                            adm_u
-                            and getattr(adm_u, "username", None)
-                            and adm_u.username.lower() == clean_username
-                        ):
-                            return adm_u
-            except Exception as e:
-                logger.debug(f"Could not fetch chat administrators: {e}")
-        return None
-
-    @classmethod
-    async def get_admins_by_username(
-        cls, context: Any, chat_id: int
-    ) -> dict[str, TgUser]:
-        """Fetch all chat administrators indexed by lowercase username."""
-        admins_by_username = {}
-        if hasattr(context, "bot") and hasattr(context.bot, "get_chat_administrators"):
-            try:
-                res = context.bot.get_chat_administrators(chat_id)
-                admins = await res if asyncio.iscoroutine(res) else res
-                if isinstance(admins, (list, tuple)):
-                    for adm in admins:
-                        adm_u = getattr(adm, "user", None)
-                        if adm_u and getattr(adm_u, "username", None):
-                            admins_by_username[adm_u.username.lower()] = adm_u
-            except Exception as e:
-                logger.debug(f"Could not fetch chat admins: {e}")
-        return admins_by_username
 
     @classmethod
     def register_reply_user(
@@ -118,7 +75,6 @@ class MemberRegistrationService:
         session: Session,
         group: Group,
         mentions: list[str],
-        admins_by_username: dict[str, TgUser],
     ) -> tuple[list[str], list[str]]:
         """Register multiple @mentions provided as arguments."""
         registered = []
@@ -129,15 +85,7 @@ class MemberRegistrationService:
             if any(m.username and m.username.lower() == h for m in group.members):
                 already_registered.append(f"@{h}")
                 continue
-            if h in admins_by_username:
-                adm_u = admins_by_username[h]
-                db_u = user_repo.get_or_create(
-                    adm_u.id, adm_u.username, adm_u.first_name
-                )
-                user_repo.add_to_group(db_u, group)
-                registered.append(f"@{h}")
-                continue
-            # Search globally
+            # Search globally for registered Telegram user
             glob_u = user_repo.get_in_group(group.id, h)
             if glob_u:
                 registered.append(f"@{h}")
@@ -156,22 +104,13 @@ class MemberRegistrationService:
         group: Group,
         handle: str,
         first_name: str,
-        admin_u: TgUser | None,
     ) -> str:
-        """Register a single @handle (as admin, global user, or external user)."""
+        """Register a single @handle (as global user or external user)."""
         user_repo = UserRepository(session)
 
         for m in group.members:
             if m.username and m.username.lower() == handle:
                 return f"ℹ️ Member *{m.first_name}* (`@{handle}`) is already registered in this group."
-
-        if admin_u:
-            db_u = user_repo.get_or_create(
-                admin_u.id, admin_u.username, admin_u.first_name
-            )
-            user_repo.add_to_group(db_u, group)
-            session.commit()
-            return f"✅ Registered member *{db_u.first_name}* (`@{handle}`) to this group ledger."
 
         # Check if registered Telegram user globally
         glob_u = user_repo.get_in_group(group.id, handle)

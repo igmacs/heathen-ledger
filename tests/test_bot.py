@@ -717,31 +717,24 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         self.assertIsNotNone(grace)
         self.assertIn(grace, self.group.members)
 
-    def test_register_admin_mention(self):
+    def test_register_handle_mention_external(self):
         context = MagicMock()
-        # Mock get_chat_administrators returning admin Harry
-        admin_member = MagicMock()
-        admin_member.user.id = 99901
-        admin_member.user.username = "harry"
-        admin_member.user.first_name = "Harry"
-        context.bot.get_chat_administrators = AsyncMock(return_value=[admin_member])
-
         update_adm = self.create_mock_message_update("/register @harry")
         asyncio.run(register_command(update_adm, context))
         update_adm.message.reply_text.assert_called_once()
         self.assertIn(
-            "Registered member *Harry* (`@harry`)",
+            "Registered *Harry* (`@harry`) in this group ledger",
             update_adm.message.reply_text.call_args.args[0],
         )
 
-        harry = crud.get_user_by_telegram_id(self.db_session, 99901)
+        harry = crud.get_user_in_group(self.db_session, self.group.id, "harry")
         self.assertIsNotNone(harry)
-        self.assertFalse(harry.is_external)
+        self.assertTrue(harry.is_external)
+        self.assertIsNone(harry.telegram_id)
         self.assertIn(harry, self.group.members)
 
     def test_register_global_telegram_user_mention(self):
         context = MagicMock()
-        context.bot.get_chat_administrators = AsyncMock(return_value=[])
 
         # Create global Telegram user Iris in DB (not in self.group)
         iris = crud.get_or_create_user(
@@ -761,7 +754,6 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
 
     def test_register_multiple_mentions(self):
         context = MagicMock()
-        context.bot.get_chat_administrators = AsyncMock(return_value=[])
 
         update_multi = self.create_mock_message_update("/register @jack @karen")
         asyncio.run(register_command(update_multi, context))

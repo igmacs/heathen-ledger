@@ -129,11 +129,8 @@ async def register_command(
     # Check if multiple @mentions are given (e.g. /register @alice @bob)
     all_mentions = [p.lstrip("@").lower() for p in parts if p.startswith("@")]
     if len(all_mentions) > 1 and len(all_mentions) == len(parts):
-        admins_by_username = await MemberRegistrationService.get_admins_by_username(
-            context, chat.id
-        )
         registered, already_registered = MemberRegistrationService.register_mentions(
-            session, group, all_mentions, admins_by_username
+            session, group, all_mentions
         )
         msgs = []
         if registered:
@@ -149,11 +146,8 @@ async def register_command(
         first_name = (
             " ".join(parts[1:]).strip() if len(parts) > 1 else handle.capitalize()
         )
-        admin_u = await MemberRegistrationService.resolve_admin_by_username(
-            context, chat.id, handle
-        )
         msg = MemberRegistrationService.register_handle(
-            session, group, handle, first_name, admin_u
+            session, group, handle, first_name
         )
         await send_response(update, context, msg, parse_mode="Markdown")
         return

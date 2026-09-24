@@ -273,14 +273,10 @@ class TestServices(BaseDatabaseTestCase):
         self.assertIn("Alice", already)
 
         # 3. register_mentions
-        admin_frank = MagicMock(
-            id=1001, username="frank", first_name="Frank", is_bot=False
-        )
         reg_m, already_m = MemberRegistrationService.register_mentions(
             self.session,
             self.group,
             ["alice", "frank", "george"],
-            {"frank": admin_frank},
         )
         self.assertIn("@alice", already_m)
         self.assertIn("@frank", reg_m)
@@ -288,20 +284,23 @@ class TestServices(BaseDatabaseTestCase):
 
         # 4. register_handle
         msg_already = MemberRegistrationService.register_handle(
-            self.session, self.group, "alice", "Alice", None
+            self.session, self.group, "alice", "Alice"
         )
         self.assertIn("already registered", msg_already)
 
-        admin_helen = MagicMock(
-            id=1002, username="helen", first_name="Helen", is_bot=False
+        # Existing global user
+        crud.get_or_create_user(
+            self.session, telegram_id=1002, username="helen", first_name="Helen"
         )
-        msg_admin = MemberRegistrationService.register_handle(
-            self.session, self.group, "helen", "Helen", admin_helen
+        self.session.commit()
+        msg_global = MemberRegistrationService.register_handle(
+            self.session, self.group, "helen", "Helen"
         )
-        self.assertIn("Registered member *Helen*", msg_admin)
+        self.assertIn("Registered member *Helen*", msg_global)
 
+        # External / pending user
         msg_ext = MemberRegistrationService.register_handle(
-            self.session, self.group, "ian", "Ian", None
+            self.session, self.group, "ian", "Ian"
         )
         self.assertIn("Registered *Ian*", msg_ext)
 
