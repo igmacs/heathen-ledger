@@ -1,3 +1,4 @@
+import contextlib
 import logging
 from telegram import Update, InlineKeyboardMarkup
 from telegram.constants import ChatAction, MessageEntityType
@@ -40,9 +41,8 @@ async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         except Exception:
             bot_username = None
 
-    if bot_username:
-        if f"@{bot_username.lower()}" in text.lower():
-            return True
+    if bot_username and f"@{bot_username.lower()}" in text.lower():
+        return True
 
     entities = list(update.message.entities or []) + list(
         update.message.caption_entities or []
@@ -89,13 +89,11 @@ async def process_voice_audio(
 
     # Indicate typing activity
     if chat_id is not None:
-        try:
+        with contextlib.suppress(Exception):
             await context.bot.send_chat_action(
                 chat_id=chat_id,
                 action=ChatAction.TYPING,
             )
-        except Exception:
-            pass
 
     # Download audio bytes
     try:
@@ -308,10 +306,8 @@ async def voice_callback_handler(
             show_alert=True,
         )
         if query.message:
-            try:
+            with contextlib.suppress(BadRequest):
                 await query.edit_message_reply_markup(reply_markup=None)
-            except BadRequest:
-                pass
         return
 
     # Check permission

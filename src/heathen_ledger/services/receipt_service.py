@@ -1,5 +1,6 @@
 """Service layer for receipt photo parsing, interactive claiming, and itemization."""
 
+import contextlib
 import html
 import logging
 from typing import Any
@@ -338,10 +339,8 @@ class ReceiptService:
             raise ValidationError("Message does not contain a photo or image document.")
 
         if chat_id is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-            except Exception:
-                pass
 
         image_bytes, mime_type = await ReceiptImageDownloader.download(
             bot, media_message

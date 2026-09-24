@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from unittest.mock import AsyncMock, MagicMock
 from telegram import InlineKeyboardMarkup, Message, Update
@@ -207,26 +208,22 @@ async def persist_callback_handler(
     payload = _EPHEMERAL_STORE.pop(token)
 
     if not payload:
-        try:
+        with contextlib.suppress(BadRequest):
             await query.answer(
                 "This message has expired or has already been shared.",
                 show_alert=True,
             )
-        except BadRequest:
-            pass
         return
 
     # Check that the user clicking the button is the one who requested it
     user = getattr(update, "effective_user", None) or getattr(query, "from_user", None)
     if user and payload.get("user_id") and user.id != payload["user_id"]:
         _EPHEMERAL_STORE.restore(token, payload)
-        try:
+        with contextlib.suppress(BadRequest):
             await query.answer(
                 "Only the person who requested this message can share it.",
                 show_alert=True,
             )
-        except BadRequest:
-            pass
         return
 
     bot = getattr(context, "bot", None)

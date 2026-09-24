@@ -1,5 +1,6 @@
 """Service layer for voice transcription, interpretation, and pending command lifecycle."""
 
+import contextlib
 import logging
 from sqlalchemy.orm import Session
 from telegram import Bot, Message, InlineKeyboardMarkup
@@ -101,10 +102,8 @@ class VoiceService:
         interpreter = get_voice_interpreter()
 
         if chat_id is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-            except Exception:
-                pass
 
         audio_bytes, mime_type = await VoiceAudioDownloader.download(bot, media_message)
         group_members = cls.get_group_member_names(session, chat_id)

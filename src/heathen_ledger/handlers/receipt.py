@@ -1,5 +1,6 @@
 """Handlers for scanning, itemizing, and interactively splitting receipt photos."""
 
+import contextlib
 import html
 import logging
 from telegram import Update
@@ -451,10 +452,8 @@ async def ticket_callback_handler(
         token = parts[2]
         item_idx = None
         if len(parts) >= 4:
-            try:
+            with contextlib.suppress(ValueError):
                 item_idx = int(parts[3])
-            except ValueError:
-                pass
 
         s = ReceiptService.get_session(token)
         if not s:
@@ -580,11 +579,13 @@ async def ticket_external_reply_handler(
         return
 
     name = update.message.text.strip()
-    if name.startswith("/"):
-        if name.lower() in ("/cancel", "/cancel@heathenledgerbot"):
-            context.user_data.pop("pending_ext_ticket", None)
-            await update.message.reply_text("Cancelled adding external participant.")
-            return
+    if name.startswith("/") and name.lower() in (
+        "/cancel",
+        "/cancel@heathenledgerbot",
+    ):
+        context.user_data.pop("pending_ext_ticket", None)
+        await update.message.reply_text("Cancelled adding external participant.")
+        return
 
     token = pending["token"]
     item_idx = pending.get("item_idx")

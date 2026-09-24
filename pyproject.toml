@@ -32,6 +32,7 @@ select = [
     "UP",   # pyupgrade
     "ERA",  # eradicate (commented-out code)
     "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
 ]
 ignore = [
     "E501",   # line length handled by ruff-format

@@ -27,9 +27,12 @@ class MemberRegistrationService:
                 if isinstance(admins, (list, tuple)):
                     for adm in admins:
                         adm_u = getattr(adm, "user", None)
-                        if adm_u and getattr(adm_u, "username", None):
-                            if adm_u.username.lower() == clean_username:
-                                return adm_u
+                        if (
+                            adm_u
+                            and getattr(adm_u, "username", None)
+                            and adm_u.username.lower() == clean_username
+                        ):
+                            return adm_u
             except Exception as e:
                 logger.debug(f"Could not fetch chat administrators: {e}")
         return None
