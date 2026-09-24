@@ -12,8 +12,8 @@ from ..parser import (
     parse_pay_message,
     parse_payback_message,
 )
-from ..repositories import UserRepository
-from ..services import ExpenseService, MemberRegistrationService
+from ..repositories import GroupRepository, UserRepository
+from ..services import ExpenseService
 from ..services.exceptions import (
     PermissionDeniedError,
     UserNotFoundError,
@@ -69,15 +69,11 @@ async def pay_command(
         )
         return
 
-    # Ensure sender and group exist and are linked
-    sender, group = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=update.effective_chat.id,
-        user_id=update.effective_user.id,
-        username=update.effective_user.username,
-        first_name=update.effective_user.first_name or "",
-        chat_title=update.effective_chat.title,
-    )
+    # Resolve sender and group (guaranteed registered by group=-1 auto_register)
+    sender = UserRepository(session).get_by_telegram_id(update.effective_user.id)
+    group = GroupRepository(session).get_by_telegram_id(update.effective_chat.id)
+    if not sender or not group:
+        return
 
     try:
         expense = ExpenseService.record_expense(
@@ -194,15 +190,11 @@ async def payback_command(
         )
         return
 
-    # Ensure sender and group exist and are linked
-    sender, group = MemberRegistrationService.ensure_member_in_group(
-        session=session,
-        chat_id=update.effective_chat.id,
-        user_id=update.effective_user.id,
-        username=update.effective_user.username,
-        first_name=update.effective_user.first_name or "",
-        chat_title=update.effective_chat.title,
-    )
+    # Resolve sender and group (guaranteed registered by group=-1 auto_register)
+    sender = UserRepository(session).get_by_telegram_id(update.effective_user.id)
+    group = GroupRepository(session).get_by_telegram_id(update.effective_chat.id)
+    if not sender or not group:
+        return
 
     try:
         payment = ExpenseService.record_payback(
