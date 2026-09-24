@@ -1,5 +1,6 @@
 """Unit tests for ephemeral commands and persistent command variants."""
 
+import asyncio
 import unittest
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
@@ -11,7 +12,9 @@ from heathen_ledger.handlers.base import (
 )
 from heathen_ledger.handlers.common import (
     _get_ephemeral_message_id,
+    is_group_chat,
     is_persistent_command,
+    require_group_chat,
     send_response,
 )
 from heathen_ledger.handlers.expense import pay_command, payback_command
@@ -72,6 +75,53 @@ class TestEphemeralHelpers(unittest.TestCase):
         # /pay 10 for Pizza -> False
         update.effective_message.text = "/pay 10 for Pizza"
         self.assertFalse(is_persistent_command(update))
+
+    def test_is_group_chat(self):
+        update = MagicMock()
+        update.effective_chat.type = ChatType.GROUP
+        self.assertTrue(is_group_chat(update))
+
+        update.effective_chat.type = ChatType.SUPERGROUP
+        self.assertTrue(is_group_chat(update))
+
+        update.effective_chat.type = ChatType.PRIVATE
+        self.assertFalse(is_group_chat(update))
+
+        update.effective_chat.type = ChatType.CHANNEL
+        self.assertFalse(is_group_chat(update))
+
+        self.assertFalse(is_group_chat(None))
+
+    def test_require_group_chat_decorator(self):
+        async def _test():
+            mock_handler = AsyncMock(return_value="executed")
+            decorated = require_group_chat(mock_handler)
+
+            context = MagicMock()
+
+            # In private chat: blocked with warning message
+            update_priv = MagicMock()
+            update_priv.effective_chat.type = ChatType.PRIVATE
+            update_priv.effective_message.reply_text = AsyncMock()
+
+            result = await decorated(update_priv, context)
+            self.assertIsNone(result)
+            mock_handler.assert_not_called()
+            update_priv.effective_message.reply_text.assert_called_once()
+            warning = update_priv.effective_message.reply_text.call_args[0][0]
+            self.assertIn("can only be used in a group chat", warning)
+
+            # In group chat: passes through
+            update_grp = MagicMock()
+            update_grp.effective_chat.type = ChatType.GROUP
+            update_grp.effective_chat.id = -100123
+            update_grp.effective_user.id = 111
+
+            result = await decorated(update_grp, context)
+            self.assertEqual(result, "executed")
+            mock_handler.assert_awaited_once_with(update_grp, context)
+
+        asyncio.run(_test())
 
 
 class TestSendResponse(unittest.IsolatedAsyncioTestCase):

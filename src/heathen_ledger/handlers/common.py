@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
 import logging
+from functools import wraps
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from telegram import InlineKeyboardMarkup, Message, Update
@@ -25,6 +27,38 @@ _has_dismiss_button = EphemeralActionKeyboardDecorator.has_dismiss_button
 _get_ephemeral_message_id = TelegramEphemeralClient.extract_ephemeral_message_id
 delete_ephemeral_message = TelegramEphemeralClient.delete_ephemeral_message
 delete_message_or_ephemeral = TelegramEphemeralClient.delete_message_or_ephemeral
+
+
+def is_group_chat(chat_or_update: Any) -> bool:
+    """Check if the update or chat corresponds to a group or supergroup chat."""
+    if hasattr(chat_or_update, "effective_chat"):
+        chat = getattr(chat_or_update, "effective_chat", None)
+    else:
+        chat = chat_or_update
+    return chat is not None and getattr(chat, "type", None) in (
+        ChatType.GROUP,
+        ChatType.SUPERGROUP,
+    )
+
+
+def require_group_chat(f):
+    """Decorator to ensure a handler only executes in group or supergroup chats."""
+
+    @wraps(f)
+    async def wrapper(
+        update: Update, context: ContextTypes.DEFAULT_TYPE, *args: Any, **kwargs: Any
+    ) -> Any:
+        if not is_group_chat(update):
+            await send_response(
+                update,
+                context,
+                "⚠️ This command can only be used in a group chat.",
+                parse_mode="Markdown",
+            )
+            return None
+        return await f(update, context, *args, **kwargs)
+
+    return wrapper
 
 
 def is_persistent_command(update: Update) -> bool:
@@ -79,10 +113,7 @@ async def send_response(
     if not chat_id:
         return None
 
-    is_group = chat is not None and getattr(chat, "type", None) in (
-        ChatType.GROUP,
-        ChatType.SUPERGROUP,
-    )
+    is_group = is_group_chat(update)
 
     if ephemeral is None:
         ephemeral = not is_persistent_command(update)
