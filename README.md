@@ -535,3 +535,13 @@ when I had to correct or guide it
   - Implemented `close_command` in `src/heathen_ledger/handlers/close.py` supporting `/close` and `/close_ledger`: validates group context, blocks closure and details outstanding debts if unsettled, and when settled sends a public farewell message, wipes the group from the database, and leaves the chat via `leave_chat`.
   - Updated `generate_settlements_summary` to suggest `/close` when all debts reach zero, documented `/close` in `help.py` and `bot.py` autocompletion, and updated user-facing documentation in `README.md`.
   - Added unit test suite `tests/test_close.py` and updated `tests/test_ephemeral.py` (all 212 unit tests passing).
+
+- I asked what checks were currently running on the codebase, noting that only a code formatter seemed active, and requested adding a linter with agreed rules and a dead code detector. The agent explained that while Ruff was running via pre-commit, lack of configuration in `pyproject.toml` left it on minimal defaults, and proposed configuring standard Ruff rule sets and integrating Vulture for dead code detection. I directed the agent to proceed by enabling rules and fixing the code incrementally one by one rather than all at once. The agent autonomously:
+  - Enabled baseline Ruff rules (`E`, `W`, `F`) in `pyproject.toml` with `target-version = "py310"` and line-length checks delegated to `ruff-format`.
+  - Added `UP` (pyupgrade) to enforce modern Python 3.10+ typing idioms across 51 codebase and migration files.
+  - Added `ERA` (eradicate) to check for commented-out dead code.
+  - Added `B` (flake8-bugbear) and refactored dynamic `getattr` lookups and strict zip calls.
+  - Added `SIM` (flake8-simplify), replacing verbose `try-except-pass` blocks with `contextlib.suppress` and simplifying nested conditional branches.
+  - Added `I` (isort) to sort imports cleanly across the codebase, identifying and decoupling a lurking circular dependency between `services` and `commands` via proxy dispatchers.
+  - Integrated `vulture` (min-confidence 80) into `pyproject.toml` and `.pre-commit-config.yaml` to detect project-wide dead code, removing unused method parameters and mock arguments across the suite.
+  - Verified that all pre-commit hooks and all 212 unit tests passed cleanly across each atomic commit.

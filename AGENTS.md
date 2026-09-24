@@ -20,6 +20,7 @@ Please follow these instructions and rules during all interactions in this works
 * **Python virtual environment**: Always execute Python commands using `.venv/bin/python` (the system Python lacks project dependencies).
 * **Testing**: Run the test suite with `.venv/bin/python -m unittest discover -s tests`.
 * **Linting & formatting**: Run `.venv/bin/pre-commit run --all-files` (or `ruff check .` / `ruff format .`).
+* **Dead code detection**: Run `.venv/bin/vulture` (or via `pre-commit`).
 * **Pre-commit hooks**: Pre-commit hooks run automatically on `git commit`. If a hook (such as `ruff-format` or `end-of-file-fixer`) modifies files during commit, re-stage them (`git add`) and re-run the commit.
 * **Database migrations**: Run Alembic migrations using `.venv/bin/alembic upgrade head`.
 
