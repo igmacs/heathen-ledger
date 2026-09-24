@@ -158,7 +158,11 @@ class TicketKeyboardBuilder:
 
     @classmethod
     def build_member_selector_keyboard(
-        cls, token: str, item_idx: int, members: list[Any], item_name: str
+        cls,
+        token: str,
+        item_idx: int,
+        members: list[Any],
+        _item_name: str | None = None,
     ) -> InlineKeyboardMarkup:
         """Show members to assign to a chosen item."""
         rows = []

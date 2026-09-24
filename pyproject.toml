@@ -39,3 +39,7 @@ ignore = [
     "E501",   # line length handled by ruff-format
     "UP038",  # isinstance with union instead of tuple (deprecated in Ruff, tuple is faster)
 ]
+
+[tool.vulture]
+min_confidence = 80
+paths = ["src", "tests"]

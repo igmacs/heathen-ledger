@@ -202,7 +202,7 @@ class TestReceiptHandler(unittest.IsolatedAsyncioTestCase):
     @patch("heathen_ledger.handlers.receipt.ReceiptService.process_receipt_image")
     @patch("heathen_ledger.handlers.receipt.send_response")
     async def test_ticket_mention_handler_success(
-        self, mock_send_response, mock_process_image, mock_is_bot_mentioned
+        self, mock_send_response, mock_process_image, _mock_is_bot_mentioned
     ):
         mock_receipt = Receipt(
             items=[ReceiptItem(name="Pasta", price=14.0)], total=14.0
