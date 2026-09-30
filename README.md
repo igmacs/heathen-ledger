@@ -592,3 +592,9 @@ when I had to correct or guide it
   - Introduced `RegistrationResult` and `RegistrationBatchResult` dataclasses providing structured attributes (`user`, `group`, `already_registered`, `success`, `error`) and user-facing Markdown `message` properties.
   - Updated `handlers/registration.py` and `commands/dispatcher.py` to use `register_user` and `register_users`, streamlining handler command dispatching and inline callback buttons.
   - Updated `services/__init__.py` and unit tests in `tests/test_services.py`, with all 223 unit tests and pre-commit checks passing cleanly.
+
+- I questioned why `MemberRegistrationService` returned user-facing Markdown messages and noted that presentation shouldn't be the service layer's responsibility. The agent agreed, explaining that this was legacy baggage from when code was moved out of handlers, and upon my confirmation:
+  - Removed Markdown message formatting and emoji strings entirely from `RegistrationResult` and `RegistrationBatchResult` in `src/heathen_ledger/services/registration_service.py`, returning pure domain data.
+  - Added `format_registration_result` and `format_batch_registration_result` helpers in `src/heathen_ledger/handlers/registration.py` to keep presentation logic strictly within the Telegram handler layer.
+  - Updated `tests/test_services.py` to test domain properties directly and verify the handler formatting functions.
+  - Verified all 223 unit tests and pre-commit checks pass cleanly.
