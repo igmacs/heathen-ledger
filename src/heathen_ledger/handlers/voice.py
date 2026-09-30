@@ -1,5 +1,6 @@
 import contextlib
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 from telegram import InlineKeyboardMarkup, Update
@@ -25,6 +26,34 @@ pop_pending_voice_command = VoiceService.pop_pending_command
 clear_pending_voice_commands = VoiceService.clear_pending_commands
 
 
+async def _get_bot_username(bot: Any) -> str | None:
+    bot_username = getattr(bot, "username", None)
+    if not bot_username and hasattr(bot, "get_me"):
+        try:
+            bot_user = await bot.get_me()
+            return getattr(bot_user, "username", None)
+        except Exception:
+            return None
+    return bot_username
+
+
+def _is_bot_in_entities(
+    entities: list[Any],
+    text: str,
+    bot_username: str | None,
+    bot_id: int | None,
+) -> bool:
+    for entity in entities:
+        if entity.type == MessageEntityType.MENTION and bot_username:
+            mention = text[entity.offset : entity.offset + entity.length]
+            if mention.lstrip("@").lower() == bot_username.lower():
+                return True
+        elif entity.type == MessageEntityType.TEXT_MENTION and entity.user:
+            if bot_id and entity.user.id == bot_id:
+                return True
+    return False
+
+
 async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Check if the bot was mentioned in the update message."""
     if not update.message:
@@ -34,31 +63,75 @@ async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not text:
         return False
 
-    bot_username = getattr(context.bot, "username", None)
-    if not bot_username and hasattr(context.bot, "get_me"):
-        try:
-            bot_user = await context.bot.get_me()
-            bot_username = getattr(bot_user, "username", None)
-        except Exception:
-            bot_username = None
-
+    bot_username = await _get_bot_username(context.bot)
     if bot_username and f"@{bot_username.lower()}" in text.lower():
         return True
 
     entities = list(update.message.entities or []) + list(
         update.message.caption_entities or []
     )
-    for entity in entities:
-        if entity.type == MessageEntityType.MENTION and bot_username:
-            mention = text[entity.offset : entity.offset + entity.length]
-            if mention.lstrip("@").lower() == bot_username.lower():
-                return True
-        elif entity.type == MessageEntityType.TEXT_MENTION and entity.user:
-            bot_id = getattr(context.bot, "id", None)
-            if bot_id and entity.user.id == bot_id:
-                return True
+    bot_id = getattr(context.bot, "id", None)
+    return _is_bot_in_entities(entities, text, bot_username, bot_id)
 
-    return False
+
+def _get_group_member_names(session: Session, chat_id: int | None) -> list[str]:
+    if chat_id is None:
+        return []
+    group = crud.get_group_by_telegram_id(session, chat_id)
+    if not group or not group.members:
+        return []
+    names = []
+    for member in group.members:
+        if member.username:
+            names.append(f"@{member.username}")
+        elif member.first_name:
+            names.append(member.first_name)
+    return names
+
+
+def _prepare_voice_command_pending(
+    media_message: Any,
+    response_message: Any,
+    interpretation: Any,
+    chat_id: int | None,
+) -> InlineKeyboardMarkup | None:
+    if not interpretation.command or chat_id is None:
+        return None
+
+    speaker = getattr(media_message, "from_user", None) or getattr(
+        response_message, "from_user", None
+    )
+    requester = getattr(response_message, "from_user", None)
+
+    creator_id = getattr(speaker, "id", None)
+    creator_username = getattr(speaker, "username", None)
+    creator_first_name = getattr(speaker, "first_name", None)
+
+    authorized_user_ids: set[int] = set()
+    if creator_id is not None:
+        authorized_user_ids.add(creator_id)
+    if requester and getattr(requester, "id", None) is not None:
+        authorized_user_ids.add(requester.id)
+
+    token = store_pending_voice_command(
+        command=interpretation.command,
+        creator_id=creator_id,
+        creator_username=creator_username,
+        creator_first_name=creator_first_name,
+        authorized_user_ids=authorized_user_ids,
+        chat_id=chat_id,
+        transcription=interpretation.transcription,
+    )
+    return VoiceKeyboardBuilder.build_confirmation_keyboard(token)
+
+
+def _format_voice_response(interpretation: Any, reply_markup: Any) -> tuple[str, Any]:
+    lines = [f'🎙️ *Transcription:*\n"{interpretation.transcription}"']
+    if interpretation.command:
+        lines.append(f"\n💡 *Interpreted Command:*\n`{interpretation.command}`")
+    else:
+        lines.append("\n❓ _No ledger command was recognized from this message._")
+    return "\n".join(lines), reply_markup
 
 
 async def process_voice_audio(
@@ -109,15 +182,7 @@ async def process_voice_audio(
         return
 
     # Gather group members context
-    group_members = []
-    if chat_id is not None:
-        group = crud.get_group_by_telegram_id(session, chat_id)
-        if group and group.members:
-            for member in group.members:
-                if member.username:
-                    group_members.append(f"@{member.username}")
-                elif member.first_name:
-                    group_members.append(member.first_name)
+    group_members = _get_group_member_names(session, chat_id)
 
     # Transcribe and interpret
     try:
@@ -133,44 +198,13 @@ async def process_voice_audio(
         )
         return
 
-    # Format response
-    reply_lines = [f'🎙️ *Transcription:*\n"{interpretation.transcription}"']
-    reply_markup = None
-
-    if interpretation.command:
-        reply_lines.append(f"\n💡 *Interpreted Command:*\n`{interpretation.command}`")
-
-        speaker = getattr(media_message, "from_user", None) or getattr(
-            response_message, "from_user", None
-        )
-        requester = getattr(response_message, "from_user", None)
-
-        creator_id = getattr(speaker, "id", None)
-        creator_username = getattr(speaker, "username", None)
-        creator_first_name = getattr(speaker, "first_name", None)
-
-        authorized_user_ids: set[int] = set()
-        if creator_id is not None:
-            authorized_user_ids.add(creator_id)
-        if requester and getattr(requester, "id", None) is not None:
-            authorized_user_ids.add(requester.id)
-
-        if chat_id is not None:
-            token = store_pending_voice_command(
-                command=interpretation.command,
-                creator_id=creator_id,
-                creator_username=creator_username,
-                creator_first_name=creator_first_name,
-                authorized_user_ids=authorized_user_ids,
-                chat_id=chat_id,
-                transcription=interpretation.transcription,
-            )
-            reply_markup = VoiceKeyboardBuilder.build_confirmation_keyboard(token)
-    else:
-        reply_lines.append("\n❓ _No ledger command was recognized from this message._")
+    reply_markup = _prepare_voice_command_pending(
+        media_message, response_message, interpretation, chat_id
+    )
+    reply_text, reply_markup = _format_voice_response(interpretation, reply_markup)
 
     await response_message.reply_text(
-        "\n".join(reply_lines),
+        reply_text,
         parse_mode="Markdown",
         reply_markup=reply_markup,
     )
@@ -285,6 +319,77 @@ def execute_voice_command(
     )
 
 
+async def _handle_voice_rejection(query: Any, pending: Any) -> None:
+    await query.answer(text="Command rejected.")
+    rejected_text = (
+        f'🎙️ *Transcription:*\n"{pending.transcription}"\n\n'
+        f"💡 *Interpreted Command:*\n`{pending.command}`\n\n"
+        f"❌ *Rejected*"
+    )
+    try:
+        await query.edit_message_text(
+            text=rejected_text,
+            parse_mode="Markdown",
+            reply_markup=None,
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
+async def _handle_voice_confirmation(
+    query: Any, context: ContextTypes.DEFAULT_TYPE, session: Session, pending: Any
+) -> None:
+    await query.answer(text="Executing command...")
+    confirmed_text = (
+        f'🎙️ *Transcription:*\n"{pending.transcription}"\n\n'
+        f"💡 *Interpreted Command:*\n`{pending.command}`\n\n"
+        f"✅ *Confirmed and executed*"
+    )
+    try:
+        await query.edit_message_text(
+            text=confirmed_text,
+            parse_mode="Markdown",
+            reply_markup=None,
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+    # Execute command via CommandDispatcher
+    chat_title = None
+    if query.message and query.message.chat:
+        chat_title = getattr(query.message.chat, "title", None)
+
+    creator_id = pending.creator_id or query.from_user.id
+    creator_username = pending.creator_username or query.from_user.username
+    creator_first_name = pending.creator_first_name or query.from_user.first_name
+
+    reply_text, reply_markup = execute_voice_command(
+        command_str=pending.command,
+        chat_id=pending.chat_id,
+        creator_id=creator_id,
+        creator_username=creator_username,
+        creator_first_name=creator_first_name,
+        session=session,
+        chat_title=chat_title,
+    )
+
+    if query.message:
+        await query.message.reply_text(
+            text=reply_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=pending.chat_id,
+            text=reply_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
+
+
 @with_db_session
 async def voice_callback_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -327,69 +432,6 @@ async def voice_callback_handler(
     pop_pending_voice_command(token)
 
     if action == "reject":
-        await query.answer(text="Command rejected.")
-        rejected_text = (
-            f'🎙️ *Transcription:*\n"{pending.transcription}"\n\n'
-            f"💡 *Interpreted Command:*\n`{pending.command}`\n\n"
-            f"❌ *Rejected*"
-        )
-        try:
-            await query.edit_message_text(
-                text=rejected_text,
-                parse_mode="Markdown",
-                reply_markup=None,
-            )
-        except BadRequest as e:
-            if "Message is not modified" not in str(e):
-                raise
-        return
-
-    if action == "confirm":
-        await query.answer(text="Executing command...")
-        confirmed_text = (
-            f'🎙️ *Transcription:*\n"{pending.transcription}"\n\n'
-            f"💡 *Interpreted Command:*\n`{pending.command}`\n\n"
-            f"✅ *Confirmed and executed*"
-        )
-        try:
-            await query.edit_message_text(
-                text=confirmed_text,
-                parse_mode="Markdown",
-                reply_markup=None,
-            )
-        except BadRequest as e:
-            if "Message is not modified" not in str(e):
-                raise
-
-        # Execute command via CommandDispatcher
-        chat_title = None
-        if query.message and query.message.chat:
-            chat_title = getattr(query.message.chat, "title", None)
-
-        creator_id = pending.creator_id or query.from_user.id
-        creator_username = pending.creator_username or query.from_user.username
-        creator_first_name = pending.creator_first_name or query.from_user.first_name
-
-        reply_text, reply_markup = execute_voice_command(
-            command_str=pending.command,
-            chat_id=pending.chat_id,
-            creator_id=creator_id,
-            creator_username=creator_username,
-            creator_first_name=creator_first_name,
-            session=session,
-            chat_title=chat_title,
-        )
-
-        if query.message:
-            await query.message.reply_text(
-                text=reply_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup,
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=pending.chat_id,
-                text=reply_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup,
-            )
+        await _handle_voice_rejection(query, pending)
+    elif action == "confirm":
+        await _handle_voice_confirmation(query, context, session, pending)
