@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 from telegram import InlineKeyboardMarkup
@@ -59,96 +60,121 @@ class CommandDispatcher:
         sender, group = reg_res.user, reg_res.group
 
         if cmd_name == "/pay":
-            parsed = PayCommandParser.parse(cmd_clean)
-            if "error" in parsed:
-                return (
-                    f"⚠️ Error parsing command: {parsed['error']}\n"
-                    f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
-                    None,
-                )
-            try:
-                expense = ExpenseService.record_expense(
-                    session=session,
-                    group=group,
-                    sender=sender,
-                    command=parsed,
-                )
-            except (UserNotFoundError, ValidationError) as e:
-                return f"⚠️ {e}", None
-
-            reply_text = generate_expense_reply_text(expense)
-            reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
-                expense_id=expense.id, creator_id=sender.id
-            )
-            return reply_text, reply_markup
-
+            return cls._handle_pay(session, group, sender, cmd_clean)
         elif cmd_name == "/payback":
-            parsed = PaybackCommandParser.parse(cmd_clean)
-            if "error" in parsed:
-                return (
-                    f"⚠️ Error parsing command: {parsed['error']}\n"
-                    f"Usage: `/payback [@payer] @recipient <amount>`",
-                    None,
-                )
-            try:
-                payment = ExpenseService.record_payback(
-                    session=session,
-                    group=group,
-                    sender=sender,
-                    command=parsed,
-                )
-            except (UserNotFoundError, ValidationError) as e:
-                return f"⚠️ {e}", None
-
-            amount_formatted = format_cents(payment.amount)
-            reply_markup = ExpenseKeyboardBuilder.build_payback_undo_keyboard(
-                payment.id, sender.id
-            )
-            reply_text = (
-                f"✅ **Recorded payment:**\n"
-                f"• **Paid by:** {payment.payer.first_name}\n"
-                f"• **Paid to:** {payment.payee.first_name}\n"
-                f"• **Amount:** {amount_formatted}"
-            )
-            return reply_text, reply_markup
-
+            return cls._handle_payback(session, group, sender, cmd_clean)
         elif cmd_name == "/balances":
-            if not group or not group.members:
-                return (
-                    "ℹ️ No transactions or members recorded for this group yet.",
-                    None,
-                )
-            balances, _, users_by_id = (
-                SettlementService.get_group_balances_and_settlements(session, group.id)
-            )
-            reply_text = generate_balances_summary(balances, users_by_id)
-            return reply_text, None
-
+            return cls._handle_balances(session, group)
         elif cmd_name == "/settle":
-            if not group or not group.members:
-                return (
-                    "ℹ️ No transactions or members recorded for this group yet.",
-                    None,
-                )
-            _, transactions, users_by_id = (
-                SettlementService.get_group_balances_and_settlements(session, group.id)
-            )
-            reply_text = generate_settlements_summary(transactions, users_by_id)
-            reply_markup = SettlementKeyboardBuilder.build_settle_keyboard(
-                transactions, users_by_id
-            )
-            return reply_text, reply_markup
-
+            return cls._handle_settle(session, group)
         elif cmd_name == "/history":
-            if not group:
-                return (
-                    "ℹ️ No transactions or members recorded for this group yet.",
-                    None,
-                )
-            txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
-            reply_text = generate_history_summary(txs)
-            reply_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
-            return reply_text, reply_markup
-
+            return cls._handle_history(session, group)
         else:
             return f"⚠️ Unsupported command from voice note: `{cmd_clean}`", None
+
+    @classmethod
+    def _handle_pay(
+        cls, session: Session, group: Any, sender: Any, cmd_clean: str
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        parsed = PayCommandParser.parse(cmd_clean)
+        if "error" in parsed:
+            return (
+                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
+                None,
+            )
+        try:
+            expense = ExpenseService.record_expense(
+                session=session,
+                group=group,
+                sender=sender,
+                command=parsed,
+            )
+        except (UserNotFoundError, ValidationError) as e:
+            return f"⚠️ {e}", None
+
+        reply_text = generate_expense_reply_text(expense)
+        reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+            expense_id=expense.id, creator_id=sender.id
+        )
+        return reply_text, reply_markup
+
+    @classmethod
+    def _handle_payback(
+        cls, session: Session, group: Any, sender: Any, cmd_clean: str
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        parsed = PaybackCommandParser.parse(cmd_clean)
+        if "error" in parsed:
+            return (
+                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"Usage: `/payback [@payer] @recipient <amount>`",
+                None,
+            )
+        try:
+            payment = ExpenseService.record_payback(
+                session=session,
+                group=group,
+                sender=sender,
+                command=parsed,
+            )
+        except (UserNotFoundError, ValidationError) as e:
+            return f"⚠️ {e}", None
+
+        amount_formatted = format_cents(payment.amount)
+        reply_markup = ExpenseKeyboardBuilder.build_payback_undo_keyboard(
+            payment.id, sender.id
+        )
+        reply_text = (
+            f"✅ **Recorded payment:**\n"
+            f"• **Paid by:** {payment.payer.first_name}\n"
+            f"• **Paid to:** {payment.payee.first_name}\n"
+            f"• **Amount:** {amount_formatted}"
+        )
+        return reply_text, reply_markup
+
+    @classmethod
+    def _handle_balances(
+        cls, session: Session, group: Any
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        if not group or not group.members:
+            return (
+                "ℹ️ No transactions or members recorded for this group yet.",
+                None,
+            )
+        balances, _, users_by_id = SettlementService.get_group_balances_and_settlements(
+            session, group.id
+        )
+        reply_text = generate_balances_summary(balances, users_by_id)
+        return reply_text, None
+
+    @classmethod
+    def _handle_settle(
+        cls, session: Session, group: Any
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        if not group or not group.members:
+            return (
+                "ℹ️ No transactions or members recorded for this group yet.",
+                None,
+            )
+        _, transactions, users_by_id = (
+            SettlementService.get_group_balances_and_settlements(session, group.id)
+        )
+        reply_text = generate_settlements_summary(transactions, users_by_id)
+        reply_markup = SettlementKeyboardBuilder.build_settle_keyboard(
+            transactions, users_by_id
+        )
+        return reply_text, reply_markup
+
+    @classmethod
+    def _handle_history(
+        cls, session: Session, group: Any
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        if not group:
+            return (
+                "ℹ️ No transactions or members recorded for this group yet.",
+                None,
+            )
+        txs = HistoryService.get_recent_transactions(session, group.id, limit=10)
+        reply_text = generate_history_summary(txs)
+        reply_markup = HistoryKeyboardBuilder.build_history_keyboard(txs)
+        return reply_text, reply_markup
