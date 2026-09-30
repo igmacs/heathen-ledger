@@ -10,7 +10,10 @@ from telegram import Bot, InlineKeyboardMarkup, Message
 from telegram.constants import ChatAction
 
 from .. import crud
+from ..formatters import generate_expense_reply_text
+from ..keyboards import ExpenseKeyboardBuilder
 from ..keyboards.ticket import TicketKeyboardBuilder
+from ..parser import PayCommandParser
 from ..receipt import (
     PendingTicketSession,
     PendingTicketStore,
@@ -26,19 +29,11 @@ from ..receipt.formatter import (
     format_ticket_split_summary,
 )
 from ..repositories import GroupRepository, UserRepository
-from .exceptions import ValidationError
+from .exceptions import UserNotFoundError, ValidationError
+from .expense_service import ExpenseService
+from .registration_service import MemberRegistrationService
 
 logger = logging.getLogger(__name__)
-
-
-class CommandDispatcher:
-    """Proxy to prevent circular import between commands and services."""
-
-    @staticmethod
-    def execute(*args, **kwargs):
-        from ..commands.dispatcher import CommandDispatcher as _CD
-
-        return _CD.execute(*args, **kwargs)
 
 
 class ReceiptService:
@@ -377,7 +372,7 @@ class ReceiptService:
         chat_id: int,
         chat_title: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Calculate shares from ticket session and execute /pay command via CommandDispatcher."""
+        """Calculate shares from ticket session and execute /pay command directly."""
         session = cls.get_session(token)
         if not session:
             raise ValidationError("Ticket session has expired or was not found.")
@@ -425,14 +420,39 @@ class ReceiptService:
         split_clause = " ".join(split_tokens)
         cmd_str = f"/pay {total_amount:.2f} for {desc} by me split {split_clause}"
 
-        result_text, reply_markup = CommandDispatcher.execute(
-            command_str=cmd_str,
-            chat_id=chat_id,
-            creator_id=payer_id,
-            creator_username=payer_username,
-            creator_first_name=payer_first_name,
+        # Resolve sender and group
+        reg_res = MemberRegistrationService.register_user(
             session=db_session,
+            group=chat_id,
+            target=payer_id,
+            username=payer_username,
+            first_name=payer_first_name or f"User{payer_id}",
             chat_title=chat_title,
         )
+        sender, group = reg_res.user, reg_res.group
+
+        parsed = PayCommandParser.parse(cmd_str)
+        if "error" in parsed:
+            result_text = (
+                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`"
+            )
+            reply_markup = None
+        else:
+            try:
+                expense = ExpenseService.record_expense(
+                    session=db_session,
+                    group=group,
+                    sender=sender,
+                    command=parsed,
+                )
+                result_text = generate_expense_reply_text(expense)
+                reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+                    expense_id=expense.id, creator_id=sender.id
+                )
+            except (UserNotFoundError, ValidationError) as e:
+                result_text = f"⚠️ {e}"
+                reply_markup = None
+
         cls.pop_session(token)
         return result_text, reply_markup

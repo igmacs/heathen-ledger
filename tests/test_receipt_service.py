@@ -262,14 +262,28 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
                 "heathen_ledger.services.receipt_service.GroupRepository"
             ) as mock_grp_repo_cls,
             patch(
-                "heathen_ledger.services.receipt_service.CommandDispatcher.execute"
-            ) as mock_exec,
+                "heathen_ledger.services.receipt_service.MemberRegistrationService.register_user"
+            ) as mock_reg,
+            patch(
+                "heathen_ledger.services.receipt_service.PayCommandParser.parse"
+            ) as mock_parse,
+            patch(
+                "heathen_ledger.services.receipt_service.ExpenseService.record_expense"
+            ) as mock_record,
+            patch(
+                "heathen_ledger.services.receipt_service.generate_expense_reply_text",
+                return_value="Expense recorded",
+            ) as mock_fmt,
         ):
             mock_grp_repo = MagicMock()
             mock_grp_repo.get_by_telegram_id.return_value = mock_group
             mock_grp_repo_cls.return_value = mock_grp_repo
 
-            mock_exec.return_value = ("Expense recorded", MagicMock())
+            mock_sender = MagicMock(id=1, first_name="Payer")
+            mock_reg.return_value = MagicMock(user=mock_sender, group=mock_group)
+            mock_parse.return_value = MagicMock()
+            mock_expense = MagicMock(id=42)
+            mock_record.return_value = mock_expense
 
             text, markup = ReceiptService.record_ticket_expense(
                 token="tok_rec",
@@ -279,10 +293,26 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
                 payer_first_name="Payer",
                 chat_id=123,
             )
-            self.assertEqual(text, "Expense recorded")
-            mock_exec.assert_called_once()
-            cmd_sent = mock_exec.call_args[1]["command_str"]
+            mock_reg.assert_called_once_with(
+                session=db_session,
+                group=123,
+                target=1,
+                username="payer",
+                first_name="Payer",
+                chat_title=None,
+            )
+            mock_parse.assert_called_once()
+            cmd_sent = mock_parse.call_args[0][0]
             self.assertIn("/pay 10.00 for Pizzeria by me split me:10.00", cmd_sent)
+            mock_record.assert_called_once_with(
+                session=db_session,
+                group=mock_group,
+                sender=mock_sender,
+                command=mock_parse.return_value,
+            )
+            self.assertEqual(text, "Expense recorded")
+            self.assertIsNotNone(markup)
+            mock_fmt.assert_called_once_with(mock_expense)
             # Session should be popped
             self.assertIsNone(ReceiptService.get_session("tok_rec"))
 
