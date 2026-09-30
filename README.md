@@ -600,3 +600,19 @@ when I had to correct or guide it
   - Verified all 223 unit tests and pre-commit checks pass cleanly.
 
 - I asked why `parser/__init__.py` defined two wrapper functions (`parse_pay_message` and `parse_payback_message`) and instructed the agent to remove them and use the inner functions in the callers. The agent explained that they were backward-compatibility wrappers left behind when the monolithic parser module was refactored into a package with dedicated parser classes (`PayCommandParser` and `PaybackCommandParser`). The agent autonomously removed the redundant wrapper functions from `src/heathen_ledger/parser/__init__.py`, updated callers in `src/heathen_ledger/handlers/expense.py` to invoke `PayCommandParser.parse` and `PaybackCommandParser.parse` directly, updated mock patching in `tests/test_voice.py`, and migrated unit tests in `tests/test_parser.py` (all 223 unit tests and pre-commit checks passing cleanly).
+
+- I reported getting IDE complaints that the cyclomatic complexity of some functions was too high and asked the agent to add a linter or linter rule to check for that and split those functions. The agent identified Ruff's McCabe rule (`C901`) with a standard complexity threshold of 10 (`max-complexity = 10`), added it to `pyproject.toml`, and identified 18 functions across 12 files exceeding the threshold. The agent autonomously refactored and split all 18 functions across incremental and atomic commits:
+  - Enabled `C901` with `max-complexity = 10` under `[tool.ruff.lint.mccabe]` in `pyproject.toml`.
+  - Refactored `BalanceCalculator.calculate_net_balances` in `domain/balance_calculator.py` into separate payer and split balance calculation helpers.
+  - Refactored `CommandDispatcher.execute` in `commands/dispatcher.py` by extracting command execution branches into dedicated private methods.
+  - Refactored `MemberRegistrationService.register_user` in `services/registration_service.py` by extracting user resolution strategies.
+  - Refactored `ExpenseService.record_expense` in `services/expense_service.py` by extracting payer and split resolution.
+  - Refactored `ReceiptService.format_receipt_breakdown` in `services/receipt_service.py` by separating line item and receipt summary formatting.
+  - Refactored `PayCommandParser.parse` in `parser/pay_parser.py` by extracting clause validation, split specification, and expense generation.
+  - Refactored `TelegramEphemeralClient` in `telegram/ephemeral_client.py` by splitting `extract_ephemeral_message_id` and `delete_message_or_ephemeral` into focused helpers.
+  - Refactored `TelegramRichClient` in `telegram/rich_client.py` by splitting `send_rich_message` and `edit_rich_message_or_ephemeral` into chat-type and method-specific helpers.
+  - Refactored `handlers/common.py` by splitting `send_response` into persistent and ephemeral delivery, and modularizing `persist_callback_handler` and `dismiss_callback_handler`.
+  - Refactored `handlers/expense.py` by splitting `pay_toggle_callback_handler` into data parsing, state toggling, and UI updating.
+  - Refactored `handlers/voice.py` by streamlining `is_bot_mentioned` and splitting `process_voice_audio` and `voice_callback_handler` into transcription and callback action handlers.
+  - Refactored `handlers/receipt.py` by decomposing the monolithic `ticket_callback_handler` into 12 dedicated sub-action handler functions mapped through an action dispatcher dictionary, and extracted `_resolve_tg_participant`.
+  - Verified that all 223 unit tests pass, no functions exceed cyclomatic complexity 10, and all pre-commit hooks (ruff, ruff-format, vulture) pass cleanly.
