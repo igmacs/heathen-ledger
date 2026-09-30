@@ -1,5 +1,7 @@
 """Service layer for expense recording, participant toggling, payback logging, and transaction undo."""
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from .. import crud
@@ -22,75 +24,10 @@ class ExpenseService:
         command: ParsedPayCommand,
     ) -> Expense:
         """Validate payers and split specifications, calculate shares, and create a persistent Expense."""
-        # 1. Resolve Payers
-        payers_dict = {}
-        for uname, p_cents in command.payers.items():
-            if uname == "me":
-                u = sender
-            else:
-                u = crud.get_user_in_group(session, group.id, uname)
-                if not u:
-                    raise UserNotFoundError(uname)
-            crud.add_user_to_group(session, u, group)
-            payers_dict[u.id] = p_cents
-
-        # 2. Resolve Participants and Splits
-        split_mode = command.split_spec.mode
-        splits_dict = {}
-
-        if split_mode == "all":
-            participants = group.members
-            if not participants:
-                raise ValidationError(
-                    "No participants found to split the expense with."
-                )
-            shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
-                splits_dict[u.id] = s
-
-        elif split_mode == "except":
-            excluded = set(command.split_spec.excluded)
-            participants = [
-                m for m in group.members if (m.username or "").lower() not in excluded
-            ]
-            if not participants:
-                raise ValidationError(
-                    "No participants left to split the expense with after exclusions."
-                )
-            shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
-                splits_dict[u.id] = s
-
-        elif split_mode == "subset":
-            participants = []
-            for uname in command.split_spec.participants:
-                if uname == "me":
-                    u = sender
-                else:
-                    u = crud.get_user_in_group(session, group.id, uname)
-                    if not u:
-                        raise UserNotFoundError(uname)
-                crud.add_user_to_group(session, u, group)
-                participants.append(u)
-
-            if not participants:
-                raise ValidationError(
-                    "No participants found to split the expense with."
-                )
-            shares = split_amount_equally(command.amount, len(participants))
-            for u, s in zip(participants, shares):
-                splits_dict[u.id] = s
-
-        elif split_mode == "custom":
-            for uname, share_cents in command.split_spec.shares.items():
-                if uname == "me":
-                    u = sender
-                else:
-                    u = crud.get_user_in_group(session, group.id, uname)
-                    if not u:
-                        raise UserNotFoundError(uname)
-                crud.add_user_to_group(session, u, group)
-                splits_dict[u.id] = share_cents
+        payers_dict = cls._resolve_payers(session, group, sender, command.payers)
+        splits_dict = cls._resolve_splits(
+            session, group, sender, command.split_spec, command.amount
+        )
 
         # 3. Create the expense in database
         return crud.create_expense(
@@ -102,6 +39,84 @@ class ExpenseService:
             payers=payers_dict,
             expense_date=command.expense_date,
         )
+
+    @classmethod
+    def _resolve_user(
+        cls, session: Session, group: Group, sender: User, uname: str
+    ) -> User:
+        if uname == "me":
+            u = sender
+        else:
+            u = crud.get_user_in_group(session, group.id, uname)
+            if not u:
+                raise UserNotFoundError(uname)
+        crud.add_user_to_group(session, u, group)
+        return u
+
+    @classmethod
+    def _resolve_payers(
+        cls, session: Session, group: Group, sender: User, payers: dict[str, int]
+    ) -> dict[int, int]:
+        payers_dict = {}
+        for uname, p_cents in payers.items():
+            u = cls._resolve_user(session, group, sender, uname)
+            payers_dict[u.id] = p_cents
+        return payers_dict
+
+    @classmethod
+    def _resolve_equal_splits(
+        cls, participants: list[User], amount: int
+    ) -> dict[int, int]:
+        shares = split_amount_equally(amount, len(participants))
+        return {u.id: s for u, s in zip(participants, shares)}
+
+    @classmethod
+    def _resolve_splits(
+        cls,
+        session: Session,
+        group: Group,
+        sender: User,
+        split_spec: Any,
+        amount: int,
+    ) -> dict[int, int]:
+        mode = split_spec.mode
+        if mode == "all":
+            if not group.members:
+                raise ValidationError(
+                    "No participants found to split the expense with."
+                )
+            return cls._resolve_equal_splits(group.members, amount)
+
+        elif mode == "except":
+            excluded = set(split_spec.excluded)
+            participants = [
+                m for m in group.members if (m.username or "").lower() not in excluded
+            ]
+            if not participants:
+                raise ValidationError(
+                    "No participants left to split the expense with after exclusions."
+                )
+            return cls._resolve_equal_splits(participants, amount)
+
+        elif mode == "subset":
+            participants = [
+                cls._resolve_user(session, group, sender, uname)
+                for uname in split_spec.participants
+            ]
+            if not participants:
+                raise ValidationError(
+                    "No participants found to split the expense with."
+                )
+            return cls._resolve_equal_splits(participants, amount)
+
+        elif mode == "custom":
+            splits_dict = {}
+            for uname, share_cents in split_spec.shares.items():
+                u = cls._resolve_user(session, group, sender, uname)
+                splits_dict[u.id] = share_cents
+            return splits_dict
+
+        return {}
 
     @classmethod
     def toggle_split_participant(
