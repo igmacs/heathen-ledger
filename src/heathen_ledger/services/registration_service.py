@@ -27,33 +27,6 @@ class RegistrationResult:
     display_label: str = ""
     has_explicit_handle: bool = False
 
-    @property
-    def message(self) -> str:
-        """Formatted user-facing markdown message for this registration result."""
-        if not self.success:
-            return f"⚠️ {self.error}"
-        if not self.user:
-            return ""
-
-        handle_str = f" (`@{self.user.username}`)" if self.user.username else ""
-        if self.already_registered:
-            return f"ℹ️ Member *{self.user.first_name}*{handle_str} is already registered in this group."
-
-        if not self.user.is_external:
-            return f"✅ Registered member *{self.user.first_name}*{handle_str} to this group ledger."
-
-        # External member
-        if self.has_explicit_handle:
-            return (
-                f"✅ Registered *{self.user.first_name}*{handle_str} in this group ledger.\n\n"
-                f"They can now be included in expenses and settlements. "
-                f"When @{self.user.username} interacts with the bot or taps Register, their account will link automatically."
-            )
-        return (
-            f"✅ Registered external member *{self.user.first_name}*{handle_str} to this group.\n\n"
-            f"You can now include them in expenses (e.g. `/pay 50 split @{self.user.username}`) or settlements."
-        )
-
 
 @dataclass
 class RegistrationBatchResult:
@@ -79,36 +52,6 @@ class RegistrationBatchResult:
             for r in self.results
             if r.success and r.already_registered and r.user
         ]
-
-    @property
-    def registered_labels(self) -> list[str]:
-        return [
-            r.display_label
-            for r in self.results
-            if r.success and not r.already_registered and r.display_label
-        ]
-
-    @property
-    def already_registered_labels(self) -> list[str]:
-        return [
-            r.display_label
-            for r in self.results
-            if r.success and r.already_registered and r.display_label
-        ]
-
-    @property
-    def message(self) -> str:
-        """Formatted user-facing markdown message for this batch registration."""
-        msgs = []
-        if self.registered_labels:
-            msgs.append(
-                f"✅ Registered member(s): {', '.join(self.registered_labels)}."
-            )
-        if self.already_registered_labels:
-            msgs.append(
-                f"ℹ️ Already registered: {', '.join(self.already_registered_labels)}."
-            )
-        return "\n".join(msgs) if msgs else "⚠️ No valid users found to register."
 
 
 class MemberRegistrationService:

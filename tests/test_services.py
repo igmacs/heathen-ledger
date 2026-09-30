@@ -232,13 +232,19 @@ class TestServices(BaseDatabaseTestCase):
     def test_member_registration_service(self):
         from unittest.mock import MagicMock
 
+        from heathen_ledger.handlers.registration import (
+            format_batch_registration_result,
+            format_registration_result,
+        )
+
         # 1. register_user with bot
         bot_user = MagicMock(is_bot=True)
         res_bot = MemberRegistrationService.register_user(
             self.session, self.group, bot_user
         )
         self.assertFalse(res_bot.success)
-        self.assertIn("Cannot register a bot", res_bot.message)
+        self.assertEqual(res_bot.error, "Cannot register a bot.")
+        self.assertIn("Cannot register a bot", format_registration_result(res_bot))
 
         # 2. Existing user
         alice_tg = MagicMock(
@@ -252,7 +258,7 @@ class TestServices(BaseDatabaseTestCase):
         )
         self.assertTrue(res_alice.success)
         self.assertTrue(res_alice.already_registered)
-        self.assertIn("already registered", res_alice.message)
+        self.assertIn("already registered", format_registration_result(res_alice))
 
         # 3. New Telegram user
         dave_tg = MagicMock(id=999, username="dave", first_name="Dave", is_bot=False)
@@ -261,19 +267,21 @@ class TestServices(BaseDatabaseTestCase):
         )
         self.assertTrue(res_dave.success)
         self.assertFalse(res_dave.already_registered)
-        self.assertIn("Registered member", res_dave.message)
+        self.assertEqual(res_dave.user.first_name, "Dave")
+        self.assertIn("Registered member", format_registration_result(res_dave))
 
         # 4. register_users with multiple Telegram users
         eve_tg = MagicMock(id=1000, username="eve", first_name="Eve", is_bot=False)
         batch = MemberRegistrationService.register_users(
             self.session, self.group, [bot_user, alice_tg, eve_tg]
         )
-        self.assertIn("Eve", batch.message)
-        self.assertIn("Alice", batch.message)
         self.assertEqual(len(batch.registered), 1)
         self.assertEqual(batch.registered[0].first_name, "Eve")
         self.assertEqual(len(batch.already_registered), 1)
         self.assertEqual(batch.already_registered[0].first_name, "Alice")
+        msg_batch = format_batch_registration_result(batch)
+        self.assertIn("Eve", msg_batch)
+        self.assertIn("Alice", msg_batch)
 
         # 5. register_users with @mentions
         batch_m = MemberRegistrationService.register_users(
@@ -281,16 +289,19 @@ class TestServices(BaseDatabaseTestCase):
             self.group,
             ["@alice", "@frank", "@george"],
         )
-        self.assertIn("@alice", batch_m.message)
-        self.assertIn("@frank", batch_m.message)
-        self.assertIn("@george", batch_m.message)
+        self.assertEqual(len(batch_m.already_registered), 1)
+        self.assertEqual(len(batch_m.registered), 2)
+        msg_m = format_batch_registration_result(batch_m)
+        self.assertIn("@alice", msg_m)
+        self.assertIn("@frank", msg_m)
+        self.assertIn("@george", msg_m)
 
         # 6. register_user with handle (already registered)
         res_h_already = MemberRegistrationService.register_user(
             self.session, self.group, "@alice", first_name="Alice"
         )
         self.assertTrue(res_h_already.already_registered)
-        self.assertIn("already registered", res_h_already.message)
+        self.assertIn("already registered", format_registration_result(res_h_already))
 
         # 7. Existing global user
         crud.get_or_create_user(
@@ -301,28 +312,34 @@ class TestServices(BaseDatabaseTestCase):
             self.session, self.group, "@helen", first_name="Helen"
         )
         self.assertTrue(res_global.success)
-        self.assertIn("Registered member *Helen*", res_global.message)
+        self.assertFalse(res_global.user.is_external)
+        self.assertIn(
+            "Registered member *Helen*", format_registration_result(res_global)
+        )
 
         # 8. External / pending user with handle
         res_ext = MemberRegistrationService.register_user(
             self.session, self.group, "@ian", first_name="Ian"
         )
         self.assertTrue(res_ext.success)
-        self.assertIn("Registered *Ian*", res_ext.message)
+        self.assertTrue(res_ext.user.is_external)
+        self.assertIn("Registered *Ian*", format_registration_result(res_ext))
 
         # 9. Register plain name
         res_name = MemberRegistrationService.register_user(
             self.session, self.group, "Jack Sparrow"
         )
         self.assertTrue(res_name.success)
-        self.assertIn("Jack Sparrow", res_name.message)
+        self.assertEqual(res_name.user.first_name, "Jack Sparrow")
+        self.assertIn("Jack Sparrow", format_registration_result(res_name))
 
         # 10. Register invalid name
         res_inv = MemberRegistrationService.register_user(
             self.session, self.group, "???"
         )
         self.assertFalse(res_inv.success)
-        self.assertIn("Invalid handle or name", res_inv.message)
+        self.assertIn("Invalid handle or name", res_inv.error)
+        self.assertIn("Invalid handle or name", format_registration_result(res_inv))
 
         # 11. Register with Telegram ID integer and chat ID integer
         res_auto = MemberRegistrationService.register_user(

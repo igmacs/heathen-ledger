@@ -7,10 +7,63 @@ from telegram.constants import MessageEntityType
 from telegram.ext import ContextTypes
 
 from ..database import with_db_session
-from ..services import MemberRegistrationService
+from ..services import (
+    MemberRegistrationService,
+    RegistrationBatchResult,
+    RegistrationResult,
+)
 from .common import is_group_chat, require_group_chat, send_response
 
 logger = logging.getLogger(__name__)
+
+
+def format_registration_result(res: RegistrationResult) -> str:
+    """Format a single registration result into a user-facing Telegram Markdown message."""
+    if not res.success:
+        return f"⚠️ {res.error}"
+    if not res.user:
+        return ""
+
+    handle_str = f" (`@{res.user.username}`)" if res.user.username else ""
+    if res.already_registered:
+        return f"ℹ️ Member *{res.user.first_name}*{handle_str} is already registered in this group."
+
+    if not res.user.is_external:
+        return f"✅ Registered member *{res.user.first_name}*{handle_str} to this group ledger."
+
+    # External member
+    if res.has_explicit_handle:
+        return (
+            f"✅ Registered *{res.user.first_name}*{handle_str} in this group ledger.\n\n"
+            f"They can now be included in expenses and settlements. "
+            f"When @{res.user.username} interacts with the bot or taps Register, their account will link automatically."
+        )
+    return (
+        f"✅ Registered external member *{res.user.first_name}*{handle_str} to this group.\n\n"
+        f"You can now include them in expenses (e.g. `/pay 50 split @{res.user.username}`) or settlements."
+    )
+
+
+def format_batch_registration_result(batch: RegistrationBatchResult) -> str:
+    """Format a batch registration result into a user-facing Telegram Markdown message."""
+    msgs = []
+    reg_labels = [
+        r.display_label
+        for r in batch.results
+        if r.success and not r.already_registered and r.display_label
+    ]
+    already_labels = [
+        r.display_label
+        for r in batch.results
+        if r.success and r.already_registered and r.display_label
+    ]
+
+    if reg_labels:
+        msgs.append(f"✅ Registered member(s): {', '.join(reg_labels)}.")
+    if already_labels:
+        msgs.append(f"ℹ️ Already registered: {', '.join(already_labels)}.")
+
+    return "\n".join(msgs) if msgs else "⚠️ No valid users found to register."
 
 
 @with_db_session
@@ -78,7 +131,9 @@ async def register_command(
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
         target_user = update.message.reply_to_message.from_user
         res = MemberRegistrationService.register_user(session, group, target_user)
-        await send_response(update, context, res.message, parse_mode="Markdown")
+        await send_response(
+            update, context, format_registration_result(res), parse_mode="Markdown"
+        )
         return
 
     # 2. Text mention entities (users without username or chosen from Telegram picker)
@@ -91,7 +146,12 @@ async def register_command(
         batch = MemberRegistrationService.register_users(
             session, group, [e.user for e in text_mentions]
         )
-        await send_response(update, context, batch.message, parse_mode="Markdown")
+        await send_response(
+            update,
+            context,
+            format_batch_registration_result(batch),
+            parse_mode="Markdown",
+        )
         return
 
     text = update.message.text.strip()
@@ -122,7 +182,12 @@ async def register_command(
     all_mentions = [p for p in parts if p.startswith("@")]
     if len(all_mentions) > 1 and len(all_mentions) == len(parts):
         batch = MemberRegistrationService.register_users(session, group, all_mentions)
-        await send_response(update, context, batch.message, parse_mode="Markdown")
+        await send_response(
+            update,
+            context,
+            format_batch_registration_result(batch),
+            parse_mode="Markdown",
+        )
         return
 
     first_token = parts[0]
@@ -131,11 +196,15 @@ async def register_command(
         res = MemberRegistrationService.register_user(
             session, group, first_token, first_name=first_name
         )
-        await send_response(update, context, res.message, parse_mode="Markdown")
+        await send_response(
+            update, context, format_registration_result(res), parse_mode="Markdown"
+        )
         return
     else:
         res = MemberRegistrationService.register_user(session, group, args_text)
-        await send_response(update, context, res.message, parse_mode="Markdown")
+        await send_response(
+            update, context, format_registration_result(res), parse_mode="Markdown"
+        )
 
 
 @with_db_session
