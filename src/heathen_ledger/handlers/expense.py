@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -97,6 +98,31 @@ async def pay_command(
     )
 
 
+async def _handle_toggle_validation_error(query: Any, err: ValidationError) -> None:
+    await query.answer(text=f"⚠️ {err}", show_alert=True)
+    if "not found" in str(err).lower():
+        try:
+            await query.edit_message_text(
+                text="⚠️ This expense has already been deleted or is not found.",
+                reply_markup=None,
+            )
+        except BadRequest as b_err:
+            if "Message is not modified" not in str(b_err):
+                raise
+
+
+async def _safe_edit_toggle_message(query: Any, text: str, reply_markup: Any) -> None:
+    try:
+        await query.edit_message_text(
+            text=text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
 @with_db_session
 async def pay_toggle_callback_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -133,16 +159,7 @@ async def pay_toggle_callback_handler(
         await query.answer(text=f"⚠️ {e}", show_alert=True)
         return
     except ValidationError as e:
-        await query.answer(text=f"⚠️ {e}", show_alert=True)
-        if "not found" in str(e).lower():
-            try:
-                await query.edit_message_text(
-                    text="⚠️ This expense has already been deleted or is not found.",
-                    reply_markup=None,
-                )
-            except BadRequest as b_err:
-                if "Message is not modified" not in str(b_err):
-                    raise
+        await _handle_toggle_validation_error(query, e)
         return
 
     # Refresh expense and get members to rebuild markup
@@ -154,16 +171,7 @@ async def pay_toggle_callback_handler(
         expense=expense, group_members=group.members, creator_id=creator_id
     )
 
-    try:
-        await query.edit_message_text(
-            text=reply_text,
-            parse_mode="Markdown",
-            reply_markup=reply_markup,
-        )
-    except BadRequest as e:
-        if "Message is not modified" not in str(e):
-            raise
-
+    await _safe_edit_toggle_message(query, reply_text, reply_markup)
     await query.answer()
 
 
