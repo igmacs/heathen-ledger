@@ -616,3 +616,11 @@ when I had to correct or guide it
   - Refactored `handlers/voice.py` by streamlining `is_bot_mentioned` and splitting `process_voice_audio` and `voice_callback_handler` into transcription and callback action handlers.
   - Refactored `handlers/receipt.py` by decomposing the monolithic `ticket_callback_handler` into 12 dedicated sub-action handler functions mapped through an action dispatcher dictionary, and extracted `_resolve_tg_participant`.
   - Verified that all 223 unit tests pass, no functions exceed cyclomatic complexity 10, and all pre-commit hooks (ruff, ruff-format, vulture) pass cleanly.
+
+- I asked to get rid of the `CommandDispatcher` class because only the pay handler is actually called that way, and requested that the parser and service be called directly instead. I clarified that voice confirmation should only support `/pay` expenses. The agent autonomously:
+  - Removed the `CommandDispatcher` proxy classes from `src/heathen_ledger/services/voice_service.py` and `src/heathen_ledger/services/receipt_service.py`.
+  - Updated `VoiceService.execute_confirmed_command` to invoke `PayCommandParser.parse` and `ExpenseService.record_expense` directly, rejecting non-pay voice commands as unsupported.
+  - Updated `ReceiptService.record_ticket_expense` to invoke `PayCommandParser.parse` and `ExpenseService.record_expense` directly.
+  - Removed `src/heathen_ledger/commands/dispatcher.py` and `src/heathen_ledger/commands/__init__.py`, eliminating the `commands` module entirely.
+  - Replaced the non-pay voice confirmation tests in `tests/test_voice.py` with an unsupported command rejection test, updated `tests/test_receipt_service.py` to verify direct parser and service execution, and cleaned up obsolete dispatcher tests in `tests/test_bot.py` and `tests/test_services.py`.
+  - Verified that all 220 unit tests, pre-commit hooks (ruff, ruff-format, vulture), and linters pass cleanly.
