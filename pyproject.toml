@@ -34,12 +34,15 @@ select = [
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
     "I",    # isort (import sorting)
+    "C901", # mccabe (cyclomatic complexity)
 ]
 ignore = [
     "E501",   # line length handled by ruff-format
-    "UP038",  # isinstance with union instead of tuple (deprecated in Ruff, tuple is faster)
     "B905",   # zip() without explicit strict= parameter
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
 ".vulture_whitelist.py" = ["B018"]
