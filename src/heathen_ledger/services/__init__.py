@@ -22,6 +22,8 @@ from .receipt_service import ReceiptService
 from .registration_service import (
     MemberRegistrationService,
     MemberService,
+    RegistrationBatchResult,
+    RegistrationResult,
     RegistrationService,
 )
 from .settlement_service import (
@@ -55,6 +57,8 @@ __all__ = [
     "MemberRegistrationService",
     "MemberService",
     "RegistrationService",
+    "RegistrationResult",
+    "RegistrationBatchResult",
     "HistoryService",
     "get_recent_transactions",
     "delete_transaction",

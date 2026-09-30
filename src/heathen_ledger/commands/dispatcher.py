@@ -48,14 +48,15 @@ class CommandDispatcher:
         cmd_name = cmd_parts[0].split("@")[0].lower()
 
         # Resolve sender and group
-        sender, group = MemberRegistrationService.ensure_member_in_group(
+        reg_res = MemberRegistrationService.register_user(
             session=session,
-            chat_id=chat_id,
-            user_id=creator_id,
+            group=chat_id,
+            target=creator_id,
             username=creator_username,
             first_name=creator_first_name or f"User{creator_id}",
             chat_title=chat_title,
         )
+        sender, group = reg_res.user, reg_res.group
 
         if cmd_name == "/pay":
             parsed = PayCommandParser.parse(cmd_clean)

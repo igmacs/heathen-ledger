@@ -44,10 +44,10 @@ async def auto_register(
         raw_title if isinstance(raw_title, str) and raw_title else f"Chat ({chat_id})"
     )
 
-    MemberRegistrationService.auto_register_user_and_group(
+    MemberRegistrationService.register_user(
         session=session,
-        user_id=user_id,
-        chat_id=chat_id,
+        group=chat_id,
+        target=user_id,
         username=username,
         first_name=first_name,
         chat_title=title,
@@ -64,22 +64,21 @@ async def register_command(
         return
 
     chat = update.effective_chat
-    _, group = MemberRegistrationService.ensure_member_in_group(
+    res = MemberRegistrationService.register_user(
         session=session,
-        chat_id=chat.id,
-        user_id=update.effective_user.id,
+        group=chat.id,
+        target=update.effective_user.id,
         username=update.effective_user.username,
         first_name=update.effective_user.first_name or "",
         chat_title=chat.title,
     )
+    group = res.group
 
     # 1. Replying to a message: register the author of that message
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
         target_user = update.message.reply_to_message.from_user
-        _, msg = MemberRegistrationService.register_reply_user(
-            session, group, target_user
-        )
-        await send_response(update, context, msg, parse_mode="Markdown")
+        res = MemberRegistrationService.register_user(session, group, target_user)
+        await send_response(update, context, res.message, parse_mode="Markdown")
         return
 
     # 2. Text mention entities (users without username or chosen from Telegram picker)
@@ -89,26 +88,10 @@ async def register_command(
         if e.type == MessageEntityType.TEXT_MENTION and e.user
     ]
     if text_mentions:
-        registered_names, already_registered_names = (
-            MemberRegistrationService.register_text_mentions(
-                session, group, text_mentions
-            )
+        batch = MemberRegistrationService.register_users(
+            session, group, [e.user for e in text_mentions]
         )
-        msgs = []
-        if registered_names:
-            msgs.append(
-                f"✅ Registered member(s): {', '.join(f'*{n}*' for n in registered_names)} to this group ledger."
-            )
-        if already_registered_names:
-            msgs.append(
-                f"ℹ️ Already registered: {', '.join(f'*{n}*' for n in already_registered_names)}."
-            )
-        await send_response(
-            update,
-            context,
-            "\n".join(msgs) if msgs else "⚠️ No valid users found to register.",
-            parse_mode="Markdown",
-        )
+        await send_response(update, context, batch.message, parse_mode="Markdown")
         return
 
     text = update.message.text.strip()
@@ -136,33 +119,23 @@ async def register_command(
     parts = args_text.split()
 
     # Check if multiple @mentions are given (e.g. /register @alice @bob)
-    all_mentions = [p.lstrip("@").lower() for p in parts if p.startswith("@")]
+    all_mentions = [p for p in parts if p.startswith("@")]
     if len(all_mentions) > 1 and len(all_mentions) == len(parts):
-        registered, already_registered = MemberRegistrationService.register_mentions(
-            session, group, all_mentions
-        )
-        msgs = []
-        if registered:
-            msgs.append(f"✅ Registered member(s): {', '.join(registered)}.")
-        if already_registered:
-            msgs.append(f"ℹ️ Already registered: {', '.join(already_registered)}.")
-        await send_response(update, context, "\n".join(msgs), parse_mode="Markdown")
+        batch = MemberRegistrationService.register_users(session, group, all_mentions)
+        await send_response(update, context, batch.message, parse_mode="Markdown")
         return
 
     first_token = parts[0]
     if first_token.startswith("@"):
-        handle = first_token.lstrip("@").lower()
-        first_name = (
-            " ".join(parts[1:]).strip() if len(parts) > 1 else handle.capitalize()
+        first_name = " ".join(parts[1:]).strip() if len(parts) > 1 else None
+        res = MemberRegistrationService.register_user(
+            session, group, first_token, first_name=first_name
         )
-        msg = MemberRegistrationService.register_handle(
-            session, group, handle, first_name
-        )
-        await send_response(update, context, msg, parse_mode="Markdown")
+        await send_response(update, context, res.message, parse_mode="Markdown")
         return
     else:
-        _, msg = MemberRegistrationService.register_name(session, group, args_text)
-        await send_response(update, context, msg, parse_mode="Markdown")
+        res = MemberRegistrationService.register_user(session, group, args_text)
+        await send_response(update, context, res.message, parse_mode="Markdown")
 
 
 @with_db_session
@@ -185,14 +158,14 @@ async def register_callback_handler(
         return
 
     chat_title = chat.title or f"Chat ({chat.id})"
-    already_registered, _, _ = MemberRegistrationService.register_self(
+    res = MemberRegistrationService.register_user(
         session=session,
-        chat_id=chat.id,
-        user=user,
+        group=chat.id,
+        target=user,
         chat_title=chat_title,
     )
 
-    if already_registered:
+    if res.already_registered:
         await query.answer(
             f"ℹ️ You are already registered as {user.first_name}!", show_alert=False
         )
