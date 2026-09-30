@@ -379,7 +379,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         update.message.reply_to_message = reply_to
 
         with patch(
-            "heathen_ledger.handlers.expense.parse_pay_message",
+            "heathen_ledger.handlers.expense.PayCommandParser.parse",
             return_value={"error": "test"},
         ):
             update.message.reply_text = AsyncMock()

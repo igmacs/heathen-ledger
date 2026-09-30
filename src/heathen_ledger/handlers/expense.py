@@ -9,8 +9,8 @@ from ..database import with_db_session
 from ..formatters import format_cents, generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
 from ..parser import (
-    parse_pay_message,
-    parse_payback_message,
+    PaybackCommandParser,
+    PayCommandParser,
 )
 from ..repositories import GroupRepository, UserRepository
 from ..services import ExpenseService
@@ -55,7 +55,7 @@ async def pay_command(
                 chat_id=chat_id,
             )
 
-    parsed = parse_pay_message(update.message.text)
+    parsed = PayCommandParser.parse(update.message.text)
     if "error" in parsed:
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -176,7 +176,7 @@ async def payback_command(
     if not update.message or not update.message.text:
         return
 
-    parsed = parse_payback_message(update.message.text)
+    parsed = PaybackCommandParser.parse(update.message.text)
     if "error" in parsed:
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)

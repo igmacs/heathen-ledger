@@ -1,7 +1,5 @@
 """Command parsing package: clause parsers, pay command parser, and payback parser."""
 
-from typing import Any
-
 from ..domain.calculations import simplify_debts, split_amount_equally
 from ..dto import (
     CommandParseError,
@@ -24,23 +22,6 @@ from .payer_clause import PayerClauseParser
 from .split_clause import SplitClauseParser
 from .user_token import UserTokenParser
 
-
-def parse_pay_message(text: str) -> dict[str, Any]:
-    """Parses a /pay command message to extract expense details.
-
-    Delegates to PayCommandParser.
-    """
-    return PayCommandParser.parse(text)
-
-
-def parse_payback_message(text: str) -> dict[str, Any]:
-    """Parses a /payback command to extract direct payment details.
-
-    Delegates to PaybackCommandParser.
-    """
-    return PaybackCommandParser.parse(text)
-
-
 __all__ = [
     "AmountParser",
     "UserTokenParser",
@@ -49,8 +30,6 @@ __all__ = [
     "PayerClauseParser",
     "PayCommandParser",
     "PaybackCommandParser",
-    "parse_pay_message",
-    "parse_payback_message",
     "split_amount_equally",
     "simplify_debts",
     "generate_balances_summary",
