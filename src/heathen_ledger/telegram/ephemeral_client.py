@@ -15,6 +15,28 @@ class TelegramEphemeralClient:
     """Encapsulates Telegram Bot API ephemeral messaging calls and fallback mechanisms."""
 
     @classmethod
+    def _extract_id_from_obj(cls, obj: Any) -> int | None:
+        if not obj:
+            return None
+        val = getattr(obj, "ephemeral_message_id", None)
+        if isinstance(val, int):
+            return val
+        api_kwargs = getattr(obj, "api_kwargs", None)
+        if isinstance(api_kwargs, Mapping):
+            val = api_kwargs.get("ephemeral_message_id")
+            if isinstance(val, int):
+                return val
+        return None
+
+    @classmethod
+    def _extract_from_message_or_reply(cls, obj: Any) -> int | None:
+        val = cls._extract_id_from_obj(obj)
+        if val is not None:
+            return val
+        reply_msg = getattr(obj, "reply_to_message", None)
+        return cls._extract_id_from_obj(reply_msg)
+
+    @classmethod
     def extract_ephemeral_message_id(cls, message: Any) -> int | None:
         """Extract ephemeral_message_id from message or callback query if present."""
         if not message:
@@ -22,26 +44,9 @@ class TelegramEphemeralClient:
         msg = getattr(message, "message", None) or message
 
         for obj in (message, msg):
-            if not obj:
-                continue
-            val = getattr(obj, "ephemeral_message_id", None)
-            if isinstance(val, int):
+            val = cls._extract_from_message_or_reply(obj)
+            if val is not None:
                 return val
-            api_kwargs = getattr(obj, "api_kwargs", None)
-            if isinstance(api_kwargs, Mapping):
-                val = api_kwargs.get("ephemeral_message_id")
-                if isinstance(val, int):
-                    return val
-            reply_msg = getattr(obj, "reply_to_message", None)
-            if reply_msg:
-                val = getattr(reply_msg, "ephemeral_message_id", None)
-                if isinstance(val, int):
-                    return val
-                reply_kwargs = getattr(reply_msg, "api_kwargs", None)
-                if isinstance(reply_kwargs, Mapping):
-                    val = reply_kwargs.get("ephemeral_message_id")
-                    if isinstance(val, int):
-                        return val
         return None
 
     @classmethod
@@ -145,6 +150,53 @@ class TelegramEphemeralClient:
         return False
 
     @classmethod
+    async def _trigger_message_delete_mock(cls, message: Message | None) -> None:
+        if message and hasattr(message, "delete"):
+            del_fn = message.delete
+            if isinstance(del_fn, AsyncMock | MagicMock):
+                try:
+                    if isinstance(del_fn, AsyncMock):
+                        await del_fn()
+                    else:
+                        del_fn()
+                except BadRequest:
+                    pass
+
+    @classmethod
+    def _extract_receiver_user_id(cls, message: Message | None) -> int | None:
+        if not message:
+            return None
+        receiver_user = getattr(message, "receiver_user", None)
+        if receiver_user and hasattr(receiver_user, "id"):
+            return receiver_user.id
+        api_kwargs = getattr(message, "api_kwargs", None)
+        if isinstance(api_kwargs, Mapping):
+            ru = api_kwargs.get("receiver_user")
+            if isinstance(ru, Mapping) and "id" in ru:
+                return ru["id"]
+        return None
+
+    @classmethod
+    async def _delete_standard_message(
+        cls, bot: Any, chat_id: int | str, msg_id: int | None
+    ) -> bool:
+        if not isinstance(msg_id, int) or msg_id == 0:
+            return False
+        try:
+            if hasattr(bot, "delete_message"):
+                del_fn = bot.delete_message
+                if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
+                    return await del_fn(chat_id=chat_id, message_id=msg_id)
+                elif callable(del_fn):
+                    res = del_fn(chat_id=chat_id, message_id=msg_id)
+                    if asyncio.iscoroutine(res):
+                        return await res
+                    return bool(res)
+        except BadRequest as e:
+            logger.debug("Failed to delete standard message %s: %s", msg_id, e)
+        return False
+
+    @classmethod
     async def delete_message_or_ephemeral(
         cls,
         context: ContextTypes.DEFAULT_TYPE,
@@ -156,18 +208,7 @@ class TelegramEphemeralClient:
     ) -> bool:
         """Delete a message, using deleteEphemeralMessage if it's ephemeral, or deleteMessage if standard."""
         bot = getattr(context, "bot", None)
-
-        # Trigger mock on message object if in a unit test fixture
-        if message and hasattr(message, "delete"):
-            del_fn = message.delete
-            if isinstance(del_fn, (AsyncMock, MagicMock)):
-                try:
-                    if isinstance(del_fn, AsyncMock):
-                        await del_fn()
-                    else:
-                        del_fn()
-                except BadRequest:
-                    pass
+        await cls._trigger_message_delete_mock(message)
 
         if not bot:
             return False
@@ -175,16 +216,8 @@ class TelegramEphemeralClient:
         if ephemeral_message_id is None and message:
             ephemeral_message_id = cls.extract_ephemeral_message_id(message)
 
-        if user_id is None and message:
-            receiver_user = getattr(message, "receiver_user", None)
-            if receiver_user and hasattr(receiver_user, "id"):
-                user_id = receiver_user.id
-            elif isinstance(getattr(message, "api_kwargs", None), Mapping):
-                ru = message.api_kwargs.get("receiver_user")
-                if isinstance(ru, Mapping) and "id" in ru:
-                    user_id = ru["id"]
-
-        msg_id = getattr(message, "message_id", None) if message else None
+        if user_id is None:
+            user_id = cls._extract_receiver_user_id(message)
 
         # 1. Ephemeral message deletion via deleteEphemeralMessage
         if ephemeral_message_id is not None and user_id is not None:
@@ -207,20 +240,5 @@ class TelegramEphemeralClient:
                 )
 
         # 2. Standard message deletion if message_id is an integer non-zero
-        if isinstance(msg_id, int) and msg_id != 0:
-            try:
-                if hasattr(bot, "delete_message"):
-                    del_fn = bot.delete_message
-                    if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(
-                        del_fn
-                    ):
-                        return await del_fn(chat_id=chat_id, message_id=msg_id)
-                    elif callable(del_fn):
-                        res = del_fn(chat_id=chat_id, message_id=msg_id)
-                        if asyncio.iscoroutine(res):
-                            return await res
-                        return bool(res)
-            except BadRequest as e:
-                logger.debug("Failed to delete standard message %s: %s", msg_id, e)
-
-        return False
+        msg_id = getattr(message, "message_id", None) if message else None
+        return await cls._delete_standard_message(bot, chat_id, msg_id)
