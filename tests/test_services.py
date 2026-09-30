@@ -12,6 +12,7 @@ from heathen_ledger.keyboards import (
 )
 from heathen_ledger.repositories import (
     ExpenseRepository,
+    GroupRepository,
     PaymentRepository,
     UserRepository,
 )
@@ -306,15 +307,18 @@ class TestServices(BaseDatabaseTestCase):
         self.assertIn("Invalid handle or name", res_inv.error)
         self.assertIn("Invalid handle or name", format_registration_result(res_inv))
 
-        # 11. Register with Telegram ID integer and chat ID integer
+        # 11. Register with Telegram ID integer and existing chat ID integer succeeds
+        GroupRepository(self.session).get_or_create(
+            telegram_chat_id=-1008888, title="Auto Group"
+        )
         res_auto = MemberRegistrationService.register_user(
             self.session,
             group=-1008888,
             target=8888,
             username="auto_user",
             first_name="Auto",
-            chat_title="Auto Group",
         )
+        self.assertTrue(res_auto.success)
         self.assertEqual(res_auto.user.telegram_id, 8888)
         self.assertEqual(res_auto.group.telegram_chat_id, -1008888)
         self.assertIn(res_auto.user, res_auto.group.members)

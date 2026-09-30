@@ -6,6 +6,7 @@ from telegram import (
     BotCommand,
     BotCommandScopeAllGroupChats,
     BotCommandScopeAllPrivateChats,
+    Update,
 )
 from telegram.ext import Application, ApplicationBuilder
 
@@ -121,4 +122,4 @@ if __name__ == "__main__":
     register_handlers(application)
 
     # Run the bot until the user presses Ctrl-C
-    application.run_polling()
+    application.run_polling(allowed_updates=Update.ALL_TYPES)

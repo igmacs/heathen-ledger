@@ -73,6 +73,11 @@ class MemberRegistrationService:
         group_repo = GroupRepository(session)
         user_repo = UserRepository(session)
         group_obj = cls._resolve_group(group_repo, group, chat_title)
+        if not group_obj:
+            return RegistrationResult(
+                success=False,
+                error=f"Group {group} does not exist.",
+            )
 
         # Unwrap if passed a TEXT_MENTION entity
         if getattr(target, "type", None) == "text_mention" and hasattr(target, "user"):
@@ -103,16 +108,13 @@ class MemberRegistrationService:
 
     @classmethod
     def _resolve_group(
-        cls, group_repo: GroupRepository, group: Group | int, chat_title: str | None
-    ) -> Group:
+        cls,
+        group_repo: GroupRepository,
+        group: Group | int,
+        chat_title: str | None = None,
+    ) -> Group | None:
         if isinstance(group, int):
-            group_obj = group_repo.get_by_telegram_id(group)
-            if not group_obj:
-                title = chat_title or f"Chat ({group})"
-                group_obj = group_repo.get_or_create(
-                    telegram_chat_id=group, title=title
-                )
-            return group_obj
+            return group_repo.get_by_telegram_id(group)
         return group
 
     @classmethod

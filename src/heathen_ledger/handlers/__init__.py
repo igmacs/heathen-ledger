@@ -2,6 +2,7 @@ from telegram.constants import MessageEntityType
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     MessageHandler,
     filters,
@@ -19,6 +20,7 @@ from .expense import (
     payback_command,
     undo_callback_handler,
 )
+from .group import chat_member_update_handler
 from .help import help_command
 from .history import history_command, history_delete_callback_handler
 from .members import members_command
@@ -61,6 +63,12 @@ async def reply_mention_dispatcher(update, context):
 
 def register_handlers(application: Application) -> None:
     """Register all command and callback handlers to the application."""
+    # Bot group join handler (creates group ledger immediately when bot enters group chat)
+    application.add_handler(
+        ChatMemberHandler(chat_member_update_handler, ChatMemberHandler.MY_CHAT_MEMBER),
+        group=-2,
+    )
+
     # Add auto-registration handlers in a separate group (-1) so they run before command/callback handlers (group 0)
     application.add_handler(MessageHandler(filters.ALL, auto_register), group=-1)
     application.add_handler(CallbackQueryHandler(auto_register), group=-1)

@@ -70,7 +70,7 @@ def format_batch_registration_result(batch: RegistrationBatchResult) -> str:
 async def auto_register(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
-    """Automatically register the user and group chat if they don't exist yet."""
+    """Automatically register the user in the group ledger if they don't exist yet."""
     if not update.effective_chat or not update.effective_user:
         return
 
@@ -92,10 +92,6 @@ async def auto_register(
     user_id = update.effective_user.id
     username = update.effective_user.username
     first_name = update.effective_user.first_name or ""
-    raw_title = getattr(update.effective_chat, "title", None)
-    title = (
-        raw_title if isinstance(raw_title, str) and raw_title else f"Chat ({chat_id})"
-    )
 
     MemberRegistrationService.register_user(
         session=session,
@@ -103,7 +99,6 @@ async def auto_register(
         target=user_id,
         username=username,
         first_name=first_name,
-        chat_title=title,
     )
 
 
@@ -123,7 +118,6 @@ async def register_command(
         target=update.effective_user.id,
         username=update.effective_user.username,
         first_name=update.effective_user.first_name or "",
-        chat_title=chat.title,
     )
     group = res.group
 
@@ -226,12 +220,10 @@ async def register_callback_handler(
         await query.answer()
         return
 
-    chat_title = chat.title or f"Chat ({chat.id})"
     res = MemberRegistrationService.register_user(
         session=session,
         group=chat.id,
         target=user,
-        chat_title=chat_title,
     )
 
     if res.already_registered:

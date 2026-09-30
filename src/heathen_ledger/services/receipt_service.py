@@ -385,7 +385,7 @@ class ReceiptService:
         group_repo = GroupRepository(db_session)
         group = group_repo.get_by_telegram_id(chat_id)
         if not group:
-            group = group_repo.create_group(chat_id=chat_id, title=chat_title)
+            raise ValidationError(f"Group ledger {chat_id} not found.")
 
         user_repo = UserRepository(db_session)
 
