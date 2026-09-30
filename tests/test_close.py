@@ -3,10 +3,14 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from heathen_ledger import crud
 from heathen_ledger.handlers.close import close_command
 from heathen_ledger.models import User
-from heathen_ledger.repositories import GroupRepository, UserRepository
+from heathen_ledger.repositories import (
+    ExpenseRepository,
+    GroupRepository,
+    PaymentRepository,
+    UserRepository,
+)
 from telegram.constants import ChatType
 
 from tests.base import BaseDatabaseTestCase
@@ -46,8 +50,7 @@ class TestCloseCommand(BaseDatabaseTestCase):
     def test_close_with_unsettled_debts_blocked(self):
         # Alice paid $30 split between Alice, Bob, Charlie (Bob owes $10, Charlie owes $10)
         splits = {self.alice.id: 1000, self.bob.id: 1000, self.charlie.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        ExpenseRepository(self.db_session).create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=3000,
@@ -76,13 +79,14 @@ class TestCloseCommand(BaseDatabaseTestCase):
             self.group.telegram_chat_id
         )
         self.assertIsNotNone(group)
-        self.assertEqual(len(crud.get_group_expenses(self.db_session, group.id)), 1)
+        self.assertEqual(
+            len(ExpenseRepository(self.db_session).get_for_group(group.id)), 1
+        )
 
     def test_close_when_settled_deletes_group_and_leaves_chat(self):
         # Alice paid $20 split with Bob
         splits = {self.alice.id: 1000, self.bob.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        ExpenseRepository(self.db_session).create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=2000,
@@ -90,16 +94,14 @@ class TestCloseCommand(BaseDatabaseTestCase):
             splits=splits,
         )
         # Bob settles debt
-        crud.create_payment(
-            self.db_session,
+        PaymentRepository(self.db_session).create(
             group_id=self.group.id,
             payer_id=self.bob.id,
             payee_id=self.alice.id,
             amount=1000,
         )
         # Register external member in this group
-        external_user = crud.create_external_user(
-            self.db_session,
+        external_user = UserRepository(self.db_session).create_external(
             group=self.group,
             first_name="GuestEve",
         )
@@ -157,5 +159,9 @@ class TestCloseCommand(BaseDatabaseTestCase):
             self.group.telegram_chat_id, "New Ledger Group"
         )
         self.assertIsNotNone(new_group)
-        self.assertEqual(len(crud.get_group_expenses(self.db_session, new_group.id)), 0)
-        self.assertEqual(len(crud.get_group_payments(self.db_session, new_group.id)), 0)
+        self.assertEqual(
+            len(ExpenseRepository(self.db_session).get_for_group(new_group.id)), 0
+        )
+        self.assertEqual(
+            len(PaymentRepository(self.db_session).get_for_group(new_group.id)), 0
+        )

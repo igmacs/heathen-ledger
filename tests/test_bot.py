@@ -12,7 +12,6 @@ from telegram.error import BadRequest
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger import crud
 from heathen_ledger.handlers.common import dismiss_callback_handler
 from heathen_ledger.handlers.expense import (
     pay_command,
@@ -47,8 +46,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
         super().setUp()
         # Alice paid $30.00 for all 3 (split is 10.00 each)
         splits = {self.alice.id: 1000, self.bob.id: 1000, self.charlie.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        self.expense_repo.create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=3000,
@@ -73,7 +71,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
         self.assertTrue(kwargs.get("show_alert"))
         self.assertIn("Only Bob or Alice can confirm", kwargs.get("text"))
 
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         self.assertEqual(len(payments), 0)
 
     def test_callback_authorized_payer(self):
@@ -83,7 +81,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
         )
         asyncio.run(self.run_settle_callback(update))
 
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         self.assertEqual(len(payments), 1)
         self.assertEqual(payments[0].payer_id, self.bob.id)
         self.assertEqual(payments[0].payee_id, self.alice.id)
@@ -103,13 +101,13 @@ class TestSettleCallback(BaseDatabaseTestCase):
         )
         asyncio.run(self.run_settle_callback(update))
 
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         self.assertEqual(len(payments), 1)
         update.callback_query.edit_message_text.assert_called_once()
 
     def test_settle_callback_both_external(self):
-        john = crud.create_external_user(self.db_session, self.group, "John", "john")
-        mary = crud.create_external_user(self.db_session, self.group, "Mary", "mary")
+        john = self.user_repo.create_external(self.group, "John", "john")
+        mary = self.user_repo.create_external(self.group, "Mary", "mary")
         self.db_session.commit()
 
         update = self.create_mock_update(
@@ -118,7 +116,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(settle_callback_handler(update, context))
 
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         matching = [
             p for p in payments if p.payer_id == john.id and p.payee_id == mary.id
         ]
@@ -127,7 +125,7 @@ class TestSettleCallback(BaseDatabaseTestCase):
 
     def test_settle_callback_external_user_autolink(self):
         # Register user dave as external with handle dave
-        dave = crud.create_external_user(self.db_session, self.group, "Dave", "dave")
+        dave = self.user_repo.create_external(self.group, "Dave", "dave")
         self.db_session.commit()
         self.assertTrue(dave.is_external)
         self.assertIsNone(dave.telegram_id)
@@ -145,14 +143,14 @@ class TestSettleCallback(BaseDatabaseTestCase):
         asyncio.run(settle_callback_handler(update, context))
 
         # Payment should be successfully recorded
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         matching = [
             p for p in payments if p.payer_id == dave.id and p.payee_id == self.alice.id
         ]
         self.assertEqual(len(matching), 1)
 
         # Dave should now be linked and no longer external
-        dave_refreshed = crud.get_user_by_telegram_id(self.db_session, 99999)
+        dave_refreshed = self.user_repo.get_by_telegram_id(99999)
         self.assertIsNotNone(dave_refreshed)
         self.assertEqual(dave_refreshed.id, dave.id)
         self.assertFalse(dave_refreshed.is_external)
@@ -162,8 +160,7 @@ class TestUndoCallback(BaseDatabaseTestCase):
     def setUp(self):
         super().setUp()
         splits = {self.alice.id: 1000, self.bob.id: 1000, self.charlie.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        self.expense_repo.create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=3000,
@@ -177,7 +174,7 @@ class TestUndoCallback(BaseDatabaseTestCase):
         await undo_callback_handler(update, context)
 
     def test_undo_security_unauthorized_user(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         callback_data = f"undo:expense:{expense.id}:{self.alice.id}"
         update = self.create_mock_update(
             telegram_user_id=33, callback_data=callback_data
@@ -188,29 +185,25 @@ class TestUndoCallback(BaseDatabaseTestCase):
         kwargs = update.callback_query.answer.call_args.kwargs
         self.assertTrue(kwargs.get("show_alert"))
         self.assertIn("Only Alice can undo", kwargs.get("text"))
-        self.assertEqual(
-            len(crud.get_group_expenses(self.db_session, self.group.id)), 1
-        )
+        self.assertEqual(len(self.expense_repo.get_for_group(self.group.id)), 1)
 
     def test_undo_authorized_creator_expense(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         callback_data = f"undo:expense:{expense.id}:{self.alice.id}"
         update = self.create_mock_update(
             telegram_user_id=11, callback_data=callback_data
         )
         asyncio.run(self.run_undo_callback(update))
 
-        self.assertEqual(
-            len(crud.get_group_expenses(self.db_session, self.group.id)), 0
-        )
+        self.assertEqual(len(self.expense_repo.get_for_group(self.group.id)), 0)
         update.callback_query.answer.assert_called_once_with(text="Transaction undone.")
         update.callback_query.edit_message_text.assert_called_once()
         kwargs = update.callback_query.edit_message_text.call_args.kwargs
         self.assertIn("has been undone by Alice", kwargs.get("text"))
 
     def test_undo_authorized_creator_payment(self):
-        payment = crud.create_payment(
-            self.db_session, self.group.id, self.bob.id, self.alice.id, 500
+        payment = self.payment_repo.create(
+            self.group.id, self.bob.id, self.alice.id, 500
         )
         self.db_session.commit()
 
@@ -220,9 +213,7 @@ class TestUndoCallback(BaseDatabaseTestCase):
         )
         asyncio.run(self.run_undo_callback(update))
 
-        self.assertEqual(
-            len(crud.get_group_payments(self.db_session, self.group.id)), 0
-        )
+        self.assertEqual(len(self.payment_repo.get_for_group(self.group.id)), 0)
         update.callback_query.answer.assert_called_once_with(text="Transaction undone.")
         update.callback_query.edit_message_text.assert_called_once()
         kwargs = update.callback_query.edit_message_text.call_args.kwargs
@@ -233,8 +224,7 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
     def setUp(self):
         super().setUp()
         splits = {self.alice.id: 1000, self.bob.id: 1000, self.charlie.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        self.expense_repo.create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=3000,
@@ -248,7 +238,7 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
         await history_delete_callback_handler(update, context)
 
     def test_history_delete_security_unauthorized_user(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         callback_data = f"hist_del:expense:{expense.id}"
         update = self.create_mock_update(
             telegram_user_id=33, callback_data=callback_data
@@ -259,29 +249,25 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
         kwargs = update.callback_query.answer.call_args.kwargs
         self.assertTrue(kwargs.get("show_alert"))
         self.assertIn("Only Alice can delete", kwargs.get("text"))
-        self.assertEqual(
-            len(crud.get_group_expenses(self.db_session, self.group.id)), 1
-        )
+        self.assertEqual(len(self.expense_repo.get_for_group(self.group.id)), 1)
 
     def test_history_delete_authorized_expense(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         callback_data = f"hist_del:expense:{expense.id}"
         update = self.create_mock_update(
             telegram_user_id=11, callback_data=callback_data
         )
         asyncio.run(self.run_history_delete_callback(update))
 
-        self.assertEqual(
-            len(crud.get_group_expenses(self.db_session, self.group.id)), 0
-        )
+        self.assertEqual(len(self.expense_repo.get_for_group(self.group.id)), 0)
         update.callback_query.answer.assert_called_once_with(text="Expense deleted.")
         update.callback_query.edit_message_text.assert_called_once()
         edit_kwargs = update.callback_query.edit_message_text.call_args.kwargs
         self.assertIn("rich_message", edit_kwargs.get("api_kwargs", {}))
 
     def test_history_delete_authorized_payment(self):
-        payment = crud.create_payment(
-            self.db_session, self.group.id, self.bob.id, self.alice.id, 500
+        payment = self.payment_repo.create(
+            self.group.id, self.bob.id, self.alice.id, 500
         )
         self.db_session.commit()
 
@@ -291,9 +277,7 @@ class TestHistoryDeleteCallback(BaseDatabaseTestCase):
         )
         asyncio.run(self.run_history_delete_callback(update))
 
-        self.assertEqual(
-            len(crud.get_group_payments(self.db_session, self.group.id)), 0
-        )
+        self.assertEqual(len(self.payment_repo.get_for_group(self.group.id)), 0)
         update.callback_query.answer.assert_called_once_with(text="Payment deleted.")
         update.callback_query.edit_message_text.assert_called_once()
         edit_kwargs_p = update.callback_query.edit_message_text.call_args.kwargs
@@ -336,8 +320,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
     def setUp(self):
         super().setUp()
         splits = {self.alice.id: 1000, self.bob.id: 1000, self.charlie.id: 1000}
-        crud.create_expense(
-            self.db_session,
+        self.expense_repo.create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=3000,
@@ -351,7 +334,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         await pay_toggle_callback_handler(update, context)
 
     def test_pay_toggle_security_unauthorized_user(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         callback_data = f"pay_toggle:{expense.id}:{self.bob.id}:{self.alice.id}"
         update = self.create_mock_update(
             telegram_user_id=33, callback_data=callback_data
@@ -364,7 +347,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         self.assertIn("Only Alice can edit", kwargs.get("text"))
 
     def test_pay_toggle_remove_participant(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         self.assertEqual(len(expense.splits), 3)
 
         callback_data = f"pay_toggle:{expense.id}:{self.bob.id}:{self.alice.id}"
@@ -374,7 +357,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         asyncio.run(self.run_pay_toggle_callback(update))
 
         self.db_session.expire_all()
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         self.assertEqual(len(expense.splits), 2)
 
         splits_dict = {s.user_id: s.amount for s in expense.splits}
@@ -389,7 +372,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         self.assertNotIn("Bob:", kwargs.get("text"))
 
     def test_pay_toggle_add_participant(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         for split in list(expense.splits):
             if split.user_id == self.bob.id:
                 self.db_session.delete(split)
@@ -402,7 +385,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         asyncio.run(self.run_pay_toggle_callback(update))
 
         self.db_session.expire_all()
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         self.assertEqual(len(expense.splits), 3)
 
         splits_dict = {s.user_id: s.amount for s in expense.splits}
@@ -411,7 +394,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         self.assertEqual(splits_dict[self.charlie.id], 1000)
 
     def test_pay_toggle_prevent_removing_last_participant(self):
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         for split in list(expense.splits):
             if split.user_id != self.alice.id:
                 self.db_session.delete(split)
@@ -430,7 +413,7 @@ class TestPayToggleCallback(BaseDatabaseTestCase):
         self.assertIn("Cannot remove the last participant", kwargs.get("text"))
 
         self.db_session.expire_all()
-        expense = crud.get_group_expenses(self.db_session, self.group.id)[0]
+        expense = self.expense_repo.get_for_group(self.group.id)[0]
         self.assertEqual(len(expense.splits), 1)
         self.assertEqual(expense.splits[0].user_id, self.alice.id)
 
@@ -441,7 +424,7 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(pay_command(update, context))
 
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = self.expense_repo.get_for_group(self.group.id)
         self.assertEqual(len(expenses), 1)
         exp = expenses[0]
         self.assertEqual(exp.amount, 9000)
@@ -461,7 +444,7 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(pay_command(update, context))
 
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = self.expense_repo.get_for_group(self.group.id)
         self.assertEqual(len(expenses), 1)
         exp = expenses[0]
         self.assertEqual(exp.expense_date, datetime.date(2026, 9, 7))
@@ -477,7 +460,7 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(pay_command(update, context))
 
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = self.expense_repo.get_for_group(self.group.id)
         self.assertEqual(len(expenses), 1)
         exp = expenses[0]
         self.assertEqual(len(exp.splits), 2)
@@ -492,7 +475,7 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(pay_command(update, context))
 
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = self.expense_repo.get_for_group(self.group.id)
         self.assertEqual(len(expenses), 1)
         exp = expenses[0]
         self.assertEqual(len(exp.splits), 2)
@@ -594,10 +577,10 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
             "/pay 30 for pizza split @john @alice"
         )
         asyncio.run(pay_command(update_pay, context))
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = self.expense_repo.get_for_group(self.group.id)
         latest_exp = expenses[-1]
         self.assertEqual(len(latest_exp.splits), 2)
-        john_user = crud.get_user_in_group(self.db_session, self.group.id, "john")
+        john_user = self.user_repo.get_in_group(self.group.id, "john")
         self.assertIsNotNone(john_user)
         self.assertTrue(john_user.is_external)
         splits_users = {s.user_id for s in latest_exp.splits}
@@ -606,7 +589,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         # 7. /payback involving external user
         update_payback = self.create_mock_message_update("/payback @john 15")
         asyncio.run(payback_command(update_payback, context))
-        payments = crud.get_group_payments(self.db_session, self.group.id)
+        payments = self.payment_repo.get_for_group(self.group.id)
         self.assertEqual(len(payments), 1)
         self.assertEqual(payments[0].payer_id, self.alice.id)
         self.assertEqual(payments[0].payee_id, john_user.id)
@@ -633,7 +616,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
             "Dave", update_click.callback_query.message.reply_text.call_args.args[0]
         )
 
-        dave_user = crud.get_user_by_telegram_id(self.db_session, 7777)
+        dave_user = self.user_repo.get_by_telegram_id(7777)
         self.assertIsNotNone(dave_user)
         self.assertIn(dave_user, self.group.members)
 
@@ -652,9 +635,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
     def test_register_inline_button_links_external_user(self):
         context = MagicMock()
         # Pre-register external user with handle emily
-        ext_user = crud.create_external_user(
-            self.db_session, self.group, "Emily", username="emily"
-        )
+        ext_user = self.user_repo.create_external(self.group, "Emily", username="emily")
         self.db_session.commit()
         ext_id = ext_user.id
 
@@ -666,7 +647,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         update_click.callback_query.from_user.first_name = "Emily Smith"
         asyncio.run(register_callback_handler(update_click, context))
 
-        linked = crud.get_user_by_telegram_id(self.db_session, 8888)
+        linked = self.user_repo.get_by_telegram_id(8888)
         self.assertIsNotNone(linked)
         self.assertEqual(linked.id, ext_id)
         self.assertFalse(linked.is_external)
@@ -693,7 +674,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
             update_reply.message.reply_text.call_args.args[0],
         )
 
-        frank = crud.get_user_by_telegram_id(self.db_session, 54321)
+        frank = self.user_repo.get_by_telegram_id(54321)
         self.assertIsNotNone(frank)
         self.assertIn(frank, self.group.members)
 
@@ -725,7 +706,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
             update_tm.message.reply_text.call_args.args[0],
         )
 
-        grace = crud.get_user_by_telegram_id(self.db_session, 67890)
+        grace = self.user_repo.get_by_telegram_id(67890)
         self.assertIsNotNone(grace)
         self.assertIn(grace, self.group.members)
 
@@ -739,7 +720,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
             update_adm.message.reply_text.call_args.args[0],
         )
 
-        harry = crud.get_user_in_group(self.db_session, self.group.id, "harry")
+        harry = self.user_repo.get_in_group(self.group.id, "harry")
         self.assertIsNotNone(harry)
         self.assertTrue(harry.is_external)
         self.assertIsNone(harry.telegram_id)
@@ -749,9 +730,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         context = MagicMock()
 
         # Create global Telegram user Iris in DB (not in self.group)
-        iris = crud.get_or_create_user(
-            self.db_session, 99902, username="iris", first_name="Iris"
-        )
+        iris = self.user_repo.get_or_create(99902, username="iris", first_name="Iris")
         self.db_session.commit()
         self.assertNotIn(iris, self.group.members)
 
@@ -773,8 +752,8 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         reply = update_multi.message.reply_text.call_args.args[0]
         self.assertIn("Registered member(s): @jack, @karen", reply)
 
-        jack = crud.get_user_in_group(self.db_session, self.group.id, "jack")
-        karen = crud.get_user_in_group(self.db_session, self.group.id, "karen")
+        jack = self.user_repo.get_in_group(self.group.id, "jack")
+        karen = self.user_repo.get_in_group(self.group.id, "karen")
         self.assertIsNotNone(jack)
         self.assertIsNotNone(karen)
 
@@ -798,7 +777,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(auto_register(update, context))
 
-        user = crud.get_user_by_telegram_id(self.db_session, 8888)
+        user = self.user_repo.get_by_telegram_id(8888)
         self.assertIsNotNone(user)
         self.assertEqual(user.first_name, "Zoe")
         self.assertEqual(user.username, "zoe")
@@ -816,11 +795,11 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         asyncio.run(auto_register(update, context))
 
         # Should not be pre-registered so register_callback_handler can handle new join announcement
-        user = crud.get_user_by_telegram_id(self.db_session, 8889)
+        user = self.user_repo.get_by_telegram_id(8889)
         self.assertIsNone(user)
 
     def test_auto_register_callback_query_links_pending_external_user(self):
-        dave = crud.create_external_user(self.db_session, self.group, "Dave", "dave")
+        dave = self.user_repo.create_external(self.group, "Dave", "dave")
         self.db_session.commit()
         self.assertTrue(dave.is_external)
         self.assertIsNone(dave.telegram_id)
@@ -835,7 +814,7 @@ class TestRegistrationHandlers(BaseDatabaseTestCase):
         context = MagicMock()
         asyncio.run(auto_register(update, context))
 
-        dave_linked = crud.get_user_by_telegram_id(self.db_session, 7777)
+        dave_linked = self.user_repo.get_by_telegram_id(7777)
         self.assertIsNotNone(dave_linked)
         self.assertEqual(dave_linked.id, dave.id)
         self.assertFalse(dave_linked.is_external)

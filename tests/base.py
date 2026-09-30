@@ -4,8 +4,13 @@ import unittest
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock
 
-from heathen_ledger import crud
 from heathen_ledger.database import Base
+from heathen_ledger.repositories import (
+    ExpenseRepository,
+    GroupRepository,
+    PaymentRepository,
+    UserRepository,
+)
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -29,16 +34,19 @@ class BaseDatabaseTestCase(unittest.TestCase):
         self.get_session_patcher.start()
 
         # 3. Create mock users and group
-        self.group = crud.get_or_create_group(self.db_session, 12345, "Test Group")
-        self.alice = crud.get_or_create_user(self.db_session, 11, "alice", "Alice")
-        self.bob = crud.get_or_create_user(self.db_session, 22, "bob", "Bob")
-        self.charlie = crud.get_or_create_user(
-            self.db_session, 33, "charlie", "Charlie"
-        )
+        self.group_repo = GroupRepository(self.db_session)
+        self.user_repo = UserRepository(self.db_session)
+        self.expense_repo = ExpenseRepository(self.db_session)
+        self.payment_repo = PaymentRepository(self.db_session)
 
-        crud.add_user_to_group(self.db_session, self.alice, self.group)
-        crud.add_user_to_group(self.db_session, self.bob, self.group)
-        crud.add_user_to_group(self.db_session, self.charlie, self.group)
+        self.group = self.group_repo.get_or_create(12345, "Test Group")
+        self.alice = self.user_repo.get_or_create(11, "alice", "Alice")
+        self.bob = self.user_repo.get_or_create(22, "bob", "Bob")
+        self.charlie = self.user_repo.get_or_create(33, "charlie", "Charlie")
+
+        self.user_repo.add_to_group(self.alice, self.group)
+        self.user_repo.add_to_group(self.bob, self.group)
+        self.user_repo.add_to_group(self.charlie, self.group)
         self.db_session.commit()
 
     @contextmanager

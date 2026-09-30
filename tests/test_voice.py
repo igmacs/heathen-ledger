@@ -61,7 +61,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         self.assertIn("GEMINI_API_KEY", text)
         self.assertIn("not configured", text)
 
-    @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
+    @patch("heathen_ledger.handlers.voice.GroupRepository.get_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
     async def test_successful_interpretation_with_command(
         self, mock_get_interpreter, mock_get_group
@@ -114,7 +114,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Reject", reject_btn.text)
         self.assertTrue(reject_btn.callback_data.startswith("voice:reject:"))
 
-    @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
+    @patch("heathen_ledger.handlers.voice.GroupRepository.get_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
     async def test_successful_interpretation_audio_file_no_command(
         self, mock_get_interpreter, mock_get_group
@@ -232,7 +232,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         warning = mock_send_response.call_args[0][2]
         self.assertIn("can only be used in a group chat", warning)
 
-    @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
+    @patch("heathen_ledger.handlers.voice.GroupRepository.get_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
     async def test_voice_command_reply_to_voice_success(
         self, mock_get_interpreter, mock_get_group
@@ -266,7 +266,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Bob paid 15 for coffee", reply)
         self.assertIn("/pay @Bob 15 for coffee", reply)
 
-    @patch("heathen_ledger.handlers.voice.crud.get_group_by_telegram_id")
+    @patch("heathen_ledger.handlers.voice.GroupRepository.get_by_telegram_id")
     @patch("heathen_ledger.handlers.voice.get_voice_interpreter")
     async def test_voice_mention_handler_bot_tagged(
         self, mock_get_interpreter, mock_get_group

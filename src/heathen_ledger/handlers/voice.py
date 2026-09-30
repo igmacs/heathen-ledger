@@ -8,9 +8,9 @@ from telegram.constants import ChatAction, MessageEntityType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from .. import crud
 from ..database import with_db_session
 from ..keyboards import VoiceKeyboardBuilder
+from ..repositories import GroupRepository
 from ..services import VoiceService
 from ..voice import (
     VoiceAudioDownloader,
@@ -77,7 +77,7 @@ async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 def _get_group_member_names(session: Session, chat_id: int | None) -> list[str]:
     if chat_id is None:
         return []
-    group = crud.get_group_by_telegram_id(session, chat_id)
+    group = GroupRepository(session).get_by_telegram_id(chat_id)
     if not group or not group.members:
         return []
     names = []

@@ -4,11 +4,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .. import crud
 from ..domain.calculations import split_amount_equally
 from ..dto import ParsedPaybackCommand, ParsedPayCommand
 from ..formatters import format_cents
 from ..models import Expense, ExpenseSplit, Group, Payment, User
+from ..repositories import ExpenseRepository, PaymentRepository, UserRepository
 from .exceptions import PermissionDeniedError, UserNotFoundError, ValidationError
 
 
@@ -30,8 +30,7 @@ class ExpenseService:
         )
 
         # 3. Create the expense in database
-        return crud.create_expense(
-            session=session,
+        return ExpenseRepository(session).create(
             group_id=group.id,
             amount=command.amount,
             description=command.description,
@@ -44,13 +43,14 @@ class ExpenseService:
     def _resolve_user(
         cls, session: Session, group: Group, sender: User, uname: str
     ) -> User:
+        user_repo = UserRepository(session)
         if uname == "me":
             u = sender
         else:
-            u = crud.get_user_in_group(session, group.id, uname)
+            u = user_repo.get_in_group(group_id=group.id, username=uname)
             if not u:
                 raise UserNotFoundError(uname)
-        crud.add_user_to_group(session, u, group)
+        user_repo.add_to_group(user=u, group=group)
         return u
 
     @classmethod
@@ -175,22 +175,22 @@ class ExpenseService:
         command: ParsedPaybackCommand,
     ) -> Payment:
         """Validate payer and payee and record a direct settlement payment."""
+        user_repo = UserRepository(session)
         if command.payer_username:
-            payer = crud.get_user_in_group(session, group.id, command.payer_username)
+            payer = user_repo.get_in_group(group.id, command.payer_username)
             if not payer:
                 raise UserNotFoundError(command.payer_username)
         else:
             payer = sender
 
-        payee = crud.get_user_in_group(session, group.id, command.payee_username)
+        payee = user_repo.get_in_group(group.id, command.payee_username)
         if not payee:
             raise UserNotFoundError(command.payee_username)
 
-        crud.add_user_to_group(session, payer, group)
-        crud.add_user_to_group(session, payee, group)
+        user_repo.add_to_group(payer, group)
+        user_repo.add_to_group(payee, group)
 
-        return crud.create_payment(
-            session=session,
+        return PaymentRepository(session).create(
             group_id=group.id,
             payer_id=payer.id,
             payee_id=payee.id,
@@ -226,13 +226,13 @@ class ExpenseService:
                     f" for '{expense.description}'" if expense.description else ""
                 )
                 audit_desc = f"Recorded expense of {amount_formatted}{desc_str}"
-                success = crud.delete_expense(session, tx_id)
+                success = ExpenseRepository(session).delete(tx_id)
         elif tx_type == "payment":
             payment = session.query(Payment).filter(Payment.id == tx_id).first()
             if payment:
                 amount_formatted = format_cents(payment.amount)
                 audit_desc = f"Recorded payment of {amount_formatted}"
-                success = crud.delete_payment(session, tx_id)
+                success = PaymentRepository(session).delete(tx_id)
 
         if not success:
             raise ValidationError("Transaction not found or already deleted.")

@@ -8,7 +8,6 @@ from telegram.constants import ChatType
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger import crud
 from heathen_ledger.handlers import reply_mention_dispatcher
 from heathen_ledger.handlers.receipt import (
     is_image_media,
@@ -19,6 +18,7 @@ from heathen_ledger.handlers.receipt import (
     ticket_photo_handler,
 )
 from heathen_ledger.receipt import Receipt, ReceiptItem
+from heathen_ledger.repositories import ExpenseRepository
 from heathen_ledger.services import ReceiptService
 
 from tests.base import BaseDatabaseTestCase
@@ -481,7 +481,7 @@ class TestReceiptTicketCallbacks(BaseDatabaseTestCase):
         self.assertIsNone(ReceiptService.get_session(self.token))
 
         # Verify expense recorded in db
-        expenses = crud.get_group_expenses(self.db_session, self.group.id)
+        expenses = ExpenseRepository(self.db_session).get_for_group(self.group.id)
         self.assertEqual(len(expenses), 1)
         self.assertEqual(expenses[0].amount, 1500)
         self.assertEqual(expenses[0].payer_id, self.alice.id)

@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import unittest
@@ -5,7 +6,6 @@ import unittest
 # Add project src to path dynamically
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger import crud
 from heathen_ledger.database import Base
 from heathen_ledger.domain import BalanceCalculator
 from heathen_ledger.models import ExpensePayer, ExpenseSplit
@@ -19,23 +19,28 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-class TestCRUD(unittest.TestCase):
+class TestRepositories(unittest.TestCase):
     def test_ledger_scenario(self):
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(bind=engine)
         Session = sessionmaker(bind=engine)
 
         with Session() as session:
+            group_repo = GroupRepository(session)
+            user_repo = UserRepository(session)
+            expense_repo = ExpenseRepository(session)
+            payment_repo = PaymentRepository(session)
+
             # 1. Register group and users
-            group = crud.get_or_create_group(session, 12345, "Trip to Spain")
-            alice = crud.get_or_create_user(session, 11, "alice", "Alice")
-            bob = crud.get_or_create_user(session, 22, "bob", "Bob")
-            charlie = crud.get_or_create_user(session, 33, "charlie", "Charlie")
+            group = group_repo.get_or_create(12345, "Trip to Spain")
+            alice = user_repo.get_or_create(11, "alice", "Alice")
+            bob = user_repo.get_or_create(22, "bob", "Bob")
+            charlie = user_repo.get_or_create(33, "charlie", "Charlie")
 
             # 2. Add users to group
-            crud.add_user_to_group(session, alice, group)
-            crud.add_user_to_group(session, bob, group)
-            crud.add_user_to_group(session, charlie, group)
+            user_repo.add_to_group(alice, group)
+            user_repo.add_to_group(bob, group)
+            user_repo.add_to_group(charlie, group)
             session.commit()
 
             # Verify membership
@@ -44,8 +49,7 @@ class TestCRUD(unittest.TestCase):
             # 3. Log a split expense
             # Alice paid 30.00 (3000 cents) for dinner, split equally between Alice, Bob, and Charlie (1000 each)
             splits = {alice.id: 1000, bob.id: 1000, charlie.id: 1000}
-            exp1 = crud.create_expense(
-                session,
+            exp1 = expense_repo.create(
                 group_id=group.id,
                 payer_id=alice.id,
                 amount=3000,
@@ -60,15 +64,18 @@ class TestCRUD(unittest.TestCase):
             self.assertEqual(exp1.payer_id, alice.id)
 
             # Verify balances: Alice should be owed 20.00 (+2000), Bob and Charlie owe 10.00 (-1000) each.
-            balances = crud.get_group_balances(session, group.id)
+            balances = BalanceCalculator.calculate_net_balances(
+                members=group.members,
+                expenses=expense_repo.get_for_group(group.id),
+                payments=payment_repo.get_for_group(group.id),
+            )
             self.assertEqual(balances[alice.id], 2000)
             self.assertEqual(balances[bob.id], -1000)
             self.assertEqual(balances[charlie.id], -1000)
 
             # 4. Log a settlement payment
             # Bob pays Alice 10.00 (1000 cents)
-            crud.create_payment(
-                session,
+            payment_repo.create(
                 group_id=group.id,
                 payer_id=bob.id,
                 payee_id=alice.id,
@@ -77,13 +84,17 @@ class TestCRUD(unittest.TestCase):
             session.commit()
 
             # Verify updated balances: Bob is settled (0), Alice is owed 10.00 (+1000), Charlie owes 10.00 (-1000).
-            balances = crud.get_group_balances(session, group.id)
+            balances = BalanceCalculator.calculate_net_balances(
+                members=group.members,
+                expenses=expense_repo.get_for_group(group.id),
+                payments=payment_repo.get_for_group(group.id),
+            )
             self.assertEqual(balances[alice.id], 1000)
             self.assertEqual(balances[bob.id], 0)
             self.assertEqual(balances[charlie.id], -1000)
 
             # 5. Retrieve recent transactions history
-            history = crud.get_recent_transactions(session, group.id)
+            history = payment_repo.get_recent_transactions(group.id)
             self.assertEqual(len(history), 2)  # 1 expense and 1 payment
             self.assertEqual(history[0]["type"], "payment")
             self.assertEqual(history[1]["type"], "expense")
@@ -94,61 +105,76 @@ class TestCRUD(unittest.TestCase):
         Session = sessionmaker(bind=engine)
 
         with Session() as session:
-            group = crud.get_or_create_group(session, 12345, "Trip to Spain")
-            alice = crud.get_or_create_user(session, 11, "alice", "Alice")
-            bob = crud.get_or_create_user(session, 22, "bob", "Bob")
-            crud.add_user_to_group(session, alice, group)
-            crud.add_user_to_group(session, bob, group)
+            group_repo = GroupRepository(session)
+            user_repo = UserRepository(session)
+            expense_repo = ExpenseRepository(session)
+            payment_repo = PaymentRepository(session)
+
+            group = group_repo.get_or_create(12345, "Trip to Spain")
+            alice = user_repo.get_or_create(11, "alice", "Alice")
+            bob = user_repo.get_or_create(22, "bob", "Bob")
+            user_repo.add_to_group(alice, group)
+            user_repo.add_to_group(bob, group)
             session.commit()
 
             # Create expense
             splits = {alice.id: 500, bob.id: 500}
-            expense = crud.create_expense(
-                session, group.id, alice.id, 1000, "Pizza", splits
+            expense = expense_repo.create(
+                group_id=group.id,
+                payer_id=alice.id,
+                amount=1000,
+                description="Pizza",
+                splits=splits,
             )
             session.commit()
 
             # Create payment
-            payment = crud.create_payment(session, group.id, bob.id, alice.id, 500)
+            payment = payment_repo.create(
+                group_id=group.id,
+                payer_id=bob.id,
+                payee_id=alice.id,
+                amount=500,
+            )
             session.commit()
 
             # Verify presence
-            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 1)
-            self.assertEqual(len(crud.get_group_payments(session, group.id)), 1)
+            self.assertEqual(len(expense_repo.get_for_group(group.id)), 1)
+            self.assertEqual(len(payment_repo.get_for_group(group.id)), 1)
 
             # Delete payment
-            success_pay = crud.delete_payment(session, payment.id)
+            success_pay = payment_repo.delete(payment.id)
             session.commit()
             self.assertTrue(success_pay)
-            self.assertEqual(len(crud.get_group_payments(session, group.id)), 0)
+            self.assertEqual(len(payment_repo.get_for_group(group.id)), 0)
 
             # Delete expense (should cascade delete splits)
-            success_exp = crud.delete_expense(session, expense.id)
+            success_exp = expense_repo.delete(expense.id)
             session.commit()
             self.assertTrue(success_exp)
-            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
+            self.assertEqual(len(expense_repo.get_for_group(group.id)), 0)
 
     def test_multi_payer_expense_scenario(self):
-        import datetime
-
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(bind=engine)
         Session = sessionmaker(bind=engine)
 
         with Session() as session:
-            group = crud.get_or_create_group(session, 9999, "Vacation")
-            alice = crud.get_or_create_user(session, 101, "alice", "Alice")
-            bob = crud.get_or_create_user(session, 102, "bob", "Bob")
-            charlie = crud.get_or_create_user(session, 103, "charlie", "Charlie")
-            crud.add_user_to_group(session, alice, group)
-            crud.add_user_to_group(session, bob, group)
-            crud.add_user_to_group(session, charlie, group)
+            group_repo = GroupRepository(session)
+            user_repo = UserRepository(session)
+            expense_repo = ExpenseRepository(session)
+
+            group = group_repo.get_or_create(9999, "Vacation")
+            alice = user_repo.get_or_create(101, "alice", "Alice")
+            bob = user_repo.get_or_create(102, "bob", "Bob")
+            charlie = user_repo.get_or_create(103, "charlie", "Charlie")
+            user_repo.add_to_group(alice, group)
+            user_repo.add_to_group(bob, group)
+            user_repo.add_to_group(charlie, group)
             session.commit()
 
             # Total $60: Alice paid 40 (4000), Bob paid 20 (2000). Split 20 (2000) each.
             exp_date = datetime.date(2026, 9, 7)
-            expense = crud.create_expense(
-                session,
+            expense = expense_repo.create(
                 group_id=group.id,
                 amount=6000,
                 description="Groceries & Snacks",
@@ -163,7 +189,11 @@ class TestCRUD(unittest.TestCase):
             self.assertIsNone(expense.payer_id)
             self.assertEqual(expense.expense_date, exp_date)
 
-            balances = crud.get_group_balances(session, group.id)
+            balances = BalanceCalculator.calculate_net_balances(
+                members=group.members,
+                expenses=expense_repo.get_for_group(group.id),
+                payments=[],
+            )
             self.assertEqual(balances[alice.id], 2000)
             self.assertEqual(balances[bob.id], 0)
             self.assertEqual(balances[charlie.id], -2000)
@@ -171,29 +201,33 @@ class TestCRUD(unittest.TestCase):
             # Cascade delete check
             self.assertEqual(session.query(ExpensePayer).count(), 2)
             self.assertEqual(session.query(ExpenseSplit).count(), 3)
-            success_exp = crud.delete_expense(session, expense.id)
+            success_exp = expense_repo.delete(expense.id)
             session.commit()
             self.assertTrue(success_exp)
-            self.assertEqual(len(crud.get_group_expenses(session, group.id)), 0)
+            self.assertEqual(len(expense_repo.get_for_group(group.id)), 0)
             self.assertEqual(session.query(ExpensePayer).count(), 0)
             self.assertEqual(session.query(ExpenseSplit).count(), 0)
 
-    def test_external_user_crud(self):
+    def test_external_user_repositories(self):
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(bind=engine)
         Session = sessionmaker(bind=engine)
 
         with Session() as session:
-            group1 = crud.get_or_create_group(session, 1001, "Flatmates")
-            group2 = crud.get_or_create_group(session, 1002, "Hiking Club")
+            group_repo = GroupRepository(session)
+            user_repo = UserRepository(session)
+            expense_repo = ExpenseRepository(session)
+
+            group1 = group_repo.get_or_create(1001, "Flatmates")
+            group2 = group_repo.get_or_create(1002, "Hiking Club")
 
             # Create regular telegram user in group 1
-            alice = crud.get_or_create_user(session, 1, "alice", "Alice")
-            crud.add_user_to_group(session, alice, group1)
+            alice = user_repo.get_or_create(1, "alice", "Alice")
+            user_repo.add_to_group(alice, group1)
 
             # Register external user in group 1
-            john = crud.create_external_user(
-                session, group1, first_name="John Doe", username="john"
+            john = user_repo.create_external(
+                group=group1, first_name="John Doe", username="john"
             )
             session.commit()
 
@@ -204,21 +238,18 @@ class TestCRUD(unittest.TestCase):
             self.assertIn(john, group1.members)
             self.assertNotIn(john, group2.members)
 
-            # Test get_user_in_group within group 1
-            self.assertEqual(crud.get_user_in_group(session, group1.id, "john"), john)
-            self.assertEqual(crud.get_user_in_group(session, group1.id, "@john"), john)
-            self.assertEqual(
-                crud.get_user_in_group(session, group1.id, "John Doe"), john
-            )
-            self.assertEqual(crud.get_user_in_group(session, group1.id, "alice"), alice)
+            # Test get_in_group within group 1
+            self.assertEqual(user_repo.get_in_group(group1.id, "john"), john)
+            self.assertEqual(user_repo.get_in_group(group1.id, "@john"), john)
+            self.assertEqual(user_repo.get_in_group(group1.id, "John Doe"), john)
+            self.assertEqual(user_repo.get_in_group(group1.id, "alice"), alice)
 
             # External user in group 1 must NOT be found from group 2
-            self.assertIsNone(crud.get_user_in_group(session, group2.id, "john"))
+            self.assertIsNone(user_repo.get_in_group(group2.id, "john"))
 
             # Expense with external user
             # Alice paid $20, split equally with John ($10 each)
-            crud.create_expense(
-                session,
+            expense_repo.create(
                 group_id=group1.id,
                 payer_id=alice.id,
                 amount=2000,
@@ -227,7 +258,11 @@ class TestCRUD(unittest.TestCase):
             )
             session.commit()
 
-            balances = crud.get_group_balances(session, group1.id)
+            balances = BalanceCalculator.calculate_net_balances(
+                members=group1.members,
+                expenses=expense_repo.get_for_group(group1.id),
+                payments=[],
+            )
             self.assertEqual(balances[alice.id], 1000)
             self.assertEqual(balances[john.id], -1000)
 
@@ -237,10 +272,13 @@ class TestCRUD(unittest.TestCase):
         Session = sessionmaker(bind=engine)
 
         with Session() as session:
-            group = crud.get_or_create_group(session, 12345, "Trip")
+            group_repo = GroupRepository(session)
+            user_repo = UserRepository(session)
+
+            group = group_repo.get_or_create(12345, "Trip")
             # Register external user John
-            ext_john = crud.create_external_user(
-                session, group, "John", username="johndoe"
+            ext_john = user_repo.create_external(
+                group=group, first_name="John", username="johndoe"
             )
             session.commit()
             self.assertTrue(ext_john.is_external)
@@ -248,8 +286,8 @@ class TestCRUD(unittest.TestCase):
             john_db_id = ext_john.id
 
             # John now interacts with the bot using Telegram ID 9999 and handle @johndoe
-            linked_user = crud.get_or_create_user(
-                session, 9999, username="johndoe", first_name="John Doe"
+            linked_user = user_repo.get_or_create(
+                telegram_id=9999, username="johndoe", first_name="John Doe"
             )
             session.commit()
 

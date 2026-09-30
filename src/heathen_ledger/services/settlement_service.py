@@ -4,9 +4,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from .. import crud
+from ..domain import BalanceCalculator
 from ..domain.calculations import simplify_debts
 from ..models import Group, Payment, User
+from ..repositories import ExpenseRepository, PaymentRepository
 from .exceptions import PermissionDeniedError
 
 
@@ -22,7 +23,11 @@ class SettlementService:
         if not group or not group.members:
             return {}, [], {}
 
-        balances = crud.get_group_balances(session, group.id)
+        expenses = ExpenseRepository(session).get_for_group(group.id)
+        payments = PaymentRepository(session).get_for_group(group.id)
+        balances = BalanceCalculator.calculate_net_balances(
+            members=group.members, expenses=expenses, payments=payments
+        )
         transactions = simplify_debts(balances)
         users_by_id = {u.id: u for u in group.members}
 
@@ -55,8 +60,7 @@ class SettlementService:
                 f"Only {from_name} or {to_name} can confirm this payment."
             )
 
-        return crud.create_payment(
-            session=session,
+        return PaymentRepository(session).create(
             group_id=group.id,
             payer_id=from_id,
             payee_id=to_id,

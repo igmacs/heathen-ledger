@@ -4,12 +4,16 @@ import unittest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from heathen_ledger import crud
 from heathen_ledger.dto import ParsedPaybackCommand, ParsedPayCommand, SplitSpec
 from heathen_ledger.keyboards import (
     HistoryKeyboardBuilder,
     SettlementKeyboardBuilder,
     VoiceKeyboardBuilder,
+)
+from heathen_ledger.repositories import (
+    ExpenseRepository,
+    PaymentRepository,
+    UserRepository,
 )
 from heathen_ledger.services import (
     HistoryService,
@@ -127,13 +131,14 @@ class TestServices(BaseDatabaseTestCase):
         )
         self.session.commit()
         self.assertIn("15.00", desc)
-        self.assertEqual(len(crud.get_group_payments(self.session, self.group.id)), 0)
+        self.assertEqual(
+            len(PaymentRepository(self.session).get_for_group(self.group.id)), 0
+        )
 
     def test_settlement_service(self):
         # Alice paid 20.00 for Alice and Bob (10.00 each)
         splits = {self.alice.id: 1000, self.bob.id: 1000}
-        crud.create_expense(
-            self.session,
+        ExpenseRepository(self.session).create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=2000,
@@ -264,8 +269,8 @@ class TestServices(BaseDatabaseTestCase):
         self.assertIn("already registered", format_registration_result(res_h_already))
 
         # 7. Existing global user
-        crud.get_or_create_user(
-            self.session, telegram_id=1002, username="helen", first_name="Helen"
+        UserRepository(self.session).get_or_create(
+            telegram_id=1002, username="helen", first_name="Helen"
         )
         self.session.commit()
         res_global = MemberRegistrationService.register_user(
@@ -323,16 +328,14 @@ class TestServices(BaseDatabaseTestCase):
 
     def test_history_service(self):
         # 1. Create an expense and a payment
-        exp = crud.create_expense(
-            self.session,
+        exp = ExpenseRepository(self.session).create(
             group_id=self.group.id,
             payer_id=self.alice.id,
             amount=2000,
             description="Groceries",
             splits={self.alice.id: 1000, self.bob.id: 1000},
         )
-        pay = crud.create_payment(
-            self.session,
+        pay = PaymentRepository(self.session).create(
             group_id=self.group.id,
             payer_id=self.bob.id,
             payee_id=self.alice.id,

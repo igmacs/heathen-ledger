@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from telegram import Bot, InlineKeyboardMarkup, Message
 from telegram.constants import ChatAction
 
-from .. import crud
 from ..formatters import generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
 from ..keyboards.ticket import TicketKeyboardBuilder
@@ -407,7 +406,7 @@ class ReceiptService:
             else:
                 clean_name = p["display_name"].strip()
                 uname_slug = clean_name.lower().replace(" ", "_")
-                ext_u = crud.get_user_in_group(db_session, group.id, uname_slug)
+                ext_u = user_repo.get_in_group(group.id, uname_slug)
                 if not ext_u:
                     user_repo.create_external(
                         group=group,
