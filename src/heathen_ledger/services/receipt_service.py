@@ -57,30 +57,16 @@ class ReceiptService:
         return format_price(amount, currency)
 
     @classmethod
-    def format_receipt_breakdown(cls, receipt: Receipt) -> str:
-        """Format a parsed receipt into a human-readable Markdown summary."""
-        lines = []
+    def _format_receipt_header(cls, receipt: Receipt) -> str:
         header = "🧾 *Receipt Breakdown*"
         if receipt.merchant:
             header += f"\n📍 *{receipt.merchant}*"
         if receipt.date:
             header += f" _({receipt.date})_"
-        lines.append(header)
-        lines.append("")
+        return header
 
-        if not receipt.items:
-            lines.append("⚠️ _No itemized lines could be detected on this receipt._")
-            if receipt.total is not None:
-                lines.append(
-                    f"\n*Total:* {cls.format_price(receipt.total, receipt.currency)}"
-                )
-            return "\n".join(lines)
-
-        expanded_items = receipt.expand_items()
-        for idx, item in enumerate(expanded_items, 1):
-            formatted_price = cls.format_price(item.price, receipt.currency)
-            lines.append(f"{idx}. {item.name} — {formatted_price}")
-
+    @classmethod
+    def _format_receipt_totals(cls, receipt: Receipt) -> list[str]:
         summary_lines = []
         if receipt.subtotal is not None:
             summary_lines.append(
@@ -98,7 +84,27 @@ class ReceiptService:
             summary_lines.append(
                 f"• *Total:* {cls.format_price(receipt.total, receipt.currency)}"
             )
+        return summary_lines
 
+    @classmethod
+    def format_receipt_breakdown(cls, receipt: Receipt) -> str:
+        """Format a parsed receipt into a human-readable Markdown summary."""
+        lines = [cls._format_receipt_header(receipt), ""]
+
+        if not receipt.items:
+            lines.append("⚠️ _No itemized lines could be detected on this receipt._")
+            if receipt.total is not None:
+                lines.append(
+                    f"\n*Total:* {cls.format_price(receipt.total, receipt.currency)}"
+                )
+            return "\n".join(lines)
+
+        expanded_items = receipt.expand_items()
+        for idx, item in enumerate(expanded_items, 1):
+            formatted_price = cls.format_price(item.price, receipt.currency)
+            lines.append(f"{idx}. {item.name} — {formatted_price}")
+
+        summary_lines = cls._format_receipt_totals(receipt)
         if summary_lines:
             lines.append("\n" + "─" * 20)
             lines.extend(summary_lines)
