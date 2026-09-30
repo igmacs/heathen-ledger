@@ -7,6 +7,9 @@ from sqlalchemy.orm import Session
 from telegram import Bot, InlineKeyboardMarkup, Message
 from telegram.constants import ChatAction
 
+from ..formatters import generate_expense_reply_text
+from ..keyboards import ExpenseKeyboardBuilder
+from ..parser import PayCommandParser
 from ..repositories import GroupRepository
 from ..voice import (
     PendingVoiceCommand,
@@ -15,19 +18,11 @@ from ..voice import (
     VoiceInterpretation,
     get_voice_interpreter,
 )
-from .exceptions import ValidationError
+from .exceptions import UserNotFoundError, ValidationError
+from .expense_service import ExpenseService
+from .registration_service import MemberRegistrationService
 
 logger = logging.getLogger(__name__)
-
-
-class CommandDispatcher:
-    """Proxy to prevent circular import between commands and services."""
-
-    @staticmethod
-    def execute(*args, **kwargs):
-        from ..commands.dispatcher import CommandDispatcher as _CD
-
-        return _CD.execute(*args, **kwargs)
 
 
 class VoiceService:
@@ -159,16 +154,46 @@ class VoiceService:
         session: Session,
         chat_title: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Execute an interpreted bot command and return (reply_text, reply_markup)."""
-        return CommandDispatcher.execute(
-            command_str=command_str,
-            chat_id=chat_id,
-            creator_id=creator_id,
-            creator_username=creator_username,
-            creator_first_name=creator_first_name,
+        cmd_clean = command_str.strip()
+        if not cmd_clean.startswith("/"):
+            cmd_clean = f"/{cmd_clean}"
+
+        if not cmd_clean.lower().startswith("/pay ") and cmd_clean.lower() != "/pay":
+            return f"⚠️ Unsupported command from voice note: `{cmd_clean}`", None
+
+        # Resolve sender and group
+        reg_res = MemberRegistrationService.register_user(
             session=session,
+            group=chat_id,
+            target=creator_id,
+            username=creator_username,
+            first_name=creator_first_name or f"User{creator_id}",
             chat_title=chat_title,
         )
+        sender, group = reg_res.user, reg_res.group
+
+        parsed = PayCommandParser.parse(cmd_clean)
+        if "error" in parsed:
+            return (
+                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
+                None,
+            )
+        try:
+            expense = ExpenseService.record_expense(
+                session=session,
+                group=group,
+                sender=sender,
+                command=parsed,
+            )
+        except (UserNotFoundError, ValidationError) as e:
+            return f"⚠️ {e}", None
+
+        reply_text = generate_expense_reply_text(expense)
+        reply_markup = ExpenseKeyboardBuilder.build_expense_undo_keyboard(
+            expense_id=expense.id, creator_id=sender.id
+        )
+        return reply_text, reply_markup
 
 
 # Aliases for backwards compatibility

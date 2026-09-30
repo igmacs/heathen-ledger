@@ -304,10 +304,7 @@ def execute_voice_command(
     session: Session,
     chat_title: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup | None]:
-    """Execute an interpreted bot command and return (reply_text, reply_markup).
-
-    Delegates to CommandDispatcher.
-    """
+    """Execute an interpreted bot command and return (reply_text, reply_markup)."""
     return VoiceService.execute_confirmed_command(
         command_str=command_str,
         chat_id=chat_id,
@@ -356,7 +353,7 @@ async def _handle_voice_confirmation(
         if "Message is not modified" not in str(e):
             raise
 
-    # Execute command via CommandDispatcher
+    # Execute confirmed command
     chat_title = None
     if query.message and query.message.chat:
         chat_title = getattr(query.message.chat, "title", None)

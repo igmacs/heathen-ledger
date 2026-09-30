@@ -17,7 +17,7 @@ from heathen_ledger.handlers.voice import (
     voice_mention_handler,
     voice_message_handler,
 )
-from heathen_ledger.models import Expense, Payment
+from heathen_ledger.models import Expense
 from heathen_ledger.voice import VoiceInterpretation
 from telegram.constants import ChatType
 
@@ -506,41 +506,8 @@ class TestVoiceConfirmationCallbacks(BaseDatabaseTestCase):
         self.assertEqual(expense.payer_id, self.alice.id)
         self.assertEqual(len(expense.splits), 3)
 
-    def test_confirm_payback_command_success(self):
+    def test_confirm_non_pay_command_rejected_as_unsupported(self):
         token = store_pending_voice_command(
-            command="/payback @bob 15",
-            creator_id=self.alice.telegram_id,
-            creator_username="alice",
-            creator_first_name="Alice",
-            authorized_user_ids={self.alice.telegram_id},
-            chat_id=self.group.telegram_chat_id,
-            transcription="I paid Bob 15",
-        )
-
-        update = self.create_mock_update(
-            telegram_user_id=self.alice.telegram_id,
-            callback_data=f"voice:confirm:{token}",
-            chat_id=self.group.telegram_chat_id,
-        )
-        context = MagicMock()
-
-        asyncio.run(voice_callback_handler(update, context))
-
-        # Payment created in database
-        payment = self.session.query(Payment).first()
-        self.assertIsNotNone(payment)
-        self.assertEqual(payment.amount, 1500)
-        self.assertEqual(payment.payer_id, self.alice.id)
-        self.assertEqual(payment.payee_id, self.bob.id)
-
-        update.callback_query.message.reply_text.assert_awaited_once()
-        reply_call = update.callback_query.message.reply_text.call_args
-        reply_text = reply_call.kwargs.get("text") or reply_call.args[0]
-        self.assertIn("Recorded payment", reply_text)
-
-    def test_confirm_balances_settle_and_history(self):
-        # 1. Balances
-        token_bal = store_pending_voice_command(
             command="/balances",
             creator_id=self.alice.telegram_id,
             creator_username="alice",
@@ -549,57 +516,17 @@ class TestVoiceConfirmationCallbacks(BaseDatabaseTestCase):
             chat_id=self.group.telegram_chat_id,
             transcription="show balances",
         )
-        update_bal = self.create_mock_update(
+        update = self.create_mock_update(
             telegram_user_id=self.alice.telegram_id,
-            callback_data=f"voice:confirm:{token_bal}",
+            callback_data=f"voice:confirm:{token}",
             chat_id=self.group.telegram_chat_id,
         )
-        asyncio.run(voice_callback_handler(update_bal, MagicMock()))
-        update_bal.callback_query.message.reply_text.assert_awaited_once()
-        bal_text = update_bal.callback_query.message.reply_text.call_args.kwargs.get(
+        asyncio.run(voice_callback_handler(update, MagicMock()))
+        update.callback_query.message.reply_text.assert_awaited_once()
+        reply_text = update.callback_query.message.reply_text.call_args.kwargs.get(
             "text"
         )
-        self.assertIn("Balances", bal_text)
-
-        # 2. Settle
-        token_set = store_pending_voice_command(
-            command="/settle",
-            creator_id=self.alice.telegram_id,
-            creator_username="alice",
-            creator_first_name="Alice",
-            authorized_user_ids={self.alice.telegram_id},
-            chat_id=self.group.telegram_chat_id,
-            transcription="settle up",
-        )
-        update_set = self.create_mock_update(
-            telegram_user_id=self.alice.telegram_id,
-            callback_data=f"voice:confirm:{token_set}",
-            chat_id=self.group.telegram_chat_id,
-        )
-        asyncio.run(voice_callback_handler(update_set, MagicMock()))
-        update_set.callback_query.message.reply_text.assert_awaited_once()
-        set_text = update_set.callback_query.message.reply_text.call_args.kwargs.get(
-            "text"
-        )
-        self.assertTrue("Settlement Plan" in set_text or "settled up" in set_text)
-
-        # 3. History
-        token_hist = store_pending_voice_command(
-            command="/history",
-            creator_id=self.alice.telegram_id,
-            creator_username="alice",
-            creator_first_name="Alice",
-            authorized_user_ids={self.alice.telegram_id},
-            chat_id=self.group.telegram_chat_id,
-            transcription="view history",
-        )
-        update_hist = self.create_mock_update(
-            telegram_user_id=self.alice.telegram_id,
-            callback_data=f"voice:confirm:{token_hist}",
-            chat_id=self.group.telegram_chat_id,
-        )
-        asyncio.run(voice_callback_handler(update_hist, MagicMock()))
-        update_hist.callback_query.message.reply_text.assert_awaited_once()
+        self.assertIn("Unsupported command from voice note", reply_text)
 
     def test_confirm_unauthorized_user(self):
         token = store_pending_voice_command(
