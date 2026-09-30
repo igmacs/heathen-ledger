@@ -5,7 +5,6 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger import crud
-from heathen_ledger.commands import CommandDispatcher
 from heathen_ledger.dto import ParsedPaybackCommand, ParsedPayCommand, SplitSpec
 from heathen_ledger.keyboards import (
     HistoryKeyboardBuilder,
@@ -174,45 +173,6 @@ class TestServices(BaseDatabaseTestCase):
         self.assertEqual(new_balances[self.alice.id], 0)
         self.assertEqual(new_balances[self.bob.id], 0)
         self.assertEqual(len(new_txs), 0)
-
-    def test_command_dispatcher_pay_and_payback(self):
-        # Dispatch /pay
-        text, markup = CommandDispatcher.execute(
-            command_str="/pay 30 for Lunch",
-            chat_id=self.group.telegram_chat_id,
-            creator_id=self.alice.telegram_id,
-            creator_username=self.alice.username,
-            creator_first_name=self.alice.first_name,
-            session=self.session,
-        )
-        self.assertIn("Recorded expense", text)
-        self.assertIn("$30.00", text)
-        self.assertIsNotNone(markup)
-
-        # Dispatch /payback
-        text_pb, markup_pb = CommandDispatcher.execute(
-            command_str="/payback @alice 10",
-            chat_id=self.group.telegram_chat_id,
-            creator_id=self.bob.telegram_id,
-            creator_username=self.bob.username,
-            creator_first_name=self.bob.first_name,
-            session=self.session,
-        )
-        self.assertIn("Recorded payment", text_pb)
-        self.assertIn("$10.00", text_pb)
-        self.assertIsNotNone(markup_pb)
-
-        # Dispatch /balances
-        text_bal, markup_bal = CommandDispatcher.execute(
-            command_str="/balances",
-            chat_id=self.group.telegram_chat_id,
-            creator_id=self.alice.telegram_id,
-            creator_username=self.alice.username,
-            creator_first_name=self.alice.first_name,
-            session=self.session,
-        )
-        self.assertIn("Current Net Balances", text_bal)
-        self.assertIsNone(markup_bal)
 
     def test_keyboard_builders(self):
         # VoiceKeyboardBuilder

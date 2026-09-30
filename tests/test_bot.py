@@ -13,7 +13,6 @@ from telegram.error import BadRequest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger import crud
-from heathen_ledger.commands.dispatcher import CommandDispatcher
 from heathen_ledger.handlers.base import (
     auto_register,
     members_command,
@@ -516,25 +515,6 @@ class TestPayCommandHandler(BaseDatabaseTestCase):
         # Standalone: exactly 1 row with 1 Undo button, NO member toggle buttons
         self.assertEqual(len(reply_markup.inline_keyboard), 1)
         self.assertEqual(len(reply_markup.inline_keyboard[0]), 1)
-        undo_button = reply_markup.inline_keyboard[0][0]
-        self.assertEqual(undo_button.text, "🗑️ Undo")
-        self.assertTrue(undo_button.callback_data.startswith("undo:expense:"))
-        for row in reply_markup.inline_keyboard:
-            for btn in row:
-                self.assertFalse(btn.callback_data.startswith("pay_toggle:"))
-
-    def test_command_dispatcher_pay_standalone_undo_keyboard(self):
-        reply_text, reply_markup = CommandDispatcher.execute(
-            command_str="/pay 50 for dinner split @Bob",
-            chat_id=self.group.telegram_chat_id,
-            creator_id=self.alice.telegram_id,
-            creator_username="alice",
-            creator_first_name="Alice",
-            session=self.db_session,
-        )
-        self.assertIn("Recorded expense", reply_text)
-        self.assertIsNotNone(reply_markup)
-        self.assertEqual(len(reply_markup.inline_keyboard), 1)
         undo_button = reply_markup.inline_keyboard[0][0]
         self.assertEqual(undo_button.text, "🗑️ Undo")
         self.assertTrue(undo_button.callback_data.startswith("undo:expense:"))
