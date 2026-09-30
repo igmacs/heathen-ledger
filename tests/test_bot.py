@@ -13,12 +13,6 @@ from telegram.error import BadRequest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from heathen_ledger import crud
-from heathen_ledger.handlers.base import (
-    auto_register,
-    members_command,
-    register_callback_handler,
-    register_command,
-)
 from heathen_ledger.handlers.common import dismiss_callback_handler
 from heathen_ledger.handlers.expense import (
     pay_command,
@@ -29,6 +23,12 @@ from heathen_ledger.handlers.expense import (
 from heathen_ledger.handlers.history import (
     history_command,
     history_delete_callback_handler,
+)
+from heathen_ledger.handlers.members import members_command
+from heathen_ledger.handlers.registration import (
+    auto_register,
+    register_callback_handler,
+    register_command,
 )
 from heathen_ledger.handlers.settle import (
     balances_command,

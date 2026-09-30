@@ -5,11 +5,6 @@ import unittest
 from types import MappingProxyType
 from unittest.mock import AsyncMock, MagicMock
 
-from heathen_ledger.handlers.base import (
-    help_command,
-    members_command,
-    register_command,
-)
 from heathen_ledger.handlers.common import (
     _get_ephemeral_message_id,
     is_group_chat,
@@ -18,7 +13,10 @@ from heathen_ledger.handlers.common import (
     send_response,
 )
 from heathen_ledger.handlers.expense import pay_command, payback_command
+from heathen_ledger.handlers.help import help_command
 from heathen_ledger.handlers.history import history_command
+from heathen_ledger.handlers.members import members_command
+from heathen_ledger.handlers.registration import register_command
 from heathen_ledger.handlers.settle import balances_command, settle_command
 from heathen_ledger.telegram import (
     EphemeralActionKeyboardDecorator,
