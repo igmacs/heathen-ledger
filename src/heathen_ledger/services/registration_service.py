@@ -72,16 +72,7 @@ class MemberRegistrationService:
         """Register a single member (Telegram user, handle, or external person) into a group ledger."""
         group_repo = GroupRepository(session)
         user_repo = UserRepository(session)
-
-        if isinstance(group, int):
-            group_obj = group_repo.get_by_telegram_id(group)
-            if not group_obj:
-                title = chat_title or f"Chat ({group})"
-                group_obj = group_repo.get_or_create(
-                    telegram_chat_id=group, title=title
-                )
-        else:
-            group_obj = group
+        group_obj = cls._resolve_group(group_repo, group, chat_title)
 
         # Unwrap if passed a TEXT_MENTION entity
         if getattr(target, "type", None) == "text_mention" and hasattr(target, "user"):
@@ -89,181 +80,212 @@ class MemberRegistrationService:
 
         # 1. Telegram user object
         if hasattr(target, "id") and hasattr(target, "is_bot"):
-            if target.is_bot:
-                return RegistrationResult(
-                    success=False,
-                    error="Cannot register a bot.",
-                    display_label=target.first_name or "Bot",
-                )
-            tg_id = target.id
-            u_name = target.username
-            f_name = target.first_name or ""
-            display_label = f"*{f_name}*"
-
-            existing = next(
-                (m for m in group_obj.members if m.telegram_id == tg_id), None
-            )
-            if existing:
-                return RegistrationResult(
-                    success=True,
-                    user=existing,
-                    group=group_obj,
-                    already_registered=True,
-                    display_label=display_label,
-                    has_explicit_handle=bool(u_name),
-                )
-
-            db_user = user_repo.get_or_create(
-                telegram_id=tg_id,
-                username=u_name,
-                first_name=f_name,
-            )
-            user_repo.add_to_group(db_user, group_obj)
-            if commit:
-                session.commit()
-            else:
-                session.flush()
-            return RegistrationResult(
-                success=True,
-                user=db_user,
-                group=group_obj,
-                already_registered=False,
-                display_label=display_label,
-                has_explicit_handle=bool(u_name),
+            return cls._register_telegram_user(
+                session, user_repo, group_obj, target, commit
             )
 
         # 2. Integer Telegram ID
         if isinstance(target, int):
-            tg_id = target
-            u_name = username
-            f_name = first_name or f"User{target}"
-            display_label = f"*{f_name}*"
-
-            existing = next(
-                (m for m in group_obj.members if m.telegram_id == tg_id), None
-            )
-            if existing:
-                return RegistrationResult(
-                    success=True,
-                    user=existing,
-                    group=group_obj,
-                    already_registered=True,
-                    display_label=display_label,
-                    has_explicit_handle=bool(u_name),
-                )
-
-            db_user = user_repo.get_or_create(
-                telegram_id=tg_id,
-                username=u_name,
-                first_name=f_name,
-            )
-            user_repo.add_to_group(db_user, group_obj)
-            if commit:
-                session.commit()
-            else:
-                session.flush()
-            return RegistrationResult(
-                success=True,
-                user=db_user,
-                group=group_obj,
-                already_registered=False,
-                display_label=display_label,
-                has_explicit_handle=bool(u_name),
+            return cls._register_by_telegram_id(
+                session, user_repo, group_obj, target, username, first_name, commit
             )
 
         # 3. String (handle or name)
         if isinstance(target, str):
-            raw_str = target.strip()
-            if raw_str.startswith("@"):
-                clean_handle = raw_str.lstrip("@").strip().lower()
-                if not clean_handle:
-                    return RegistrationResult(
-                        success=False,
-                        error="Invalid handle. Please specify a non-empty username.",
-                        display_label=target,
-                    )
-                handle = clean_handle
-                disp_name = first_name or handle.capitalize()
-                has_explicit_handle = True
-                display_label = f"@{handle}"
-            else:
-                if username:
-                    handle = username.lstrip("@").strip().lower()
-                    disp_name = first_name or raw_str
-                    has_explicit_handle = True
-                    display_label = f"@{handle}"
-                else:
-                    parts = raw_str.split()
-                    if len(parts) == 1:
-                        disp_name = parts[0]
-                        handle = re.sub(r"[^\w]", "", parts[0]).lower()
-                    else:
-                        disp_name = raw_str
-                        handle = re.sub(r"[^\w]+", "_", raw_str).strip("_").lower()
-
-                    if not handle:
-                        return RegistrationResult(
-                            success=False,
-                            error="Invalid handle or name. Please use alphanumeric characters.",
-                            display_label=raw_str,
-                        )
-                    has_explicit_handle = False
-                    display_label = f"*{disp_name}*"
-
-            existing = next(
-                (
-                    m
-                    for m in group_obj.members
-                    if m.username and m.username.lower() == handle
-                ),
-                None,
+            return cls._register_string_user(
+                session, user_repo, group_obj, target, username, first_name, commit
             )
-            if existing:
-                return RegistrationResult(
-                    success=True,
-                    user=existing,
-                    group=group_obj,
-                    already_registered=True,
-                    display_label=display_label,
-                    has_explicit_handle=has_explicit_handle,
-                )
 
-            glob_u = user_repo.get_in_group(group_obj.id, handle)
-            if glob_u:
-                if commit:
-                    session.commit()
-                else:
-                    session.flush()
-                return RegistrationResult(
-                    success=True,
-                    user=glob_u,
-                    group=group_obj,
-                    already_registered=False,
-                    display_label=display_label,
-                    has_explicit_handle=has_explicit_handle,
-                )
+        return RegistrationResult(
+            success=False,
+            error=f"Unsupported target type: {type(target).__name__}",
+        )
 
-            db_user = user_repo.create_external(
+    @classmethod
+    def _resolve_group(
+        cls, group_repo: GroupRepository, group: Group | int, chat_title: str | None
+    ) -> Group:
+        if isinstance(group, int):
+            group_obj = group_repo.get_by_telegram_id(group)
+            if not group_obj:
+                title = chat_title or f"Chat ({group})"
+                group_obj = group_repo.get_or_create(
+                    telegram_chat_id=group, title=title
+                )
+            return group_obj
+        return group
+
+    @classmethod
+    def _register_telegram_user(
+        cls,
+        session: Session,
+        user_repo: UserRepository,
+        group_obj: Group,
+        target: Any,
+        commit: bool,
+    ) -> RegistrationResult:
+        if target.is_bot:
+            return RegistrationResult(
+                success=False,
+                error="Cannot register a bot.",
+                display_label=target.first_name or "Bot",
+            )
+        return cls._register_by_telegram_id(
+            session=session,
+            user_repo=user_repo,
+            group_obj=group_obj,
+            tg_id=target.id,
+            username=target.username,
+            first_name=target.first_name or "",
+            commit=commit,
+        )
+
+    @classmethod
+    def _register_by_telegram_id(
+        cls,
+        session: Session,
+        user_repo: UserRepository,
+        group_obj: Group,
+        tg_id: int,
+        username: str | None,
+        first_name: str | None,
+        commit: bool,
+    ) -> RegistrationResult:
+        f_name = first_name or f"User{tg_id}"
+        display_label = f"*{f_name}*"
+
+        existing = next((m for m in group_obj.members if m.telegram_id == tg_id), None)
+        if existing:
+            return RegistrationResult(
+                success=True,
+                user=existing,
                 group=group_obj,
-                first_name=disp_name,
-                username=handle,
+                already_registered=True,
+                display_label=display_label,
+                has_explicit_handle=bool(username),
             )
+
+        db_user = user_repo.get_or_create(
+            telegram_id=tg_id,
+            username=username,
+            first_name=f_name,
+        )
+        user_repo.add_to_group(db_user, group_obj)
+        if commit:
+            session.commit()
+        else:
+            session.flush()
+        return RegistrationResult(
+            success=True,
+            user=db_user,
+            group=group_obj,
+            already_registered=False,
+            display_label=display_label,
+            has_explicit_handle=bool(username),
+        )
+
+    @classmethod
+    def _parse_string_target(
+        cls, raw_str: str, username: str | None, first_name: str | None
+    ) -> tuple[str, str, bool, str] | RegistrationResult:
+        if raw_str.startswith("@"):
+            clean_handle = raw_str.lstrip("@").strip().lower()
+            if not clean_handle:
+                return RegistrationResult(
+                    success=False,
+                    error="Invalid handle. Please specify a non-empty username.",
+                    display_label=raw_str,
+                )
+            handle = clean_handle
+            disp_name = first_name or handle.capitalize()
+            return handle, disp_name, True, f"@{handle}"
+
+        if username:
+            handle = username.lstrip("@").strip().lower()
+            disp_name = first_name or raw_str
+            return handle, disp_name, True, f"@{handle}"
+
+        parts = raw_str.split()
+        if len(parts) == 1:
+            disp_name = parts[0]
+            handle = re.sub(r"[^\w]", "", parts[0]).lower()
+        else:
+            disp_name = raw_str
+            handle = re.sub(r"[^\w]+", "_", raw_str).strip("_").lower()
+
+        if not handle:
+            return RegistrationResult(
+                success=False,
+                error="Invalid handle or name. Please use alphanumeric characters.",
+                display_label=raw_str,
+            )
+        return handle, disp_name, False, f"*{disp_name}*"
+
+    @classmethod
+    def _register_string_user(
+        cls,
+        session: Session,
+        user_repo: UserRepository,
+        group_obj: Group,
+        target: str,
+        username: str | None,
+        first_name: str | None,
+        commit: bool,
+    ) -> RegistrationResult:
+        parsed = cls._parse_string_target(target.strip(), username, first_name)
+        if isinstance(parsed, RegistrationResult):
+            return parsed
+
+        handle, disp_name, has_explicit_handle, display_label = parsed
+        existing = next(
+            (
+                m
+                for m in group_obj.members
+                if m.username and m.username.lower() == handle
+            ),
+            None,
+        )
+        if existing:
+            return RegistrationResult(
+                success=True,
+                user=existing,
+                group=group_obj,
+                already_registered=True,
+                display_label=display_label,
+                has_explicit_handle=has_explicit_handle,
+            )
+
+        glob_u = user_repo.get_in_group(group_obj.id, handle)
+        if glob_u:
             if commit:
                 session.commit()
             else:
                 session.flush()
             return RegistrationResult(
                 success=True,
-                user=db_user,
+                user=glob_u,
                 group=group_obj,
                 already_registered=False,
                 display_label=display_label,
                 has_explicit_handle=has_explicit_handle,
             )
 
+        db_user = user_repo.create_external(
+            group=group_obj,
+            first_name=disp_name,
+            username=handle,
+        )
+        if commit:
+            session.commit()
+        else:
+            session.flush()
         return RegistrationResult(
-            success=False,
-            error=f"Unsupported target type: {type(target).__name__}",
+            success=True,
+            user=db_user,
+            group=group_obj,
+            already_registered=False,
+            display_label=display_label,
+            has_explicit_handle=has_explicit_handle,
         )
 
     @classmethod
