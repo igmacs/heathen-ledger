@@ -35,6 +35,7 @@ select = [
     "SIM",  # flake8-simplify
     "I",    # isort (import sorting)
     "C901", # mccabe (cyclomatic complexity)
+    "ARG",  # flake8-unused-arguments
 ]
 ignore = [
     "E501",   # line length handled by ruff-format

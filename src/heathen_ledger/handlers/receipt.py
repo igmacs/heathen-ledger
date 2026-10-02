@@ -216,7 +216,7 @@ def _resolve_tg_participant(session: Session, participant_key: str) -> Any | Non
 
 
 async def _handle_tkt_toggle_me(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 4:
         return
@@ -251,7 +251,7 @@ async def _handle_tkt_toggle_me(
 
 
 async def _handle_tkt_toggle_done(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 4:
         return
@@ -299,7 +299,7 @@ async def _handle_tkt_assign_person(
 
 
 async def _handle_tkt_person_select(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 4:
         return
@@ -447,7 +447,7 @@ async def _handle_tkt_assign_user(
 
 
 async def _handle_tkt_assign_new(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 3:
         return
@@ -483,7 +483,7 @@ async def _handle_tkt_assign_new(
 
 
 async def _handle_tkt_finish(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 3:
         return
@@ -516,7 +516,7 @@ async def _handle_tkt_finish(
 
 
 async def _handle_tkt_record(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, _context: Any, session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 3:
         return
@@ -524,7 +524,6 @@ async def _handle_tkt_record(
     user = query.from_user
     chat = query.message.chat if query and query.message else None
     chat_id = chat.id if chat else query.from_user.id
-    chat_title = chat.title if chat else None
 
     try:
         text, reply_markup = ReceiptService.record_ticket_expense(
@@ -534,7 +533,6 @@ async def _handle_tkt_record(
             payer_username=user.username,
             payer_first_name=user.first_name,
             chat_id=chat_id,
-            chat_title=chat_title,
         )
         if query.message:
             await query.edit_message_text(
@@ -549,7 +547,7 @@ async def _handle_tkt_record(
 
 
 async def _handle_tkt_back(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 3:
         return
@@ -569,7 +567,7 @@ async def _handle_tkt_back(
 
 
 async def _handle_tkt_cancel(
-    query: Any, context: Any, session: Session, parts: list[str]
+    query: Any, _context: Any, _session: Session, parts: list[str]
 ) -> None:
     if len(parts) < 3:
         return

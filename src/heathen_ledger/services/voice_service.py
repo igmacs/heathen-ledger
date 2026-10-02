@@ -152,7 +152,6 @@ class VoiceService:
         creator_username: str | None,
         creator_first_name: str | None,
         session: Session,
-        chat_title: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         cmd_clean = command_str.strip()
         if not cmd_clean.startswith("/"):
@@ -168,7 +167,6 @@ class VoiceService:
             target=creator_id,
             username=creator_username,
             first_name=creator_first_name or f"User{creator_id}",
-            chat_title=chat_title,
         )
         sender, group = reg_res.user, reg_res.group
 

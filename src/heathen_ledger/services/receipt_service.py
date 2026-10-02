@@ -366,7 +366,6 @@ class ReceiptService:
         payer_username: str | None,
         payer_first_name: str | None,
         chat_id: int,
-        chat_title: str | None = None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         """Calculate shares from ticket session and execute /pay command directly."""
         session = cls.get_session(token)
@@ -423,7 +422,6 @@ class ReceiptService:
             target=payer_id,
             username=payer_username,
             first_name=payer_first_name or f"User{payer_id}",
-            chat_title=chat_title,
         )
         sender, group = reg_res.user, reg_res.group
 

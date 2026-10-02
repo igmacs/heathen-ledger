@@ -68,7 +68,7 @@ def format_batch_registration_result(batch: RegistrationBatchResult) -> str:
 
 @with_db_session
 async def auto_register(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+    update: Update, _context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Automatically register the user in the group ledger if they don't exist yet."""
     if not update.effective_chat or not update.effective_user:

@@ -1,19 +1,14 @@
 import logging
 
-from sqlalchemy.orm import Session
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from ..database import with_db_session
 from .common import send_response
 
 logger = logging.getLogger(__name__)
 
 
-@with_db_session
-async def start_command(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
-):
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a greeting and introduction when the command /start is issued."""
     await send_response(
         update,

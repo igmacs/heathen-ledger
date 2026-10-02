@@ -299,7 +299,6 @@ class TestReceiptService(unittest.IsolatedAsyncioTestCase):
                 target=1,
                 username="payer",
                 first_name="Payer",
-                chat_title=None,
             )
             mock_parse.assert_called_once()
             cmd_sent = mock_parse.call_args[0][0]

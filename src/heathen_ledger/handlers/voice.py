@@ -304,7 +304,6 @@ def execute_voice_command(
     creator_username: str | None,
     creator_first_name: str | None,
     session: Session,
-    chat_title: str | None = None,
 ) -> tuple[str, InlineKeyboardMarkup | None]:
     """Execute an interpreted bot command and return (reply_text, reply_markup)."""
     return VoiceService.execute_confirmed_command(
@@ -314,7 +313,6 @@ def execute_voice_command(
         creator_username=creator_username,
         creator_first_name=creator_first_name,
         session=session,
-        chat_title=chat_title,
     )
 
 
@@ -356,10 +354,6 @@ async def _handle_voice_confirmation(
             raise
 
     # Execute confirmed command
-    chat_title = None
-    if query.message and query.message.chat:
-        chat_title = query.message.chat.title
-
     creator_id = pending.creator_id or query.from_user.id
     creator_username = pending.creator_username or query.from_user.username
     creator_first_name = pending.creator_first_name or query.from_user.first_name
@@ -371,7 +365,6 @@ async def _handle_voice_confirmation(
         creator_username=creator_username,
         creator_first_name=creator_first_name,
         session=session,
-        chat_title=chat_title,
     )
 
     if query.message:

@@ -88,7 +88,7 @@ async def settle_command(
 
 @with_db_session
 async def settle_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+    update: Update, _context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle callback query when a settle payment confirmation button is clicked."""
     query = update.callback_query

@@ -213,7 +213,6 @@ class TelegramRichClient:
         rich_html: str,
         *,
         reply_markup: InlineKeyboardMarkup | None = None,
-        **kwargs: Any,
     ) -> bool:
         """Edit a standard rich message using editMessageText with rich_message."""
         data: dict[str, Any] = {
@@ -265,7 +264,6 @@ class TelegramRichClient:
         rich_html: str,
         *,
         reply_markup: InlineKeyboardMarkup | None = None,
-        **kwargs: Any,
     ) -> bool:
         """Edit an ephemeral rich message using editEphemeralMessageText with rich_message."""
         data: dict[str, Any] = {

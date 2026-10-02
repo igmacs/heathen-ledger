@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from typing import override
 from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
@@ -15,6 +16,7 @@ from heathen_ledger.receipt import (
 
 
 class DummyReceiptParser(ReceiptParser):
+    @override
     async def parse(self, image_data: bytes, mime_type: str = "image/jpeg") -> Receipt:
         return Receipt(
             merchant="Test Bistro",

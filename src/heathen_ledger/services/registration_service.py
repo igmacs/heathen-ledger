@@ -66,13 +66,12 @@ class MemberRegistrationService:
         *,
         username: str | None = None,
         first_name: str | None = None,
-        chat_title: str | None = None,
         commit: bool = True,
     ) -> RegistrationResult:
         """Register a single member (Telegram user, handle, or external person) into a group ledger."""
         group_repo = GroupRepository(session)
         user_repo = UserRepository(session)
-        group_obj = cls._resolve_group(group_repo, group, chat_title)
+        group_obj = cls._resolve_group(group_repo, group)
         if not group_obj:
             return RegistrationResult(
                 success=False,
@@ -111,7 +110,6 @@ class MemberRegistrationService:
         cls,
         group_repo: GroupRepository,
         group: Group | int,
-        chat_title: str | None = None,
     ) -> Group | None:
         if isinstance(group, int):
             return group_repo.get_by_telegram_id(group)
@@ -297,7 +295,6 @@ class MemberRegistrationService:
         group: Group | int,
         targets: Iterable[TgUser | int | str | Any],
         *,
-        chat_title: str | None = None,
         commit: bool = True,
     ) -> RegistrationBatchResult:
         """Register multiple members in the group ledger."""
@@ -307,7 +304,6 @@ class MemberRegistrationService:
                 session,
                 group,
                 target,
-                chat_title=chat_title,
                 commit=False,
             )
             results.append(res)

@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+from typing import override
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add project src to path dynamically
@@ -17,9 +18,11 @@ from heathen_ledger.voice import (
 class DummyVoiceInterpreter(VoiceInterpreter):
     """Concrete test implementation of VoiceInterpreter."""
 
+    @override
     async def transcribe(self, audio_data: bytes, mime_type: str = "audio/ogg") -> str:
         return "transcribed text"
 
+    @override
     async def interpret(
         self,
         audio_data: bytes,
@@ -72,7 +75,7 @@ class TestVoiceInterpreter(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(interpreter.api_key, "env-api-key")
 
     @patch("heathen_ledger.voice.gemini.genai.Client")
-    def test_get_voice_interpreter_factory(self, mock_client_cls):
+    def test_get_voice_interpreter_factory(self, _mock_client_cls):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "env-key"}, clear=True):
             interpreter = get_voice_interpreter(provider="gemini")
             self.assertIsInstance(interpreter, GeminiVoiceInterpreter)

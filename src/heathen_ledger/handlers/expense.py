@@ -126,7 +126,7 @@ async def _safe_edit_toggle_message(query: Any, text: str, reply_markup: Any) ->
 
 @with_db_session
 async def pay_toggle_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+    update: Update, _context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle toggling participants in an expense split."""
     query = update.callback_query
@@ -237,7 +237,7 @@ async def payback_command(
 
 @with_db_session
 async def undo_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
+    update: Update, _context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle CallbackQuery for transaction undo actions."""
     query = update.callback_query
