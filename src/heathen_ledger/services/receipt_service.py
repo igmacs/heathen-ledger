@@ -12,6 +12,7 @@ from telegram.constants import ChatAction
 from ..formatters import generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
 from ..keyboards.ticket import TicketKeyboardBuilder
+from ..models import Group
 from ..parser import ParseErrorResult, PayCommandParser
 from ..receipt import (
     PendingTicketSession,
@@ -358,6 +359,36 @@ class ReceiptService:
         return receipt, formatted_text
 
     @classmethod
+    def _build_split_token(
+        cls,
+        p: dict[str, Any],
+        payer_id: int,
+        group: Group,
+        user_repo: UserRepository,
+        db_session: Session,
+    ) -> str:
+        uid = p.get("user_id")
+        share_amt = p["total_share"]
+
+        if uid == payer_id:
+            return f"me:{share_amt:.2f}"
+        if p.get("username"):
+            uname = p["username"].lstrip("@")
+            return f"@{uname}:{share_amt:.2f}"
+
+        clean_name = p["display_name"].strip()
+        uname_slug = clean_name.lower().replace(" ", "_")
+        ext_u = user_repo.get_in_group(group.id, uname_slug)
+        if not ext_u:
+            user_repo.create_external(
+                group=group,
+                first_name=clean_name,
+                username=uname_slug,
+            )
+            db_session.flush()
+        return f"@{uname_slug}:{share_amt:.2f}"
+
+    @classmethod
     def record_ticket_expense(
         cls,
         token: str,
@@ -389,28 +420,10 @@ class ReceiptService:
         total_amount = sum(p["total_share"] for p in split_shares.values())
         desc = session.receipt.merchant or "Receipt"
 
-        split_tokens = []
-        for p in split_shares.values():
-            uid = p.get("user_id")
-            share_amt = p["total_share"]
-
-            if uid == payer_id:
-                split_tokens.append(f"me:{share_amt:.2f}")
-            elif p.get("username"):
-                uname = p["username"].lstrip("@")
-                split_tokens.append(f"@{uname}:{share_amt:.2f}")
-            else:
-                clean_name = p["display_name"].strip()
-                uname_slug = clean_name.lower().replace(" ", "_")
-                ext_u = user_repo.get_in_group(group.id, uname_slug)
-                if not ext_u:
-                    user_repo.create_external(
-                        group=group,
-                        first_name=clean_name,
-                        username=uname_slug,
-                    )
-                    db_session.flush()
-                split_tokens.append(f"@{uname_slug}:{share_amt:.2f}")
+        split_tokens = [
+            cls._build_split_token(p, payer_id, group, user_repo, db_session)
+            for p in split_shares.values()
+        ]
 
         split_clause = " ".join(split_tokens)
         cmd_str = f"/pay {total_amount:.2f} for {desc} by me split {split_clause}"
@@ -423,6 +436,9 @@ class ReceiptService:
             username=payer_username,
             first_name=payer_first_name or f"User{payer_id}",
         )
+        if not reg_res.user or not reg_res.group:
+            cls.pop_session(token)
+            return f"⚠️ {reg_res.error or 'Failed to resolve user or group'}", None
         sender, group = reg_res.user, reg_res.group
 
         parsed = PayCommandParser.parse(cmd_str)

@@ -162,9 +162,10 @@ class TicketKeyboardBuilder:
         token: str,
         item_idx: int,
         members: list[Any],
-        _item_name: str | None = None,
+        item_name: str | None = None,
     ) -> InlineKeyboardMarkup:
         """Show members to assign to a chosen item."""
+        _ = item_name
         rows = []
         current_row = []
         for m in members:

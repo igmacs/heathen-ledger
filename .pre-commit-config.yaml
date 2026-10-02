@@ -17,3 +17,13 @@ repos:
     rev: v2.14
     hooks:
       - id: vulture
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        files: ^src/
+        pass_filenames: false

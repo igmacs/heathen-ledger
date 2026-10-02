@@ -71,3 +71,10 @@ max-complexity = 10
 min_confidence = 60
 paths = ["src", "tests", ".vulture_whitelist.py"]
 exclude = ["*/.#*"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+ignore_missing_imports = true
+check_untyped_defs = true

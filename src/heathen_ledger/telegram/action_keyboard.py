@@ -12,7 +12,9 @@ class EphemeralActionKeyboardDecorator:
         for row in reply_markup.inline_keyboard:
             for btn in row:
                 cb = btn.callback_data
-                if cb and (cb == "dismiss" or cb.startswith("dismiss:")):
+                if isinstance(cb, str) and (
+                    cb == "dismiss" or cb.startswith("dismiss:")
+                ):
                     return True
         return False
 

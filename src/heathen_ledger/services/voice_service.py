@@ -168,6 +168,8 @@ class VoiceService:
             username=creator_username,
             first_name=creator_first_name or f"User{creator_id}",
         )
+        if not reg_res.user or not reg_res.group:
+            return f"⚠️ {reg_res.error or 'Failed to resolve user or group'}", None
         sender, group = reg_res.user, reg_res.group
 
         parsed = PayCommandParser.parse(cmd_clean)

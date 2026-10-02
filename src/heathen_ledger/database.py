@@ -5,12 +5,15 @@ from contextlib import contextmanager
 from functools import wraps
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
+
 # Base class for all database models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
+
 
 # Retrieve database configuration from environment
 database_url = os.environ.get("DATABASE_URL")

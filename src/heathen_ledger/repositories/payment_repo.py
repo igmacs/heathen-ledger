@@ -65,7 +65,7 @@ class PaymentRepository:
             .all()
         )
 
-        txs = [
+        txs: list[dict[str, Any]] = [
             {"type": "expense", "obj": exp, "created_at": exp.created_at}
             for exp in expenses
         ]

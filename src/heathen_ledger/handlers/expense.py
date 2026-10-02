@@ -36,7 +36,12 @@ async def pay_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle the /pay command to record an expense."""
-    if not update.message or not update.message.text:
+    if (
+        not update.message
+        or not update.message.text
+        or not update.effective_user
+        or not update.effective_chat
+    ):
         return
 
     # If replying to a voice/audio note with /pay (no arguments), delegate to voice interpretation
@@ -182,7 +187,12 @@ async def payback_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Handle the /payback command to log direct payback transactions."""
-    if not update.message or not update.message.text:
+    if (
+        not update.message
+        or not update.message.text
+        or not update.effective_user
+        or not update.effective_chat
+    ):
         return
 
     parsed = PaybackCommandParser.parse(update.message.text)

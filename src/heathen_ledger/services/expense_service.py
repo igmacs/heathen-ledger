@@ -47,9 +47,10 @@ class ExpenseService:
         if uname == "me":
             u = sender
         else:
-            u = user_repo.get_in_group(group_id=group.id, username=uname)
-            if not u:
+            found = user_repo.get_in_group(group_id=group.id, username=uname)
+            if not found:
                 raise UserNotFoundError(uname)
+            u = found
         user_repo.add_to_group(user=u, group=group)
         return u
 

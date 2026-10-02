@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import re
+from typing import Any
 
 from sqlalchemy.orm import Session
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -108,7 +110,7 @@ async def register_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
 ):
     """Register a member, external person, or display registration button for the group ledger."""
-    if not update.message or not update.effective_chat:
+    if not update.message or not update.effective_chat or not update.effective_user:
         return
 
     chat = update.effective_chat
@@ -120,6 +122,8 @@ async def register_command(
         first_name=update.effective_user.first_name or "",
     )
     group = res.group
+    if not group:
+        return
 
     # 1. Replying to a message: register the author of that message
     if update.message.reply_to_message and update.message.reply_to_message.from_user:
@@ -148,7 +152,7 @@ async def register_command(
         )
         return
 
-    text = update.message.text.strip()
+    text = (update.message.text or "").strip()
     args_text = re.sub(
         r"^/register(?:_persistent)?(?:@\w+)?\s*", "", text, flags=re.IGNORECASE
     ).strip()
@@ -201,6 +205,27 @@ async def register_command(
         )
 
 
+async def _send_registration_notification(
+    query: Any,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    text: str,
+) -> None:
+    if query and query.message:
+        reply_fn = getattr(query.message, "reply_text", None)
+        if callable(reply_fn):
+            res = reply_fn(text, parse_mode="Markdown")
+            if asyncio.iscoroutine(res):
+                await res
+            return
+    if context and context.bot:
+        send_fn = getattr(context.bot, "send_message", None)
+        if callable(send_fn):
+            res = send_fn(chat_id=chat_id, text=text, parse_mode="Markdown")
+            if asyncio.iscoroutine(res):
+                await res
+
+
 @with_db_session
 async def register_callback_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE, session: Session
@@ -236,14 +261,5 @@ async def register_callback_handler(
         f"✅ You are now registered as {user.first_name}!", show_alert=False
     )
     handle_str = f" (@{user.username})" if user.username else ""
-    if query.message:
-        await query.message.reply_text(
-            f"👋 Registered *{user.first_name}*{handle_str} to the group ledger!",
-            parse_mode="Markdown",
-        )
-    elif context and context.bot:
-        await context.bot.send_message(
-            chat_id=chat.id,
-            text=f"👋 Registered *{user.first_name}*{handle_str} to the group ledger!",
-            parse_mode="Markdown",
-        )
+    text_content = f"👋 Registered *{user.first_name}*{handle_str} to the group ledger!"
+    await _send_registration_notification(query, context, chat.id, text_content)

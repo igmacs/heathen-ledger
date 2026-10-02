@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from telegram import Message
+from telegram import MaybeInaccessibleMessage, Message
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -150,7 +150,9 @@ class TelegramEphemeralClient:
         return False
 
     @classmethod
-    async def _trigger_message_delete_mock(cls, message: Message | None) -> None:
+    async def _trigger_message_delete_mock(
+        cls, message: Message | MaybeInaccessibleMessage | None
+    ) -> None:
         if message and hasattr(message, "delete"):
             del_fn = message.delete
             if isinstance(del_fn, AsyncMock | MagicMock):
@@ -163,7 +165,9 @@ class TelegramEphemeralClient:
                     pass
 
     @classmethod
-    def _extract_receiver_user_id(cls, message: Message | None) -> int | None:
+    def _extract_receiver_user_id(
+        cls, message: Message | MaybeInaccessibleMessage | None
+    ) -> int | None:
         if not message:
             return None
         receiver_user = getattr(message, "receiver_user", None)
@@ -204,7 +208,7 @@ class TelegramEphemeralClient:
         *,
         user_id: int | None = None,
         ephemeral_message_id: int | None = None,
-        message: Message | None = None,
+        message: Message | MaybeInaccessibleMessage | None = None,
     ) -> bool:
         """Delete a message, using deleteEphemeralMessage if it's ephemeral, or deleteMessage if standard."""
         bot = getattr(context, "bot", None)

@@ -57,6 +57,8 @@ async def process_receipt_media(
         target_chat = update.effective_chat if update else None
         if target_chat:
             chat_id = target_chat.id
+    if chat_id is None:
+        return
 
     try:
         receipt, formatted_text = await ReceiptService.process_receipt_image(
@@ -615,7 +617,7 @@ async def ticket_external_reply_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Handle text input when a user submits an external participant name."""
-    if not update.message or not update.message.text:
+    if not update.message or not update.message.text or context.user_data is None:
         return
 
     pending = context.user_data.get("pending_ext_ticket")

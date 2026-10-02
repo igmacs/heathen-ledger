@@ -117,7 +117,7 @@ async def _send_ephemeral_group_response(
     token: str | None = None
     if can_share or (dismissible and not _has_dismiss_button(reply_markup)):
         token = _EPHEMERAL_STORE.store(
-            chat_id=chat_id,
+            chat_id=int(chat_id),
             user_id=user.id,
             text=text or "",
             parse_mode=parse_mode,
