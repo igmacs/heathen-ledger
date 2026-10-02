@@ -9,7 +9,7 @@ from telegram.constants import ChatAction
 
 from ..formatters import generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
-from ..parser import PayCommandParser
+from ..parser import ParseErrorResult, PayCommandParser
 from ..repositories import GroupRepository
 from ..voice import (
     PendingVoiceCommand,
@@ -119,10 +119,10 @@ class VoiceService:
 
         token = None
         if interpretation.command:
-            speaker = getattr(media_message, "from_user", None)
-            creator_id = getattr(speaker, "id", None)
-            creator_username = getattr(speaker, "username", None)
-            creator_first_name = getattr(speaker, "first_name", None)
+            speaker = media_message.from_user if media_message else None
+            creator_id = speaker.id if speaker else None
+            creator_username = speaker.username if speaker else None
+            creator_first_name = speaker.first_name if speaker else None
 
             authorized_user_ids: set[int] = set()
             if creator_id is not None:
@@ -173,9 +173,9 @@ class VoiceService:
         sender, group = reg_res.user, reg_res.group
 
         parsed = PayCommandParser.parse(cmd_clean)
-        if "error" in parsed:
+        if isinstance(parsed, ParseErrorResult):
             return (
-                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"⚠️ Error parsing command: {parsed.error}\n"
                 f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
                 None,
             )

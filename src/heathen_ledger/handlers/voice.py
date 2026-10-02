@@ -27,11 +27,13 @@ clear_pending_voice_commands = VoiceService.clear_pending_commands
 
 
 async def _get_bot_username(bot: Any) -> str | None:
-    bot_username = getattr(bot, "username", None)
+    if not bot:
+        return None
+    bot_username = bot.username
     if not bot_username and hasattr(bot, "get_me"):
         try:
             bot_user = await bot.get_me()
-            return getattr(bot_user, "username", None)
+            return bot_user.username if bot_user else None
         except Exception:
             return None
     return bot_username
@@ -70,7 +72,7 @@ async def is_bot_mentioned(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     entities = list(update.message.entities or []) + list(
         update.message.caption_entities or []
     )
-    bot_id = getattr(context.bot, "id", None)
+    bot_id = context.bot.id if context and context.bot else None
     return _is_bot_in_entities(entities, text, bot_username, bot_id)
 
 
@@ -98,19 +100,19 @@ def _prepare_voice_command_pending(
     if not interpretation.command or chat_id is None:
         return None
 
-    speaker = getattr(media_message, "from_user", None) or getattr(
-        response_message, "from_user", None
+    speaker = (media_message.from_user if media_message else None) or (
+        response_message.from_user if response_message else None
     )
-    requester = getattr(response_message, "from_user", None)
+    requester = response_message.from_user if response_message else None
 
-    creator_id = getattr(speaker, "id", None)
-    creator_username = getattr(speaker, "username", None)
-    creator_first_name = getattr(speaker, "first_name", None)
+    creator_id = speaker.id if speaker else None
+    creator_username = speaker.username if speaker else None
+    creator_first_name = speaker.first_name if speaker else None
 
     authorized_user_ids: set[int] = set()
     if creator_id is not None:
         authorized_user_ids.add(creator_id)
-    if requester and getattr(requester, "id", None) is not None:
+    if requester and requester.id is not None:
         authorized_user_ids.add(requester.id)
 
     token = store_pending_voice_command(
@@ -157,8 +159,8 @@ async def process_voice_audio(
         return
 
     if chat_id is None:
-        target_chat = getattr(response_message, "chat", None)
-        if target_chat and hasattr(target_chat, "id"):
+        target_chat = response_message.chat if response_message else None
+        if target_chat:
             chat_id = target_chat.id
 
     # Indicate typing activity
@@ -356,7 +358,7 @@ async def _handle_voice_confirmation(
     # Execute confirmed command
     chat_title = None
     if query.message and query.message.chat:
-        chat_title = getattr(query.message.chat, "title", None)
+        chat_title = query.message.chat.title
 
     creator_id = pending.creator_id or query.from_user.id
     creator_username = pending.creator_username or query.from_user.username

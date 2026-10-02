@@ -41,8 +41,8 @@ class TicketKeyboardBuilder:
 
         # 1. Group members
         for m in members:
-            name = getattr(m, "first_name", None) or f"User {getattr(m, 'id', '')}"
-            uid = getattr(m, "telegram_id", getattr(m, "id", None))
+            name = m.first_name if m.first_name else f"User {m.id}"
+            uid = m.telegram_id or m.id
             btn = InlineKeyboardButton(
                 text=f"👤 {name}",
                 callback_data=f"tkt:psel:{session.token}:tg:{uid}",
@@ -168,7 +168,7 @@ class TicketKeyboardBuilder:
         rows = []
         current_row = []
         for m in members:
-            name = getattr(m, "first_name", f"User {m.id}")
+            name = m.first_name if m.first_name else f"User {m.id}"
             btn = InlineKeyboardButton(
                 text=f"👤 {name}",
                 callback_data=f"tkt:asgn_usr:{token}:{item_idx}:{m.id}",

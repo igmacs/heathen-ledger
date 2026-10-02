@@ -56,7 +56,8 @@ async def reply_mention_dispatcher(update, context):
         await voice_mention_handler(update, context)
     elif reply_to.photo or (
         reply_to.document
-        and getattr(reply_to.document, "mime_type", "").startswith("image/")
+        and reply_to.document.mime_type
+        and reply_to.document.mime_type.startswith("image/")
     ):
         await ticket_mention_handler(update, context)
 

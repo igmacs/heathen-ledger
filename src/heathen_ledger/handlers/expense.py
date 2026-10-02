@@ -10,6 +10,7 @@ from ..database import with_db_session
 from ..formatters import format_cents, generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
 from ..parser import (
+    ParseErrorResult,
     PaybackCommandParser,
     PayCommandParser,
 )
@@ -42,7 +43,7 @@ async def pay_command(
     reply_to = update.message.reply_to_message
     if reply_to and (reply_to.voice or reply_to.audio):
         text_clean = update.message.text.strip().lower()
-        bot_username = getattr(context.bot, "username", None) or ""
+        bot_username = (context.bot.username if context and context.bot else "") or ""
         valid_commands = ["/pay"]
         if bot_username:
             valid_commands.append(f"/pay@{bot_username.lower()}")
@@ -57,13 +58,13 @@ async def pay_command(
             )
 
     parsed = PayCommandParser.parse(update.message.text)
-    if "error" in parsed:
+    if isinstance(parsed, ParseErrorResult):
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await send_response(
             update,
             context,
-            f"⚠️ Error parsing command: {parsed['error']}\n"
+            f"⚠️ Error parsing command: {parsed.error}\n"
             f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`",
             reply_markup=reply_markup,
             parse_mode="Markdown",
@@ -185,13 +186,13 @@ async def payback_command(
         return
 
     parsed = PaybackCommandParser.parse(update.message.text)
-    if "error" in parsed:
+    if isinstance(parsed, ParseErrorResult):
         keyboard = [[InlineKeyboardButton(text="OK", callback_data="dismiss")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await send_response(
             update,
             context,
-            f"⚠️ Error parsing command: {parsed['error']}\n"
+            f"⚠️ Error parsing command: {parsed.error}\n"
             f"Usage: `/payback [@payer] @recipient <amount>`",
             reply_markup=reply_markup,
             parse_mode="Markdown",

@@ -12,14 +12,14 @@ class ReceiptImageDownloader:
         file_id = None
         mime_type = "image/jpeg"
 
-        if getattr(media_message, "photo", None):
+        if media_message.photo:
             # Telegram provides photo sizes from smallest to largest; the last is highest resolution
             photo_size = media_message.photo[-1]
             file_id = photo_size.file_id
             mime_type = "image/jpeg"
-        elif getattr(media_message, "document", None):
+        elif media_message.document:
             doc = media_message.document
-            doc_mime = getattr(doc, "mime_type", "") or ""
+            doc_mime = doc.mime_type or ""
             if doc_mime.startswith("image/"):
                 file_id = doc.file_id
                 mime_type = doc_mime

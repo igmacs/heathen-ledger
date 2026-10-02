@@ -7,11 +7,11 @@ class EphemeralActionKeyboardDecorator:
     @classmethod
     def has_dismiss_button(cls, reply_markup: InlineKeyboardMarkup | None) -> bool:
         """Check if reply_markup already contains a button with dismiss callback_data."""
-        if not reply_markup or not getattr(reply_markup, "inline_keyboard", None):
+        if not reply_markup or not reply_markup.inline_keyboard:
             return False
         for row in reply_markup.inline_keyboard:
             for btn in row:
-                cb = getattr(btn, "callback_data", None)
+                cb = btn.callback_data
                 if cb and (cb == "dismiss" or cb.startswith("dismiss:")):
                     return True
         return False
@@ -42,7 +42,7 @@ class EphemeralActionKeyboardDecorator:
         if not action_buttons:
             return reply_markup
 
-        if reply_markup is not None and getattr(reply_markup, "inline_keyboard", None):
+        if reply_markup is not None and reply_markup.inline_keyboard:
             new_keyboard = [list(row) for row in reply_markup.inline_keyboard]
             new_keyboard.append(action_buttons)
             return InlineKeyboardMarkup(new_keyboard)

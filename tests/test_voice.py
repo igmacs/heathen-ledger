@@ -18,6 +18,7 @@ from heathen_ledger.handlers.voice import (
     voice_message_handler,
 )
 from heathen_ledger.models import Expense
+from heathen_ledger.parser import ParseErrorResult
 from heathen_ledger.voice import VoiceInterpretation
 from telegram.constants import ChatType
 
@@ -380,7 +381,7 @@ class TestVoiceMessageHandler(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "heathen_ledger.handlers.expense.PayCommandParser.parse",
-            return_value={"error": "test"},
+            return_value=ParseErrorResult("test"),
         ):
             update.message.reply_text = AsyncMock()
             await pay_command(update, context)

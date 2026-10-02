@@ -16,7 +16,7 @@ class VoiceAudioDownloader:
         telegram_file = await bot.get_file(media.file_id)
         audio_bytes = bytes(await telegram_file.download_as_bytearray())
 
-        mime_type = getattr(media, "mime_type", None) or (
+        mime_type = media.mime_type or (
             "audio/ogg" if media_message.voice else "audio/mpeg"
         )
         return audio_bytes, mime_type

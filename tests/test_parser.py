@@ -30,113 +30,115 @@ from heathen_ledger.parser import (
 class TestParser(unittest.TestCase):
     def test_pay_command_parser_with_payer_and_desc(self):
         res = PayCommandParser.parse("/pay @Alice 50 for Dinner")
-        self.assertEqual(res.get("payer_username"), "alice")
-        self.assertEqual(res.get("amount"), 5000)
-        self.assertEqual(res.get("participants"), [])
-        self.assertEqual(res.get("description"), "Dinner")
+        self.assertEqual(res.payer_username, "alice")
+        self.assertEqual(res.amount, 5000)
+        self.assertEqual(res.participants, [])
+        self.assertEqual(res.description, "Dinner")
 
     def test_pay_command_parser_with_payer_and_participants(self):
         res = PayCommandParser.parse("/pay @Alice 50 for @Bob @Charlie")
-        self.assertEqual(res.get("payer_username"), "alice")
-        self.assertEqual(res.get("amount"), 5000)
-        self.assertEqual(res.get("participants"), ["bob", "charlie"])
-        self.assertIsNone(res.get("description"))
+        self.assertEqual(res.payer_username, "alice")
+        self.assertEqual(res.amount, 5000)
+        self.assertEqual(res.participants, ["bob", "charlie"])
+        self.assertIsNone(res.description)
 
     def test_pay_command_parser_no_payer(self):
         res = PayCommandParser.parse("/pay 12.50 for lunch @Bob")
-        self.assertIsNone(res.get("payer_username"))
-        self.assertEqual(res.get("amount"), 1250)
-        self.assertEqual(res.get("participants"), ["bob"])
-        self.assertEqual(res.get("description"), "lunch")
+        self.assertIsNone(res.payer_username)
+        self.assertEqual(res.amount, 1250)
+        self.assertEqual(res.participants, ["bob"])
+        self.assertEqual(res.description, "lunch")
 
     def test_pay_command_parser_only_amount(self):
         res = PayCommandParser.parse("/pay 100")
-        self.assertIsNone(res.get("payer_username"))
-        self.assertEqual(res.get("amount"), 10000)
-        self.assertEqual(res.get("participants"), [])
-        self.assertIsNone(res.get("description"))
+        self.assertIsNone(res.payer_username)
+        self.assertEqual(res.amount, 10000)
+        self.assertEqual(res.participants, [])
+        self.assertIsNone(res.description)
 
     def test_pay_command_parser_invalid_amount(self):
         res = PayCommandParser.parse("/pay @Alice for Dinner")
-        self.assertIn("error", res)
+        self.assertIsInstance(res, ParseErrorResult)
 
     def test_pay_command_parser_multi_payer_equal(self):
         res = PayCommandParser.parse("/pay 90 for Dinner by me @Bob")
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 9000)
-        self.assertEqual(res["description"], "Dinner")
-        self.assertEqual(res["payers"], {"me": 4500, "bob": 4500})
-        self.assertIsNone(res["payer_username"])
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 9000)
+        self.assertEqual(res.description, "Dinner")
+        self.assertEqual(res.payers, {"me": 4500, "bob": 4500})
+        self.assertIsNone(res.payer_username)
 
     def test_pay_command_parser_multi_payer_custom(self):
         res = PayCommandParser.parse("/pay 40 for Pizza by me:25 @Charlie:15")
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 4000)
-        self.assertEqual(res["description"], "Pizza")
-        self.assertEqual(res["payers"], {"me": 2500, "charlie": 1500})
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 4000)
+        self.assertEqual(res.description, "Pizza")
+        self.assertEqual(res.payers, {"me": 2500, "charlie": 1500})
 
     def test_pay_command_parser_inferred_amount_from_payers(self):
         res = PayCommandParser.parse("/pay for Dinner by @Alice:30 @Bob:20")
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 5000)
-        self.assertEqual(res["payers"], {"alice": 3000, "bob": 2000})
-        self.assertEqual(res["description"], "Dinner")
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 5000)
+        self.assertEqual(res.payers, {"alice": 3000, "bob": 2000})
+        self.assertEqual(res.description, "Dinner")
 
     def test_pay_command_parser_custom_splits(self):
         res = PayCommandParser.parse("/pay 30 for drinks split @Bob:10 @Charlie:20")
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 3000)
-        self.assertEqual(res["description"], "drinks")
-        self.assertEqual(res["split_spec"]["mode"], "custom")
-        self.assertEqual(res["split_spec"]["shares"], {"bob": 1000, "charlie": 2000})
-        self.assertEqual(res["participants"], ["bob", "charlie"])
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 3000)
+        self.assertEqual(res.description, "drinks")
+        self.assertEqual(res.split_spec.mode, "custom")
+        self.assertEqual(res.split_spec.shares, {"bob": 1000, "charlie": 2000})
+        self.assertEqual(res.participants, ["bob", "charlie"])
 
     def test_pay_command_parser_split_except(self):
         res = PayCommandParser.parse("/pay 45 for groceries split except @Dave")
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 4500)
-        self.assertEqual(res["description"], "groceries")
-        self.assertEqual(res["split_spec"]["mode"], "except")
-        self.assertEqual(res["split_spec"]["excluded"], ["dave"])
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 4500)
+        self.assertEqual(res.description, "groceries")
+        self.assertEqual(res.split_spec.mode, "except")
+        self.assertEqual(res.split_spec.excluded, ["dave"])
 
     def test_pay_command_parser_dates(self):
         # ISO date
         res_iso = PayCommandParser.parse("/pay 50 for Dinner on 2026-09-07")
-        self.assertNotIn("error", res_iso)
-        self.assertEqual(res_iso["expense_date"], datetime.date(2026, 9, 7))
+        self.assertIsInstance(res_iso, ParsedPayCommand)
+        self.assertEqual(res_iso.expense_date, datetime.date(2026, 9, 7))
 
         # today & yesterday
         res_today = PayCommandParser.parse("/pay 50 for Lunch on today")
-        self.assertEqual(res_today["expense_date"], datetime.date.today())
+        self.assertIsInstance(res_today, ParsedPayCommand)
+        self.assertEqual(res_today.expense_date, datetime.date.today())
 
         res_yesterday = PayCommandParser.parse("/pay 50 for Lunch on yesterday")
+        self.assertIsInstance(res_yesterday, ParsedPayCommand)
         self.assertEqual(
-            res_yesterday["expense_date"],
+            res_yesterday.expense_date,
             datetime.date.today() - datetime.timedelta(days=1),
         )
 
         # Invalid date
         res_invalid = PayCommandParser.parse("/pay 50 for Lunch on 2026-99-99")
-        self.assertIn("error", res_invalid)
+        self.assertIsInstance(res_invalid, ParseErrorResult)
 
     def test_pay_command_parser_quoted_description(self):
         res = PayCommandParser.parse(
             '/pay 120 for "Weekend Airbnb and snacks" by @Alice'
         )
-        self.assertNotIn("error", res)
-        self.assertEqual(res["amount"], 12000)
-        self.assertEqual(res["description"], "Weekend Airbnb and snacks")
-        self.assertEqual(res["payers"], {"alice": 12000})
+        self.assertIsInstance(res, ParsedPayCommand)
+        self.assertEqual(res.amount, 12000)
+        self.assertEqual(res.description, "Weekend Airbnb and snacks")
+        self.assertEqual(res.payers, {"alice": 12000})
 
     def test_pay_command_parser_validation_mismatched_payers(self):
         res = PayCommandParser.parse("/pay 50 for Dinner by @Alice:30 @Bob:10")
-        self.assertIn("error", res)
-        self.assertIn("does not match total expense amount", res["error"])
+        self.assertIsInstance(res, ParseErrorResult)
+        self.assertIn("does not match total expense amount", res.error)
 
     def test_pay_command_parser_validation_mismatched_splits(self):
         res = PayCommandParser.parse("/pay 50 for Dinner split @Bob:20 @Charlie:20")
-        self.assertIn("error", res)
-        self.assertIn("does not match total expense amount", res["error"])
+        self.assertIsInstance(res, ParseErrorResult)
+        self.assertIn("does not match total expense amount", res.error)
 
     def test_split_amount_equally_exact(self):
         shares = split_amount_equally(3000, 3)
@@ -222,19 +224,21 @@ class TestParser(unittest.TestCase):
 
     def test_payback_command_parser_single_mention(self):
         res = PaybackCommandParser.parse("/payback @Alice 10")
-        self.assertIsNone(res.get("payer_username"))
-        self.assertEqual(res.get("payee_username"), "alice")
-        self.assertEqual(res.get("amount"), 1000)
+        self.assertIsInstance(res, ParsedPaybackCommand)
+        self.assertIsNone(res.payer_username)
+        self.assertEqual(res.payee_username, "alice")
+        self.assertEqual(res.amount, 1000)
 
     def test_payback_command_parser_dual_mention(self):
         res = PaybackCommandParser.parse("/payback @Bob @Alice 12.50")
-        self.assertEqual(res.get("payer_username"), "bob")
-        self.assertEqual(res.get("payee_username"), "alice")
-        self.assertEqual(res.get("amount"), 1250)
+        self.assertIsInstance(res, ParsedPaybackCommand)
+        self.assertEqual(res.payer_username, "bob")
+        self.assertEqual(res.payee_username, "alice")
+        self.assertEqual(res.amount, 1250)
 
     def test_payback_command_parser_invalid(self):
         res = PaybackCommandParser.parse("/payback @Alice")
-        self.assertIn("error", res)
+        self.assertIsInstance(res, ParseErrorResult)
 
     def test_generate_history_summary(self):
         class MockUser:
@@ -245,6 +249,8 @@ class TestParser(unittest.TestCase):
             def __init__(self, payer, amount, description):
                 self.payer = payer
                 self.payer_id = 1
+                self.payers = []
+                self.expense_date = None
                 self.amount = amount
                 self.description = description
 
@@ -283,6 +289,8 @@ class TestParser(unittest.TestCase):
                 self.id = 101
                 self.payer = payer
                 self.payer_id = 1
+                self.payers = []
+                self.expense_date = None
                 self.amount = amount
                 self.description = description
 
@@ -346,8 +354,6 @@ class TestParser(unittest.TestCase):
         err_res = PayCommandParser.parse("/pay invalid")
         self.assertIsInstance(err_res, ParseErrorResult)
         self.assertEqual(err_res.error, "No valid amount found in the message.")
-        self.assertEqual(err_res["error"], "No valid amount found in the message.")
-        self.assertIn("error", err_res)
 
     def test_amount_parser(self):
         self.assertEqual(AmountParser.parse_cents("10"), 1000)

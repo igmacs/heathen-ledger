@@ -12,7 +12,7 @@ from telegram.constants import ChatAction
 from ..formatters import generate_expense_reply_text
 from ..keyboards import ExpenseKeyboardBuilder
 from ..keyboards.ticket import TicketKeyboardBuilder
-from ..parser import PayCommandParser
+from ..parser import ParseErrorResult, PayCommandParser
 from ..receipt import (
     PendingTicketSession,
     PendingTicketStore,
@@ -341,10 +341,7 @@ class ReceiptService:
         chat_id: int | None = None,
     ) -> tuple[Receipt, str]:
         """Download, parse via Gemini, and return (Receipt, formatted_markdown)."""
-        has_media = bool(
-            getattr(media_message, "photo", None)
-            or getattr(media_message, "document", None)
-        )
+        has_media = bool(media_message.photo or media_message.document)
         if not has_media:
             raise ValidationError("Message does not contain a photo or image document.")
 
@@ -431,9 +428,9 @@ class ReceiptService:
         sender, group = reg_res.user, reg_res.group
 
         parsed = PayCommandParser.parse(cmd_str)
-        if "error" in parsed:
+        if isinstance(parsed, ParseErrorResult):
             result_text = (
-                f"⚠️ Error parsing command: {parsed['error']}\n"
+                f"⚠️ Error parsing command: {parsed.error}\n"
                 f"Usage: `/pay <amount> [for <description>] [by <payer(s)>] [split <participants>] [on <date>]`"
             )
             reply_markup = None

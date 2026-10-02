@@ -2,7 +2,6 @@
 
 import datetime
 from dataclasses import dataclass, field
-from typing import Any
 
 
 class CommandParseError(Exception):
@@ -15,25 +14,9 @@ class CommandParseError(Exception):
 
 @dataclass
 class ParseErrorResult:
-    """Represents a parsing failure for backwards compatibility with dict inspection."""
+    """Represents a parsing failure."""
 
     error: str
-
-    def __getitem__(self, item: str) -> Any:
-        if item == "error":
-            return self.error
-        raise KeyError(item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        if item == "error":
-            return self.error
-        return default
-
-    def __contains__(self, item: str) -> bool:
-        return item == "error"
-
-    def __repr__(self) -> str:
-        return f"ParseErrorResult(error={self.error!r})"
 
 
 @dataclass
@@ -44,17 +27,6 @@ class SplitSpec:
     participants: list[str] = field(default_factory=list)
     shares: dict[str, int | None] = field(default_factory=dict)
     excluded: list[str] = field(default_factory=list)
-
-    def __getitem__(self, item: str) -> Any:
-        if hasattr(self, item):
-            return getattr(self, item)
-        raise KeyError(item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        return getattr(self, item, default)
-
-    def __contains__(self, item: str) -> bool:
-        return hasattr(self, item)
 
 
 @dataclass
@@ -69,19 +41,6 @@ class ParsedPayCommand:
     payer_username: str | None = None
     participants: list[str] = field(default_factory=list)
 
-    def __getitem__(self, item: str) -> Any:
-        if hasattr(self, item):
-            return getattr(self, item)
-        raise KeyError(item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        return getattr(self, item, default)
-
-    def __contains__(self, item: str) -> bool:
-        if item == "error":
-            return False
-        return hasattr(self, item)
-
 
 @dataclass
 class ParsedPaybackCommand:
@@ -90,16 +49,3 @@ class ParsedPaybackCommand:
     payee_username: str
     amount: int
     payer_username: str | None = None
-
-    def __getitem__(self, item: str) -> Any:
-        if hasattr(self, item):
-            return getattr(self, item)
-        raise KeyError(item)
-
-    def get(self, item: str, default: Any = None) -> Any:
-        return getattr(self, item, default)
-
-    def __contains__(self, item: str) -> bool:
-        if item == "error":
-            return False
-        return hasattr(self, item)

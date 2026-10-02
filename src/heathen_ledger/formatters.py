@@ -26,7 +26,7 @@ def generate_balances_summary(
         user = users_by_id.get(user_id)
         if not user:
             continue
-        name = getattr(user, "first_name", f"User {user_id}")
+        name = user.first_name if user.first_name else f"User {user_id}"
         amount_str = format_cents(abs(balance))
 
         if balance > 0:
@@ -54,13 +54,13 @@ def generate_settlements_summary(
         from_user = users_by_id.get(tx["from_user_id"])
         to_user = users_by_id.get(tx["to_user_id"])
         from_name = (
-            getattr(from_user, "first_name", f"User {tx['from_user_id']}")
-            if from_user
+            from_user.first_name
+            if from_user and from_user.first_name
             else f"User {tx['from_user_id']}"
         )
         to_name = (
-            getattr(to_user, "first_name", f"User {tx['to_user_id']}")
-            if to_user
+            to_user.first_name
+            if to_user and to_user.first_name
             else f"User {tx['to_user_id']}"
         )
         amount_formatted = format_cents(tx["amount"])
@@ -89,7 +89,7 @@ def generate_history_summary(transactions: list[dict[str, Any]]) -> str:
         amount_formatted = format_cents(obj.amount)
 
         if t_type == "expense":
-            if getattr(obj, "payers", None) and len(obj.payers) > 1:
+            if obj.payers and len(obj.payers) > 1:
                 payer_parts = [
                     f"{p.user.first_name} ({format_cents(p.amount)})"
                     for p in obj.payers
@@ -98,29 +98,19 @@ def generate_history_summary(transactions: list[dict[str, Any]]) -> str:
                 payer_str = (
                     ", ".join(payer_parts) if payer_parts else "Multiple members"
                 )
-            elif (
-                getattr(obj, "payers", None)
-                and len(obj.payers) == 1
-                and obj.payers[0].user
-            ):
-                payer_str = obj.payers[0].user.first_name
-            elif getattr(obj, "payer", None) and obj.payer:
+            elif obj.payer:
                 payer_str = obj.payer.first_name
             else:
                 payer_str = "Unknown"
 
             desc = f" for '{obj.description}'" if obj.description else ""
-            date_str = (
-                f" on {obj.expense_date.isoformat()}"
-                if getattr(obj, "expense_date", None)
-                else ""
-            )
+            date_str = f" on {obj.expense_date.isoformat()}" if obj.expense_date else ""
             lines.append(
                 f"{i}. 💸 **Expense:** **{payer_str}** paid **{amount_formatted}**{desc}{date_str}"
             )
         elif t_type == "payment":
-            payer_name = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
-            payee_name = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
+            payer_name = obj.payer.first_name if obj.payer else f"User {obj.payer_id}"
+            payee_name = obj.payee.first_name if obj.payee else f"User {obj.payee_id}"
             lines.append(
                 f"{i}. 🤝 **Payment:** **{payer_name}** paid **{payee_name}** **{amount_formatted}**"
             )
@@ -142,7 +132,7 @@ def generate_history_rich_html(transactions: list[dict[str, Any]]) -> str:
         delete_btn = f'<tg-button type="callback_data" style="danger" data="{callback_data}">🗑️</tg-button>'
 
         if t_type == "expense":
-            if getattr(obj, "payers", None) and len(obj.payers) > 1:
+            if obj.payers and len(obj.payers) > 1:
                 payer_parts = [
                     f"{html.escape(p.user.first_name)} ({format_cents(p.amount)})"
                     for p in obj.payers
@@ -151,13 +141,7 @@ def generate_history_rich_html(transactions: list[dict[str, Any]]) -> str:
                 payer_str = (
                     ", ".join(payer_parts) if payer_parts else "Multiple members"
                 )
-            elif (
-                getattr(obj, "payers", None)
-                and len(obj.payers) == 1
-                and obj.payers[0].user
-            ):
-                payer_str = html.escape(obj.payers[0].user.first_name)
-            elif getattr(obj, "payer", None) and obj.payer:
+            elif obj.payer:
                 payer_str = html.escape(obj.payer.first_name)
             else:
                 payer_str = "Unknown"
@@ -165,15 +149,15 @@ def generate_history_rich_html(transactions: list[dict[str, Any]]) -> str:
             desc = f" for '{html.escape(obj.description)}'" if obj.description else ""
             date_str = (
                 f" on {html.escape(obj.expense_date.isoformat())}"
-                if getattr(obj, "expense_date", None)
+                if obj.expense_date
                 else ""
             )
             lines.append(
                 f"<p>{i}. 💸 <b>Expense:</b> <b>{payer_str}</b> paid <b>{amount_formatted}</b>{desc}{date_str} {delete_btn}</p>"
             )
         elif t_type == "payment":
-            payer_raw = getattr(obj.payer, "first_name", f"User {obj.payer_id}")
-            payee_raw = getattr(obj.payee, "first_name", f"User {obj.payee_id}")
+            payer_raw = obj.payer.first_name if obj.payer else f"User {obj.payer_id}"
+            payee_raw = obj.payee.first_name if obj.payee else f"User {obj.payee_id}"
             payer_name = html.escape(payer_raw)
             payee_name = html.escape(payee_raw)
             lines.append(

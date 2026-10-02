@@ -26,9 +26,9 @@ def is_image_media(message) -> bool:
     """Check if message contains a photo or image document."""
     if not message:
         return False
-    doc = getattr(message, "document", None)
-    is_img_doc = bool(doc and getattr(doc, "mime_type", "").startswith("image/"))
-    return bool(getattr(message, "photo", None) or is_img_doc)
+    doc = message.document
+    is_img_doc = bool(doc and doc.mime_type and doc.mime_type.startswith("image/"))
+    return bool(message.photo or is_img_doc)
 
 
 async def process_receipt_media(
@@ -54,8 +54,8 @@ async def process_receipt_media(
         return
 
     if chat_id is None:
-        target_chat = getattr(update, "effective_chat", None)
-        if target_chat and hasattr(target_chat, "id"):
+        target_chat = update.effective_chat if update else None
+        if target_chat:
             chat_id = target_chat.id
 
     try:
@@ -73,7 +73,7 @@ async def process_receipt_media(
             )
             return
 
-        user = getattr(update, "effective_user", None)
+        user = update.effective_user if update else None
         creator_id = user.id if user else None
         creator_name = user.first_name if user else "Member"
 
@@ -200,14 +200,13 @@ def _resolve_tg_participant(session: Session, participant_key: str) -> Any | Non
                 extract_initials,
             )
 
-            first_name = getattr(u, "first_name", "") or f"User {tg_uid}"
-            last_name = getattr(u, "last_name", None)
-            username = getattr(u, "username", None)
+            first_name = u.first_name or f"User {tg_uid}"
+            username = u.username
             return TicketParticipant(
                 participant_key=participant_key,
                 display_name=first_name,
-                initials=extract_initials(first_name, last_name, username),
-                user_id=getattr(u, "telegram_id", tg_uid),
+                initials=extract_initials(first_name, None, username),
+                user_id=u.telegram_id or tg_uid,
                 username=username,
                 is_external=False,
             )
@@ -377,7 +376,7 @@ async def _handle_tkt_assign_item(
         await query.answer("⚠️ This ticket session has expired.", show_alert=True)
         return
 
-    chat = getattr(query.message, "chat", None)
+    chat = query.message.chat if query and query.message else None
     chat_id = chat.id if chat else None
     members = []
     if chat_id:
@@ -463,9 +462,9 @@ async def _handle_tkt_assign_new(
         await query.answer("⚠️ This ticket session has expired.", show_alert=True)
         return
 
-    chat = getattr(query.message, "chat", None)
+    chat = query.message.chat if query and query.message else None
     chat_id = chat.id if chat else None
-    msg_id = getattr(query.message, "message_id", None)
+    msg_id = query.message.message_id if query and query.message else None
     context.user_data["pending_ext_ticket"] = {
         "token": token,
         "item_idx": item_idx,
@@ -523,9 +522,9 @@ async def _handle_tkt_record(
         return
     token = parts[2]
     user = query.from_user
-    chat = getattr(query.message, "chat", None)
+    chat = query.message.chat if query and query.message else None
     chat_id = chat.id if chat else query.from_user.id
-    chat_title = getattr(chat, "title", None)
+    chat_title = chat.title if chat else None
 
     try:
         text, reply_markup = ReceiptService.record_ticket_expense(

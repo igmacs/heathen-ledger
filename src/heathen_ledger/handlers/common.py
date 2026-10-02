@@ -28,16 +28,11 @@ delete_ephemeral_message = TelegramEphemeralClient.delete_ephemeral_message
 delete_message_or_ephemeral = TelegramEphemeralClient.delete_message_or_ephemeral
 
 
-def is_group_chat(chat_or_update: Any) -> bool:
-    """Check if the update or chat corresponds to a group or supergroup chat."""
-    if hasattr(chat_or_update, "effective_chat"):
-        chat = getattr(chat_or_update, "effective_chat", None)
-    else:
-        chat = chat_or_update
-    return chat is not None and getattr(chat, "type", None) in (
-        ChatType.GROUP,
-        ChatType.SUPERGROUP,
-    )
+def is_group_chat(update: Update | None) -> bool:
+    """Check if the update corresponds to a group or supergroup chat."""
+    if not update or not update.effective_chat:
+        return False
+    return update.effective_chat.type in (ChatType.GROUP, ChatType.SUPERGROUP)
 
 
 def require_group_chat(f):
@@ -62,8 +57,8 @@ def require_group_chat(f):
 
 def is_persistent_command(update: Update) -> bool:
     """Check if the invoked command requested a persistent (public) group response."""
-    msg = getattr(update, "effective_message", None) or getattr(update, "message", None)
-    if not msg or not getattr(msg, "text", None):
+    msg = (update.effective_message or update.message) if update else None
+    if not msg or not msg.text:
         return False
     first_word = msg.text.strip().split()[0].lower()
     cmd = first_word.lstrip("/").split("@")[0]
@@ -77,27 +72,24 @@ async def _trigger_mock_reply(
     reply_markup: InlineKeyboardMarkup | None,
     parse_mode: str | None,
 ) -> None:
-    msg_obj = getattr(update, "effective_message", None) or getattr(
-        update, "message", None
-    )
-    if msg_obj and hasattr(msg_obj, "reply_text"):
-        reply_fn = getattr(msg_obj, "reply_text", None)
-        if isinstance(reply_fn, MagicMock | AsyncMock):
-            effective_text = text if text is not None else (rich_html or "")
-            if isinstance(reply_fn, AsyncMock):
-                await reply_fn(
-                    effective_text, reply_markup=reply_markup, parse_mode=parse_mode
-                )
-            else:
-                reply_fn(
-                    effective_text, reply_markup=reply_markup, parse_mode=parse_mode
-                )
+    msg_obj = (update.effective_message or update.message) if update else None
+    if not msg_obj:
+        return
+    reply_fn = getattr(msg_obj, "reply_text", None)
+    if isinstance(reply_fn, MagicMock | AsyncMock):
+        effective_text = text if text is not None else (rich_html or "")
+        if isinstance(reply_fn, AsyncMock):
+            await reply_fn(
+                effective_text, reply_markup=reply_markup, parse_mode=parse_mode
+            )
+        else:
+            reply_fn(effective_text, reply_markup=reply_markup, parse_mode=parse_mode)
 
 
 async def _invoke_bot_send(bot: Any, **kwargs: Any) -> Any:
-    send_fn = getattr(bot, "send_message", None) if bot else None
-    if send_fn is None:
+    if not bot:
         return None
+    send_fn = bot.send_message
     if isinstance(send_fn, MagicMock) and not isinstance(send_fn, AsyncMock):
         send_fn(**kwargs)
         return None
@@ -174,8 +166,8 @@ async def _send_ephemeral_group_response(
             sent_eph_id = _get_ephemeral_message_id(sent_msg)
             if sent_eph_id is not None:
                 _EPHEMERAL_STORE.payloads[token]["ephemeral_message_id"] = sent_eph_id
-            _EPHEMERAL_STORE.payloads[token]["message_id"] = getattr(
-                sent_msg, "message_id", None
+            _EPHEMERAL_STORE.payloads[token]["message_id"] = (
+                sent_msg.message_id if sent_msg else None
             )
         return sent_msg
     except Exception as e:
@@ -211,8 +203,8 @@ async def send_response(
     """
     await _trigger_mock_reply(update, text, rich_html, reply_markup, parse_mode)
 
-    chat = getattr(update, "effective_chat", None)
-    user = getattr(update, "effective_user", None)
+    chat = update.effective_chat if update else None
+    user = update.effective_user if update else None
     chat_id = chat.id if chat else (user.id if user else None)
     if not chat_id:
         return None
@@ -220,10 +212,8 @@ async def send_response(
     if ephemeral is None:
         ephemeral = not is_persistent_command(update)
 
-    bot = getattr(context, "bot", None)
-    msg_obj = getattr(update, "effective_message", None) or getattr(
-        update, "message", None
-    )
+    bot = context.bot if context else None
+    msg_obj = (update.effective_message or update.message) if update else None
 
     if ephemeral and is_group_chat(update) and user:
         return await _send_ephemeral_group_response(
@@ -258,7 +248,7 @@ async def send_response(
 async def _safe_answer_query(
     query: Any, text: str | None = None, show_alert: bool = False
 ) -> None:
-    if not query or not hasattr(query, "answer"):
+    if not query:
         return
     try:
         ans_fn = query.answer
@@ -272,7 +262,7 @@ async def _safe_answer_query(
             res = ans_fn(*args, **kwargs)
             if asyncio.iscoroutine(res):
                 await res
-    except BadRequest:
+    except (BadRequest, AttributeError):
         pass
 
 
@@ -291,24 +281,25 @@ async def _send_persisted_message(bot: Any, payload: dict[str, Any]) -> None:
             reply_markup=reply_markup,
         )
     else:
-        send_fn = getattr(bot, "send_message", None)
-        if send_fn:
-            if isinstance(send_fn, AsyncMock) or asyncio.iscoroutinefunction(send_fn):
-                await send_fn(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode=parse_mode,
-                    reply_markup=reply_markup,
-                )
-            elif callable(send_fn):
-                res = send_fn(
-                    chat_id=chat_id,
-                    text=text,
-                    parse_mode=parse_mode,
-                    reply_markup=reply_markup,
-                )
-                if asyncio.iscoroutine(res):
-                    await res
+        if not bot:
+            return
+        send_fn = bot.send_message
+        if isinstance(send_fn, AsyncMock) or asyncio.iscoroutinefunction(send_fn):
+            await send_fn(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+        elif callable(send_fn):
+            res = send_fn(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=parse_mode,
+                reply_markup=reply_markup,
+            )
+            if asyncio.iscoroutine(res):
+                await res
 
 
 async def persist_callback_handler(
@@ -333,7 +324,9 @@ async def persist_callback_handler(
         return
 
     # Check that the user clicking the button is the one who requested it
-    user = getattr(update, "effective_user", None) or getattr(query, "from_user", None)
+    user = (update.effective_user if update else None) or (
+        query.from_user if query else None
+    )
     if user and payload.get("user_id") and user.id != payload["user_id"]:
         _EPHEMERAL_STORE.restore(token, payload)
         await _safe_answer_query(
@@ -343,7 +336,7 @@ async def persist_callback_handler(
         )
         return
 
-    bot = getattr(context, "bot", None)
+    bot = context.bot if context else None
     if not bot:
         return
 
@@ -371,19 +364,18 @@ async def persist_callback_handler(
 
 
 async def _delete_reply_to_message(query: Any) -> None:
-    if query.message and getattr(query.message, "reply_to_message", None):
+    if query and query.message and query.message.reply_to_message:
         reply_msg = query.message.reply_to_message
-        if hasattr(reply_msg, "delete"):
-            try:
-                del_fn = reply_msg.delete
-                if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
-                    await del_fn()
-                elif callable(del_fn):
-                    res = del_fn()
-                    if asyncio.iscoroutine(res):
-                        await res
-            except BadRequest as e:
-                logger.debug("Failed to delete original command message: %s", e)
+        try:
+            del_fn = reply_msg.delete
+            if isinstance(del_fn, AsyncMock) or asyncio.iscoroutinefunction(del_fn):
+                await del_fn()
+            elif callable(del_fn):
+                res = del_fn()
+                if asyncio.iscoroutine(res):
+                    await res
+        except (BadRequest, AttributeError) as e:
+            logger.debug("Failed to delete original command message: %s", e)
 
 
 async def dismiss_callback_handler(
@@ -402,18 +394,14 @@ async def dismiss_callback_handler(
     # Delete the original command message if it exists
     await _delete_reply_to_message(query)
 
-    user = getattr(query, "from_user", None) or getattr(update, "effective_user", None)
+    user = (query.from_user if query else None) or (
+        update.effective_user if update else None
+    )
     chat = (
-        query.message.chat
-        if query.message and getattr(query.message, "chat", None)
-        else None
-    ) or getattr(update, "effective_chat", None)
-    chat_id = (payload and payload.get("chat_id")) or (
-        chat.id if chat and getattr(chat, "id", None) is not None else None
-    )
-    user_id = (payload and payload.get("user_id")) or (
-        user.id if user and getattr(user, "id", None) is not None else None
-    )
+        query.message.chat if query and query.message and query.message.chat else None
+    ) or (update.effective_chat if update else None)
+    chat_id = (payload and payload.get("chat_id")) or (chat.id if chat else None)
+    user_id = (payload and payload.get("user_id")) or (user.id if user else None)
     eph_id = (
         payload and payload.get("ephemeral_message_id")
     ) or _get_ephemeral_message_id(query.message)

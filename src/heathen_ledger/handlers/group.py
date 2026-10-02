@@ -31,8 +31,8 @@ def _is_active_status(status: str | None) -> bool:
 async def _send_welcome_greeting(
     context: ContextTypes.DEFAULT_TYPE, chat_id: int
 ) -> None:
-    bot = getattr(context, "bot", None)
-    if not bot or not hasattr(bot, "send_message"):
+    bot = context.bot if context else None
+    if not bot:
         return
     try:
         res = bot.send_message(
@@ -63,8 +63,16 @@ async def chat_member_update_handler(
     if not chat or chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
         return
 
-    old_status = getattr(chat_member_updated.old_chat_member, "status", None)
-    new_status = getattr(chat_member_updated.new_chat_member, "status", None)
+    old_status = (
+        chat_member_updated.old_chat_member.status
+        if chat_member_updated.old_chat_member
+        else None
+    )
+    new_status = (
+        chat_member_updated.new_chat_member.status
+        if chat_member_updated.new_chat_member
+        else None
+    )
 
     # Bot joined or was added to group / promoted to active status from inactive
     if _is_active_status(new_status) and not _is_active_status(old_status):

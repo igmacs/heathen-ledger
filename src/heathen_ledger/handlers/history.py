@@ -21,7 +21,7 @@ async def refresh_history_message(
     query, session: Session, context: ContextTypes.DEFAULT_TYPE | None = None
 ):
     """Helper to refresh the history message with updated transactions using Rich Messages."""
-    bot = getattr(context, "bot", None) if context else None
+    bot = context.bot if context else None
     group = GroupRepository(session).get_by_telegram_id(query.message.chat.id)
     if not group:
         await TelegramRichClient.edit_rich_message_or_ephemeral(
@@ -36,16 +36,16 @@ async def refresh_history_message(
     rich_html = generate_history_rich_html(txs)
 
     # Retain action buttons (Share to group / Dismiss) if present, ignoring bottom delete buttons
-    msg = getattr(query, "message", None)
-    orig_reply_markup = getattr(msg, "reply_markup", None)
+    msg = query.message if query else None
+    orig_reply_markup = msg.reply_markup if msg else None
     action_markup = None
-    if orig_reply_markup and hasattr(orig_reply_markup, "inline_keyboard"):
+    if orig_reply_markup and orig_reply_markup.inline_keyboard:
         action_rows = []
         for row in orig_reply_markup.inline_keyboard:
             action_row = [
                 btn
                 for btn in row
-                if getattr(btn, "callback_data", "")
+                if btn.callback_data
                 and (
                     btn.callback_data.startswith("persist:")
                     or btn.callback_data.startswith("dismiss")

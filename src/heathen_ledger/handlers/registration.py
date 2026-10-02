@@ -241,7 +241,7 @@ async def register_callback_handler(
             f"👋 Registered *{user.first_name}*{handle_str} to the group ledger!",
             parse_mode="Markdown",
         )
-    elif hasattr(context, "bot") and hasattr(context.bot, "send_message"):
+    elif context and context.bot:
         await context.bot.send_message(
             chat_id=chat.id,
             text=f"👋 Registered *{user.first_name}*{handle_str} to the group ledger!",

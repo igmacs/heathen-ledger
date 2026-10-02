@@ -35,15 +35,11 @@ class BalanceCalculator:
     def _apply_expenses(cls, balances: dict[int, int], expenses: list[Any]) -> None:
         """Apply payers and splits from expenses to net balances."""
         for exp in expenses:
-            if getattr(exp, "payers", None):
-                for p in exp.payers:
-                    balances[p.user_id] = balances.get(p.user_id, 0) + p.amount
+            for p in exp.payers:
+                balances[p.user_id] = balances.get(p.user_id, 0) + p.amount
 
-            if getattr(exp, "splits", None):
-                for split in exp.splits:
-                    balances[split.user_id] = (
-                        balances.get(split.user_id, 0) - split.amount
-                    )
+            for split in exp.splits:
+                balances[split.user_id] = balances.get(split.user_id, 0) - split.amount
 
     @classmethod
     def _apply_payments(cls, balances: dict[int, int], payments: list[Any]) -> None:
