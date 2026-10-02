@@ -36,10 +36,28 @@ select = [
     "I",    # isort (import sorting)
     "C901", # mccabe (cyclomatic complexity)
     "ARG",  # flake8-unused-arguments
+    "ASYNC",# flake8-async (asyncio anti-patterns)
+    "A",    # flake8-builtins (shadowing builtins)
+    "C4",   # flake8-comprehensions
+    "T20",  # flake8-print (disallow stray print statements)
+    "FA",   # flake8-future-annotations (consistent __future__ annotations)
+    "RSE",  # flake8-raise (clean raise statements)
+    "PGH",  # pygrep-hooks (specific type: ignore / noqa)
+    "PLC",  # pylint conventions
+    "PLE",  # pylint errors
+    "PLW",  # pylint warnings
+    "RUF",  # ruff-specific rules
+    "FLY",  # flynt (f-strings)
+    "ICN",  # flake8-import-conventions
+    "PIE",  # flake8-pie
+    "PERF", # perflint (performance anti-patterns)
 ]
 ignore = [
     "E501",   # line length handled by ruff-format
     "B905",   # zip() without explicit strict= parameter
+    "RUF001", # allow ambiguous unicode (emojis like ℹ️, 🧾, etc.)
+    "RUF002", # allow ambiguous unicode in docstrings
+    "RUF003", # allow ambiguous unicode in comments
 ]
 
 [tool.ruff.lint.mccabe]

@@ -18,15 +18,14 @@ class PaybackCommandParser:
             flags=re.IGNORECASE,
         ).strip()
 
-        mentions: list[dict[str, Any]] = []
-        for match in re.finditer(r"@(\w+)", cleaned_text):
-            mentions.append(
-                {
-                    "username": match.group(1).lower(),
-                    "start": match.start(),
-                    "end": match.end(),
-                }
-            )
+        mentions: list[dict[str, Any]] = [
+            {
+                "username": match.group(1).lower(),
+                "start": match.start(),
+                "end": match.end(),
+            }
+            for match in re.finditer(r"@(\w+)", cleaned_text)
+        ]
 
         amount_match = re.search(r"\b(\d+(?:\.\d{1,2})?)\b", cleaned_text)
         if not amount_match:

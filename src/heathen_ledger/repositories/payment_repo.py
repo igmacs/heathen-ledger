@@ -65,11 +65,14 @@ class PaymentRepository:
             .all()
         )
 
-        txs = []
-        for exp in expenses:
-            txs.append({"type": "expense", "obj": exp, "created_at": exp.created_at})
-        for pay in payments:
-            txs.append({"type": "payment", "obj": pay, "created_at": pay.created_at})
+        txs = [
+            {"type": "expense", "obj": exp, "created_at": exp.created_at}
+            for exp in expenses
+        ]
+        txs.extend(
+            {"type": "payment", "obj": pay, "created_at": pay.created_at}
+            for pay in payments
+        )
 
         txs.sort(key=lambda x: x["created_at"], reverse=True)
         return txs[:limit]

@@ -4,8 +4,6 @@
 class LedgerServiceError(Exception):
     """Base exception for service layer business logic errors."""
 
-    pass
-
 
 class UserNotFoundError(LedgerServiceError):
     """Raised when a specified user cannot be resolved in the group."""
@@ -21,10 +19,6 @@ class UserNotFoundError(LedgerServiceError):
 class ValidationError(LedgerServiceError):
     """Raised when validation fails (e.g. no participants left to split with)."""
 
-    pass
-
 
 class PermissionDeniedError(LedgerServiceError):
     """Raised when a user attempts an unauthorized action."""
-
-    pass

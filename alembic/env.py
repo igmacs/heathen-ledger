@@ -9,7 +9,7 @@ from alembic import context
 # Add src directory to sys.path so we can import our database module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from dotenv import load_dotenv  # noqa: E402
+from dotenv import load_dotenv
 
 load_dotenv()
 

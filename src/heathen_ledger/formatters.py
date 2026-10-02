@@ -179,9 +179,9 @@ def generate_expense_reply_text(expense: Any) -> str:
 
     # Format Payers
     if expense.payers and len(expense.payers) > 1:
-        payer_lines = []
-        for p in expense.payers:
-            payer_lines.append(f"  - {p.user.first_name}: {format_cents(p.amount)}")
+        payer_lines = [
+            f"  - {p.user.first_name}: {format_cents(p.amount)}" for p in expense.payers
+        ]
         paid_by_str = "• **Paid by:**\n" + "\n".join(payer_lines)
     elif expense.payers and len(expense.payers) == 1:
         paid_by_str = f"• **Paid by:** {expense.payers[0].user.first_name}"

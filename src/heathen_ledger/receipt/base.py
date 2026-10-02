@@ -74,4 +74,3 @@ class ReceiptParser(ABC):
         Returns:
             Receipt object containing items, totals, and metadata.
         """
-        pass

@@ -25,7 +25,6 @@ class VoiceInterpreter(ABC):
         Returns:
             Transcribed text.
         """
-        pass
 
     @abstractmethod
     async def interpret(
@@ -44,4 +43,3 @@ class VoiceInterpreter(ABC):
         Returns:
             VoiceInterpretation containing the raw transcription and proposed command.
         """
-        pass

@@ -111,7 +111,7 @@ async def _send_ephemeral_group_response(
     can_share = (
         shareable
         if shareable is not None
-        else not (text and (text.startswith("⚠️") or text.startswith("❌")))
+        else not (text and text.startswith(("⚠️", "❌")))
     )
 
     token: str | None = None
